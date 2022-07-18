@@ -1,0 +1,5 @@
+[target.x86_64-pc-windows-gnu]
+rustflags = ["-L./mpv"]
+
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-L./mpv"]
