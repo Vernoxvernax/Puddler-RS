@@ -19,7 +19,8 @@ pub struct Settings {
     pub server_config: Option<String>,
     pub discord_presence: bool,
     // pub direct_stream: bool,
-    pub fullscreen: bool
+    pub fullscreen: bool,
+    pub autologin: bool
 }
 
 
@@ -36,19 +37,43 @@ fn read_settings() -> Settings {
         // let direct_stream: bool = direct_streaming(); // planned but not implemented
         // Wether mpv should start in fullscreen mode.
         let fullscreen: bool = start_fullscreen();
+        // Wether the user should be prompted if the default login is correct
+        let autologin: bool = automatically_login();
         let settings = Settings {
             server_config,
             discord_presence,
             // direct_stream,
-            fullscreen
+            fullscreen,
+            autologin
         };
         let settings_file = toml::to_string_pretty(&settings).unwrap();
         std::fs::write(config_path_string, settings_file).expect("Saving settings.");
         settings
     } else {
         let settings_file_raw = Config::builder().add_source(File::from(Path::new(&config_path_string))).build().unwrap();
-        
-        settings_file_raw.try_deserialize::<Settings>().unwrap()
+        let serialized = settings_file_raw.try_deserialize::<Settings>();
+        match serialized {
+            Ok(settings) => {
+                settings
+            },
+            Err(_) => {
+                println!("{}", format!("Settings file is corrupt. Settings have to be reconfigured.\n").red());
+                let server_config: Option<String> = search_server_configs();
+                let discord_presence: bool = initiate_discord();
+                let fullscreen: bool = start_fullscreen();
+                let autologin: bool = automatically_login();
+                let settings = Settings {
+                    server_config,
+                    discord_presence,
+                    // direct_stream,
+                    fullscreen,
+                    autologin
+                };
+                let settings_file = toml::to_string_pretty(&settings).unwrap();
+                std::fs::write(config_path_string, settings_file).expect("Saving settings.");
+                settings
+            }
+        }
     }
 }
 
@@ -89,21 +114,35 @@ fn initiate_discord() -> bool {
 fn search_server_configs() -> Option<String> {
     let config_path = get_app_root(AppDataType::UserConfig, &APP_INFO).unwrap();
     println!("Searching in \"{}\" for emby or jellyfin configuration files ...", &config_path.display());
-    let path: Vec<_> = fs::read_dir(config_path).unwrap().map(|r| r.unwrap()).collect();
-    let mut files = 0;
+    let path: Vec<_> = fs::read_dir(&config_path).unwrap().map(|r| r.unwrap()).collect();
+    let mut files: Vec<String> = [].to_vec();
     for file in &path {
+        if file.path().is_dir() {
+            let depth2: Vec<_> = fs::read_dir(&file.path()).unwrap().map(|r| r.unwrap()).collect();
+            for stuff in depth2 {
+                let file_path: String = stuff.path().display().to_string();
+                if file_path.contains(&".config.json") {
+                    files.append(&mut [file_path].to_vec());  
+                } else {
+                    continue
+                }
+            }
+        }
         let file_path: String = file.path().display().to_string();
-        files += 1;
         if file_path.contains(&".config.json") {
-            println!("  [{}] {}", files, file_path)
+            files.append(&mut [file_path].to_vec());
         } else {
             continue
         }
     };
-    if files == 0 {
+    if files.len() == 0 {
         println!("No configuration has been found.");
         return None
-    };
+    } else {
+        for (index, path) in files.iter().enumerate() {
+            println!("  [{}] {}", index, path);
+        }
+    }
     print!("Select which one of the above server configs should be used by default, or skip with \"None\".\n: ");
     io::stdout().flush().ok().expect("Failed to flush stdout");
     let mut selection = String::new();
@@ -157,7 +196,7 @@ fn change_settings(mut settings: Settings) -> Settings {
     let config_path_string = format!("{}/{}.toml", &config_path.display().to_string(), &APPNAME);
     loop {
         // print!("Which settings do you want to change?\n  [1] Default server configuration = {}\n  [2] Discord presence = {}\n  [3] Direct Stream = {}\n  [4] MPV fullscreen = {}\n\n  [S] Save and return to the menu", format!("{}", settings.server_config.as_ref().unwrap_or(&"None".to_string())).green(), format!("{}", settings.discord_presence).green(), format!("{}", settings.direct_stream).green(), format!("{}", settings.fullscreen).green());
-        print!("Which settings do you want to change?\n  [1] Default server configuration = {}\n  [2] Discord presence = {}\n  [3] MPV fullscreen = {}\n\n  [S] Save and return to the menu", settings.server_config.as_ref().unwrap_or(&"None".to_string()).to_string().green(), format!("{}", settings.discord_presence).green(), format!("{}", settings.fullscreen).green());
+        print!("Which settings do you want to change?\n  [1] Default server configuration = {}\n  [2] Discord presence = {}\n  [3] MPV fullscreen = {}\n  [4] Automatically login = {}\n\n  [S] Save and return to the menu", settings.server_config.as_ref().unwrap_or(&"None".to_string()).to_string().green(), settings.discord_presence.to_string().green(), settings.fullscreen.to_string().green(), settings.autologin.to_string().green());
         let menu = getch("1234Ss");
         match menu {
             '1' => {
@@ -171,6 +210,9 @@ fn change_settings(mut settings: Settings) -> Settings {
             // },
             // '4' => {
                 settings.fullscreen = start_fullscreen();
+            },
+            '4' => {
+                settings.autologin = automatically_login();
             },
             'S' | 's' => {
                 break
@@ -187,5 +229,22 @@ fn change_settings(mut settings: Settings) -> Settings {
 
 fn display_settings(settings: &Settings) {
     // println!("\n Default server configuration = {}\n Discord presence = {}\n Direct Stream = {}\n MPV fullscreen = {}", format!("{}", settings.server_config.as_ref().unwrap_or(&"None".to_string())).green(), format!("{}", settings.discord_presence).green(), format!("{}", settings.direct_stream).green(), format!("{}", settings.fullscreen).green());
-    println!(" Default server configuration = {}\n Discord presence = {}\n MPV fullscreen = {}\n", settings.server_config.as_ref().unwrap_or(&"None".to_string()).to_string().green(), format!("{}", settings.discord_presence).green(), format!("{}", settings.fullscreen).green());
+    println!(" Default server configuration = {}\n Discord presence = {}\n MPV fullscreen = {}\n Automatically login = {}\n", settings.server_config.as_ref().unwrap_or(&"None".to_string()).to_string().green(), settings.discord_presence.to_string().green(), settings.fullscreen.to_string().green(), settings.autologin.to_string().green());
+}
+
+
+fn automatically_login() -> bool {
+    print!("Do you want to enable autologin on start?\n (Y)es / (N)o");
+    let autologin = getch("YyNn");
+    match autologin {
+        'Y' | 'y' => {
+            true
+        },
+        'N' | 'n' => {
+            false
+        },
+        _ => (
+            false
+        )
+    }
 }

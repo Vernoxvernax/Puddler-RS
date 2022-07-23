@@ -1,3 +1,4 @@
+#![allow(non_snake_case)]
 use colored::Colorize;
 use urlencoding::encode;
 use std::time::Duration;
@@ -10,10 +11,11 @@ use serde_derive::{Deserialize};
 use isahc::Body;
 use isahc::Request;
 use isahc::prelude::*;
+mod progress_report;
 pub mod mediaserver_information;
 pub mod player;
 pub mod settings;
-mod progress_report;
+pub mod config;
 pub mod discord;
 use player::play;
 use mediaserver_information::*;
