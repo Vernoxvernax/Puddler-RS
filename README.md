@@ -56,20 +56,7 @@ What you'll need:
 * cargo
 * git
 
-___
 
-### Prerequisites:
-
-The mpv crate I'm using for puddler is outdated and had to loose some api bindings.
-
-Clone my fork of `mpv-rs`:
-```
-$ git clone https://github.com/VernoxVernax/mpv-rs.git
-```
-
-#### You should leave this git-clone next to the `puddler-rs` folder. It's relative path is important!
-
-___
 
 ### Linux:
 
@@ -88,13 +75,14 @@ ___
 
 ### Windows:
 
-Clone this repo and compile `Puddler.exe`:
+Go to [mpv-player](https://sourceforge.net/projects/mpv-player-windows/files/libmpv/) at sourceforge.net and get the newest libmpv **x86_64** archive. This contains `mpv-2.dll` which will need to be placed next to `Puddler.exe`.
+
+Then just compile it:
 ```
-$ git clone https://github.com/VernoxVernax/Puddler-RS.git
-$ cargo build --release
+$ cargo install --path .
 ```
 
-Go to [mpv-player](https://sourceforge.net/projects/mpv-player-windows/files/libmpv/) at sourceforge.net and get the newest libmpv **x86_64** archive. This contains `mpv-2.dll` which will need to be placed next to `Puddler.exe`.
+Cargo will print the output folder of the `.exe` so that you know what folder to add to your PATH.
 
 ___
 
@@ -110,14 +98,13 @@ Additionally you will need the following tools:
 + mingw-w64-tools (for `gendef`)
 + 7z
 
-Procedure:
+#### **Procedure:**
 
 + Get the newest libmpv-dev from sourceforge [here](https://sourceforge.net/projects/mpv-player-windows/files/libmpv/) (wget command below).
 
 
 ```
 $ rustup target add x86_64-pc-windows-gnu
-$ git clone https://github.com/VernoxVernax/mpv-rs.git
 $ git clone https://github.com/VernoxVernax/Puddler-RS.git
 $ cd Puddler-RS
 $ wget https://sourceforge.net/projects/mpv-player-windows/files/libmpv/mpv-dev-x86_64-20220626-git-3a2838c.7z/download -O mpv.7z

@@ -14,7 +14,7 @@ use crate::mediaserver_information::getch;
 use crate::numbers;
 
 
-pub fn choose_config(server_kind: char) -> Option<String> {
+pub fn choose_config(server_kind: char, autologin: bool) -> Option<String> {
     let folder_suffix = if server_kind == '1' {
         "emby"
     } else {
@@ -45,11 +45,15 @@ pub fn choose_config(server_kind: char) -> Option<String> {
                 file_list.append(&mut [file.display().to_string()].to_vec());
             }
         };
+        if autologin {
+            return Some(file_list.iter().nth(0).unwrap().to_string())
+        };
         let copy = file_list.clone();
-        print!("Please choose which configuration file you want to use.\n: ");
+        println!("Please choose which configuration file you want to use.");
         for entry in &file_list {
             println!("  [{}] {}", &copy.iter().position(|y| y == entry).unwrap(), &entry)
         };
+        print!(": ");
         let index: usize;
         loop {
             io::stdout().flush().ok().expect("Failed to flush stdout");
@@ -63,12 +67,13 @@ pub fn choose_config(server_kind: char) -> Option<String> {
                 break
             }
         }
+        println!("");
         Some(file_list.iter().nth(index).unwrap().to_string())
     }
 }
 
 
-pub fn read_config(config_path_string: &String, quick_mode: bool) -> Result<(ConfigFile, ConfigFileRaw), (Option<ConfigFileRaw>, &str)> {
+pub fn read_config(config_path_string: &String, autologin: bool) -> Result<(ConfigFile, ConfigFileRaw), (Option<ConfigFileRaw>, &str)> {
     let file = std::fs::read_to_string(config_path_string).unwrap();
     let local_config_file: Result<ConfigFileRaw, serde_json::Error> = serde_json::from_str::<ConfigFileRaw>(&file);
     match local_config_file {
@@ -88,7 +93,7 @@ pub fn read_config(config_path_string: &String, quick_mode: bool) -> Result<(Con
                     "Host"
                 }
             };
-            if quick_mode {
+            if autologin {
                 if server_name != "Host" {
                     println!("Logging in with {} on {}.", a.user.first().unwrap().username.green(), server_name.green());
                 } else {

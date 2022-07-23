@@ -1,7 +1,4 @@
-## **0.5.6**
-
-+ finally, full multi-server + multi-user support (config files have to be recreated)
-+ added autologin feature since why not
-+ updated all dependencies
-+ move a little bit of code to the new `config.rs` where it belongs
-+ password input will not be shown in the command line anymore
++ fixed recently introduced bugs
++ 0.5.6 advertised features are now fully working
++ autologin always chooses the first entry (unless default server configuration is set)
++ discovered `git` source option for cargo.toml => you don't need to clone mpv-rs seperately anymore

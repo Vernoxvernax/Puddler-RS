@@ -152,8 +152,8 @@ fn search_server_configs() -> Option<String> {
         return None
     }
     let num_selection: usize = selection.trim().parse().unwrap();
-    println!("You've picked {}.\n", format!("{:?}", path[num_selection - 1].file_name()).green());
-    Some(path[num_selection - 1].path().display().to_string())
+    println!("You've picked {}.\n", format!("{:?}", files[num_selection]).green());
+    Some(files[num_selection].to_string())
 }
 
 

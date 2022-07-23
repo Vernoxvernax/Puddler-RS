@@ -1,6 +1,6 @@
 [package]
 name = "puddler"
-version = "0.5.6"
+version = "0.5.6-1"
 edition = "2021"
 
 [dependencies]
@@ -13,7 +13,7 @@ serde_derive = "1.0.140"
 http = "0.2.8"
 colored = "2.0.0"
 urlencoding = "2.1.0"
-mpv = { version = "0.2.4", path = "../mpv-rs"}
+mpv = { version = "0.2.4", git = "https://github.com/Vernoxvernax/mpv-rs.git"}
 discord-rich-presence = "0.2.1"
 uuid = { version = "1.1.2", features = ["v4"] }
 config = { version = "0.13.1", features = ["yaml"] }

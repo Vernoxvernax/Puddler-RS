@@ -7,6 +7,7 @@ use http::Response;
 use http::StatusCode;
 use colored::Colorize;
 use isahc::Body;
+use regex::Regex;
 use uuid;
 use isahc::Request;
 use isahc::prelude::*;
@@ -92,7 +93,7 @@ pub fn getch(allowed: &str) -> char {
         let ch: char = getch::Getch::new().getch().unwrap() as char;
         if allowed.contains(ch) {
             if ch == '\n' {
-                println!("\\n");
+                println!("\n");
             } else {
                 println!("{}\n", ch);
             }
@@ -116,11 +117,13 @@ pub fn check_information(settings: &Settings) -> HeadDict {
         print!("What kind of server do you want to stream from?\n   [1] Emby\n   [2] Jellyfin");
         getch("12")
     } else {
-        let config_file = read_config(settings.server_config.as_ref().unwrap(), settings.autologin);
-        if config_file.is_ok() {
-            match config_file.unwrap().0.emby {
-                true => '1',
-                false => '2'
+        if settings.server_config.is_some() {
+            let reg: Regex = Regex::new(r#"/(emby|jellyfin)/"#).unwrap();
+            let server_kind = reg.find(settings.server_config.as_ref().unwrap()).unwrap();
+            match server_kind.as_str() {
+                "/emby/" => '1',
+                "/jellyfin/" => '2',
+                _ => '1'
             }
         } else {
             print!("What kind of server do you want to stream from?\n   [1] Emby\n   [2] Jellyfin");
@@ -146,7 +149,7 @@ pub fn check_information(settings: &Settings) -> HeadDict {
         }
     };
     let config_path: Option<String> = if settings.server_config.is_none() {
-        choose_config(server_kind)
+        choose_config(server_kind, settings.autologin)
     } else {
         settings.server_config.clone()
     };
