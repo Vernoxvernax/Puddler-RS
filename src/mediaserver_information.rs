@@ -1,5 +1,6 @@
 #![allow(non_snake_case)]
 extern crate getch;
+use std::char;
 use std::fmt::Debug;
 use std::io;
 use app_dirs::*;
@@ -7,7 +8,6 @@ use http::Response;
 use http::StatusCode;
 use colored::Colorize;
 use isahc::Body;
-use regex::Regex;
 use uuid;
 use isahc::Request;
 use isahc::prelude::*;
@@ -37,9 +37,16 @@ pub struct HeadDict {
 }
 
 
+#[derive(Debug, Serialize, Clone)]
+struct TranscodingInfo {
+
+}
+
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ConfigFile {
     pub emby: bool,
+    pub server_name: String,
     pub ipaddress: String,
     pub device_id: String,
     pub user_id: String,
@@ -89,7 +96,7 @@ pub fn getch(allowed: &str) -> char {
     let output: char;
     loop {
         print!("\n: ");
-        io::stdout().flush().ok().expect("Failed to flush stdout");
+        io::stdout().flush().expect("Failed to flush stdout");
         let ch: char = getch::Getch::new().getch().unwrap() as char;
         if allowed.contains(ch) {
             if ch == '\n' {
@@ -98,6 +105,10 @@ pub fn getch(allowed: &str) -> char {
                 println!("{}\n", ch);
             }
             output = ch;
+            break
+        } else if ch == '\r' {
+            println!("\n");
+            output = '\n';
             break
         } else {
             print!("\nInvalid input, please try again.")
@@ -117,17 +128,18 @@ pub fn check_information(settings: &Settings) -> HeadDict {
         print!("What kind of server do you want to stream from?\n   [1] Emby\n   [2] Jellyfin");
         getch("12")
     } else {
-        if settings.server_config.is_some() {
-            let reg: Regex = Regex::new(r#"/(emby|jellyfin)/"#).unwrap();
-            let server_kind = reg.find(settings.server_config.as_ref().unwrap()).unwrap();
-            match server_kind.as_str() {
-                "/emby/" => '1',
-                "/jellyfin/" => '2',
-                _ => '1'
+        match read_config(&settings.server_config.as_ref().unwrap(), true) {
+            Ok((config, _raw)) => {
+                if config.emby {
+                    '1'
+                } else {
+                    '2'
+                }
+            },
+            Err(_no) => {
+                print!("What kind of server do you want to stream from?\n   [1] Emby\n   [2] Jellyfin");
+                getch("12")
             }
-        } else {
-            print!("What kind of server do you want to stream from?\n   [1] Emby\n   [2] Jellyfin");
-            getch("12")
         }
     };
     match server_kind {
@@ -162,11 +174,12 @@ pub fn check_information(settings: &Settings) -> HeadDict {
     let config_file: ConfigFile;
     if config_path.is_none() {
         app_root(AppDataType::UserConfig, &APP_INFO).expect("shit");
-        let (ipaddress, server_name) = configure_new_server();
+        let (ipaddress, server_name) = configure_new_server(media_server_name);
         let user_login = configure_new_login(media_server_name);
         (auth_header, request_header, session_id, user_id, access_token, server_id) = test_auth(media_server_name, media_server, &ipaddress, &auth_header, &user_login, &device_id);
         config_file = ConfigFile { 
             emby,
+            server_name: server_name.clone(),
             ipaddress,
             user_id,
             device_id,
@@ -178,13 +191,18 @@ pub fn check_information(settings: &Settings) -> HeadDict {
     } else {
         let config_path_string = config_path.unwrap();
         println!("{}", "Configuration files found!".to_string().green());
-        let config_file_raw = read_config(&config_path_string, settings.autologin);
+        let config_file_raw: Result<(ConfigFile, ConfigFileRaw), (Option<ConfigFileRaw>, &str)> = read_config(&config_path_string, settings.autologin);
         match config_file_raw {
             Ok((mut file, mut raw_file)) => {
                 let ipaddress = &file.ipaddress;
                 device_id = file.device_id.clone();
                 auth_header = AuthHeader {
                     authorization: format!("Emby UserId={}, Client=\"Emby Theater\", Device=\"{}\", DeviceId=\"{}\", Version=\"{}\", Token={}", &file.user_id, APPNAME, device_id, VERSION, &file.access_token)
+                };
+                if file.server_name != "Host" {
+                    println!("Logging in with {} on {}.", file.username.green(), file.server_name.green());
+                } else {
+                    println!("Logging in with {}.", file.username.green());
                 };
                 let session_id_test: Option<String> = re_auth(media_server_name, media_server, ipaddress, &auth_header, &device_id);
                 if session_id_test.is_none() {
@@ -218,6 +236,7 @@ pub fn check_information(settings: &Settings) -> HeadDict {
                 }
                 config_file = ConfigFile {
                     emby,
+                    server_name: file.server_name,
                     device_id,
                     ipaddress: ipaddress.to_string(),
                     user_id: file.user_id,
@@ -231,6 +250,7 @@ pub fn check_information(settings: &Settings) -> HeadDict {
                 (auth_header, request_header, session_id, user_id, access_token, _) = test_auth(media_server_name, media_server, &ipaddress, &auth_header, &user_login, &device_id);
                 config_file = ConfigFile {
                     emby,
+                    server_name: "Host".to_string(),
                     device_id,
                     ipaddress,
                     user_id,
@@ -248,11 +268,12 @@ pub fn check_information(settings: &Settings) -> HeadDict {
                 write_config(config_path_string, &config_file, Some(file.user));
             },
             Err((None, "add server")) => {
-                let (ipaddress, _) = configure_new_server();
+                let (ipaddress, server_name) = configure_new_server(media_server_name);
                 let user_login = configure_new_login(media_server_name);
                 (auth_header, request_header, session_id, user_id, access_token, _) = test_auth(media_server_name, media_server, &ipaddress, &auth_header, &user_login, &device_id);
                 config_file = ConfigFile {
                     emby,
+                    server_name,
                     device_id,
                     ipaddress,
                     user_id,
@@ -262,12 +283,13 @@ pub fn check_information(settings: &Settings) -> HeadDict {
                 write_config(config_path_string, &config_file, None);
             },
             _ => {
-                let (ipaddress, _) = configure_new_server();
+                let (ipaddress, server_name) = configure_new_server(media_server_name);
                 let user_login = configure_new_login(media_server_name);
                 device_id = uuid::Uuid::new_v4().to_string();
                 (auth_header, request_header, session_id, user_id, access_token, _) = test_auth(media_server_name, media_server, &ipaddress, &auth_header, &user_login, &device_id);
                 config_file = ConfigFile {
                     emby,
+                    server_name,
                     device_id,
                     ipaddress,
                     user_id,
@@ -289,14 +311,23 @@ pub fn check_information(settings: &Settings) -> HeadDict {
 }
 
 
-fn configure_new_server() -> (String, String) {
+fn configure_new_server(media_server_name: &str) -> (String, String) {
     let mut ipaddress: String;
     let mut server_name: String;
+    let who_is = if media_server_name == "Emby" {
+        "who is EmbyServer?"
+    } else {
+        "who is JellyfinServer?"
+    };
     println!("Searching for local media-server...");
     let socket:UdpSocket = UdpSocket::bind("0.0.0.0:0").expect("Failed to bind to network socket.");
     socket.set_read_timeout(Some(Duration::new(5, 0))).expect("nothing");
     socket.set_broadcast(true).expect("errrrrrr");
-    socket.send_to(&String::from("who is EmbyServer?").into_bytes(), "255.255.255.255:7359").expect("fdsfds");
+    if cfg!(windows) {
+        socket.send_to(&String::from(who_is).into_bytes(), "255.255.255.255:7359").expect("fdsfds");
+    } else {
+        socket.send_to(&String::from(who_is).into_bytes(), "255.255.255.255:7359").expect("fdsfds");
+    }
     let mut buf  = [0; 4096];
     let udp_disco = socket.recv_from(&mut buf);
     match udp_disco {
@@ -313,12 +344,12 @@ fn configure_new_server() -> (String, String) {
                 },
                 'N'|'n' => {
                     print!("Please specify the IP-Address manually\n(don't forget to add ports if not running on 80/443!)\n: ");
-                    io::stdout().flush().ok().expect("Failed to flush stdout");
+                    io::stdout().flush().expect("Failed to flush stdout");
                     let mut ipaddress2 = String::new();
                     io::stdin().read_line(  &mut ipaddress2).unwrap();
                     ipaddress = ipaddress2.trim().parse().unwrap();
                     print!("\nPlease enter a nickname for your media-server.\n(It's recommended to use a unique one)\n: ");
-                    io::stdout().flush().ok().expect("Failed to flush stdout");
+                    io::stdout().flush().expect("Failed to flush stdout");
                     server_name = String::new();
                     io::stdin().read_line(  &mut server_name).unwrap();
                     server_name = server_name.trim().parse().unwrap();
@@ -328,12 +359,12 @@ fn configure_new_server() -> (String, String) {
         },
         Err(_e) => {
             print!("Couldn't find any local media-server.\nIf your instance is running under a docker environment, configure the host network-option.\nOr just specify the IP-Address manually. (don't forget to add ports)\n: ");
-            io::stdout().flush().ok().expect("Failed to flush stdout");
+            io::stdout().flush().expect("Failed to flush stdout");
             let mut ipaddress2 = String::new();
             io::stdin().read_line(  &mut ipaddress2).unwrap();
             ipaddress = ipaddress2.trim().parse().unwrap();
             print!("\nPlease enter a nickname for your media-server.\n(It's recommended to use a unique one)\n: ");
-            io::stdout().flush().ok().expect("Failed to flush stdout");
+            io::stdout().flush().expect("Failed to flush stdout");
             server_name = String::new();
             io::stdin().read_line(  &mut server_name).unwrap();
             server_name = server_name.trim().parse().unwrap();
@@ -367,10 +398,10 @@ fn configure_new_login(media_server_name: &str) -> UserLogin {
     fn take_input(media_server_name: &str) -> (String, String) {
         let mut username = String::new();
         print!("Please enter your {} username: ", media_server_name);
-        io::stdout().flush().ok().expect("Failed to flush stdout");
+        io::stdout().flush().expect("Failed to flush stdout");
         io::stdin().read_line(  &mut username).unwrap();
         print!("Please enter your {} password (hidden): ", media_server_name);
-        io::stdout().flush().ok().expect("Failed to flush stdout");
+        io::stdout().flush().expect("Failed to flush stdout");
         let password = read_password().unwrap();
         println!("");
         (password.trim().parse().unwrap(), username.trim().parse().unwrap())
@@ -404,6 +435,7 @@ fn test_auth (media_server_name: &str, media_server: &str, ipaddress: &String, a
     let json_response = post_puddler(url, auth_header, bod);
     match json_response {
         Ok(mut t) => {
+            println!("{}", "Connection successfully established!".to_string().green());
             let json_response = t.json::<Value>().unwrap();
             let server_id = json_response.get("ServerId").unwrap();
             let session_obj = json_response.get("SessionInfo").unwrap();
@@ -437,7 +469,6 @@ pub fn post_puddler (url: String, auth_header: &AuthHeader, bod: String) -> Resu
         .send()?;
     let result = match response.status() {
         StatusCode::OK => {
-            println!("{}", "Connection successfully established!".to_string().green());
             response
         },
         StatusCode::NOT_FOUND => panic!("Not Found"),
@@ -459,7 +490,7 @@ fn re_auth(media_server_name: &str, media_server: &str, ipaddress: &String, auth
                     let re_auth_json: Value = serde_json::from_str(response_text).unwrap();
                     println!("{}", "Connection successfully reestablished!".to_string().green());
                     if re_auth_json[0].get("Id").is_some() {
-                        Some(re_auth_json[0].get("Id").unwrap().to_string()[2..re_auth_json[0].get("Id").unwrap().to_string().len() - 2].to_string())
+                        Some(re_auth_json[0].get("Id").unwrap().to_string()[1..re_auth_json[0].get("Id").unwrap().to_string().len() - 1].to_string())
                     }
                     else {
                         None

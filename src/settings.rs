@@ -10,7 +10,6 @@ use mediaserver_information::getch;
 use app_dirs::*;
 use serde_derive::{Deserialize,Serialize};
 use crate::APPNAME;
-// use crate::VERSION;
 use crate::APP_INFO;
 
 
@@ -18,7 +17,7 @@ use crate::APP_INFO;
 pub struct Settings {
     pub server_config: Option<String>,
     pub discord_presence: bool,
-    // pub direct_stream: bool,
+    pub transcoding: bool,
     pub fullscreen: bool,
     pub autologin: bool
 }
@@ -34,7 +33,7 @@ fn read_settings() -> Settings {
         // Discord Presence default setting.
         let discord_presence: bool = initiate_discord();
         // Activate encoded streaming (requires fully configured media-server)
-        // let direct_stream: bool = direct_streaming(); // planned but not implemented
+        let transcoding: bool = transcoding();
         // Wether mpv should start in fullscreen mode.
         let fullscreen: bool = start_fullscreen();
         // Wether the user should be prompted if the default login is correct
@@ -42,7 +41,7 @@ fn read_settings() -> Settings {
         let settings = Settings {
             server_config,
             discord_presence,
-            // direct_stream,
+            transcoding,
             fullscreen,
             autologin
         };
@@ -56,16 +55,57 @@ fn read_settings() -> Settings {
             Ok(settings) => {
                 settings
             },
-            Err(_) => {
-                println!("{}", format!("Settings file is corrupt. Settings have to be reconfigured.\n").red());
+            Err(e) => {
+                if e.to_string().contains("missing field") {
+                    println!("{}", format!("Settings file is corrupt. Attempting to fix it ...\n").red());
+                    let mut settings_file = fs::OpenOptions::new().write(true).append(true).open(&config_path_string).unwrap();
+                    match &e.to_string()[e.to_string().find("`").unwrap() + 1..e.to_string().len() - 1] {
+                        "server_config" => {
+                            let server_config: Option<String> = search_server_configs();
+                            write!(settings_file, "server_config = {:?}", server_config).unwrap();
+                            let settings = read_settings();
+                            return settings;
+                        },
+                        "discord_presence" => {
+                            let discord_presence: bool = initiate_discord();
+                            write!(settings_file, "discord_presence = {}", discord_presence).unwrap();
+                            let settings = read_settings();
+                            return settings;
+                        },
+                        "transcoding" => {
+                            let transcoding: bool = transcoding();
+                            write!(settings_file, "transcoding = {}", transcoding).unwrap();
+                            let settings = read_settings();
+                            return settings;
+                        },
+                        "fullscreen" => {
+                            let fullscreen: bool = start_fullscreen();
+                            write!(settings_file, "fullscreen = {}", fullscreen).unwrap();
+                            let settings = read_settings();
+                            return settings;
+                        },
+                        "autologin" => {
+                            let autologin: bool = automatically_login();
+                            write!(settings_file, "autologin = {}", autologin).unwrap();
+                            let settings = read_settings();
+                            return settings;
+                        },
+                        _ => {
+                            println!("{}", format!("Failure.").red())
+                        }
+                    }
+                } else {
+                    println!("{}", format!("Settings file is corrupt. Settings have to be reconfigured.\n").red());
+                }
                 let server_config: Option<String> = search_server_configs();
                 let discord_presence: bool = initiate_discord();
+                let transcoding: bool = transcoding();
                 let fullscreen: bool = start_fullscreen();
                 let autologin: bool = automatically_login();
                 let settings = Settings {
                     server_config,
                     discord_presence,
-                    // direct_stream,
+                    transcoding,
                     fullscreen,
                     autologin
                 };
@@ -114,6 +154,9 @@ fn initiate_discord() -> bool {
 fn search_server_configs() -> Option<String> {
     let config_path = get_app_root(AppDataType::UserConfig, &APP_INFO).unwrap();
     println!("Searching in \"{}\" for emby or jellyfin configuration files ...", &config_path.display());
+    if fs::read_dir(&config_path).is_err() {
+        fs::create_dir(&config_path).expect("Could not create config directory!")
+    };
     let path: Vec<_> = fs::read_dir(&config_path).unwrap().map(|r| r.unwrap()).collect();
     let mut files: Vec<String> = [].to_vec();
     for file in &path {
@@ -136,7 +179,7 @@ fn search_server_configs() -> Option<String> {
         }
     };
     if files.len() == 0 {
-        println!("No configuration has been found.");
+        println!("No configuration has been found.\n");
         return None
     } else {
         for (index, path) in files.iter().enumerate() {
@@ -157,21 +200,21 @@ fn search_server_configs() -> Option<String> {
 }
 
 
-// fn direct_streaming() -> bool {
-//     print!("Is your internet speed capable to directly stream the media?\n  (e.g.: if the emby/jellyfin instance is running locally)\n (Y)es / (N)o [this requires server-side configuration]");
-//     let encode = getch("YyNn");
-//     match encode {
-//         'Y' | 'y' => {
-//             true
-//         },
-//         'N' | 'n' => {
-//             false
-//         },
-//         _ => (
-//             false
-//         )
-//     }
-// }
+fn transcoding() -> bool {
+    print!("Do you want to transcode the video to hevc to save bandwidth?\n  (e.g.: if the emby/jellyfin instance isn't running locally)\n (Y)es / (N)o");
+    let encode = getch("YyNn");
+    match encode {
+        'Y' | 'y' => {
+            true
+        },
+        'N' | 'n' => {
+            false
+        },
+        _ => (
+            false
+        )
+    }
+}
 
 
 fn start_fullscreen() -> bool {
@@ -195,9 +238,8 @@ fn change_settings(mut settings: Settings) -> Settings {
     let config_path = get_app_root(AppDataType::UserConfig, &APP_INFO).unwrap();
     let config_path_string = format!("{}/{}.toml", &config_path.display().to_string(), &APPNAME);
     loop {
-        // print!("Which settings do you want to change?\n  [1] Default server configuration = {}\n  [2] Discord presence = {}\n  [3] Direct Stream = {}\n  [4] MPV fullscreen = {}\n\n  [S] Save and return to the menu", format!("{}", settings.server_config.as_ref().unwrap_or(&"None".to_string())).green(), format!("{}", settings.discord_presence).green(), format!("{}", settings.direct_stream).green(), format!("{}", settings.fullscreen).green());
-        print!("Which settings do you want to change?\n  [1] Default server configuration = {}\n  [2] Discord presence = {}\n  [3] MPV fullscreen = {}\n  [4] Automatically login = {}\n\n  [S] Save and return to the menu", settings.server_config.as_ref().unwrap_or(&"None".to_string()).to_string().green(), settings.discord_presence.to_string().green(), settings.fullscreen.to_string().green(), settings.autologin.to_string().green());
-        let menu = getch("1234Ss");
+        print!("Which settings do you want to change?\n  [1] Default server configuration = {}\n  [2] Discord presence = {}\n  [3] Transcoding = {}\n  [4] MPV fullscreen = {}\n  [5] Automatically login = {}\n\n  [S] Save and return to the menu", settings.server_config.as_ref().unwrap_or(&"None".to_string()).to_string().green(), settings.discord_presence.to_string().green(), settings.transcoding.to_string().green(), settings.fullscreen.to_string().green(), settings.autologin.to_string().green());
+        let menu = getch("12345Ss");
         match menu {
             '1' => {
                 settings.server_config = search_server_configs();
@@ -206,12 +248,12 @@ fn change_settings(mut settings: Settings) -> Settings {
                 settings.discord_presence = initiate_discord();
             },
             '3' => {
-            //     settings.direct_stream = direct_streaming();
-            // },
-            // '4' => {
-                settings.fullscreen = start_fullscreen();
+                settings.transcoding = transcoding();
             },
             '4' => {
+                settings.fullscreen = start_fullscreen();
+            },
+            '5' => {
                 settings.autologin = automatically_login();
             },
             'S' | 's' => {
@@ -228,8 +270,7 @@ fn change_settings(mut settings: Settings) -> Settings {
 
 
 fn display_settings(settings: &Settings) {
-    // println!("\n Default server configuration = {}\n Discord presence = {}\n Direct Stream = {}\n MPV fullscreen = {}", format!("{}", settings.server_config.as_ref().unwrap_or(&"None".to_string())).green(), format!("{}", settings.discord_presence).green(), format!("{}", settings.direct_stream).green(), format!("{}", settings.fullscreen).green());
-    println!(" Default server configuration = {}\n Discord presence = {}\n MPV fullscreen = {}\n Automatically login = {}\n", settings.server_config.as_ref().unwrap_or(&"None".to_string()).to_string().green(), settings.discord_presence.to_string().green(), settings.fullscreen.to_string().green(), settings.autologin.to_string().green());
+    println!(" Default server configuration = {}\n Discord presence = {}\n Transcoding = {}\n MPV fullscreen = {}\n Automatically login = {}\n", settings.server_config.as_ref().unwrap_or(&"None".to_string()).to_string().green(), settings.discord_presence.to_string().green(), settings.transcoding.to_string().green(), settings.fullscreen.to_string().green(), settings.autologin.to_string().green());
 }
 
 

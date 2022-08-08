@@ -84,7 +84,7 @@ pub fn read_config(config_path_string: &String, autologin: bool) -> Result<(Conf
             } else {
                 "Jellyfin"
             };
-            let reg: Regex = Regex::new(r#"([^/]+)(?:\.[a-zA-Z0-9]+\.config\.json)"#).unwrap();
+            let reg: Regex = Regex::new(r#"([^(/|\\)]+)(?:\.[a-zA-Z0-9]+\.config\.json)"#).unwrap();
             let server_name: &str = match reg.captures(config_path_string) {
                 Some(yay) => {
                     yay.get(1).map_or("", |m| m.as_str())
@@ -94,19 +94,14 @@ pub fn read_config(config_path_string: &String, autologin: bool) -> Result<(Conf
                 }
             };
             if autologin {
-                if server_name != "Host" {
-                    println!("Logging in with {} on {}.", a.user.first().unwrap().username.green(), server_name.green());
-                } else {
-                    println!("Logging in with {}.", a.user.first().unwrap().username.green());
-                }
-                user = a.user.first().unwrap();
                 Ok((ConfigFile {
                     emby: a.emby,
+                    server_name: server_name.to_string(),
                     ipaddress: a.ipaddress.clone(),
                     device_id: a.device_id.clone(),
-                    user_id: user.user_id.clone(),
-                    access_token: user.access_token.clone(),
-                    username: user.username.clone()
+                    user_id: a.user.first().unwrap().user_id.to_string(),
+                    access_token: a.user.first().unwrap().access_token.to_string(),
+                    username: a.user.first().unwrap().username.to_string()
                 }, a))
             } else {
                 print!("Do you want to use this config?\n   {} ({}): {}\n   Username: {}\n (Y)es / (N)o", server_name.green(), media_server_name, a.ipaddress, a.user.first().unwrap().username);
@@ -116,6 +111,7 @@ pub fn read_config(config_path_string: &String, autologin: bool) -> Result<(Conf
                     user = a.user.first().unwrap();
                     Ok((ConfigFile {
                         emby: a.emby,
+                        server_name: server_name.to_string(),
                         ipaddress: a.ipaddress.clone(),
                         device_id: a.device_id.clone(),
                         user_id: user.user_id.clone(),
@@ -159,6 +155,7 @@ pub fn read_config(config_path_string: &String, autologin: bool) -> Result<(Conf
                             user = a.user.iter().nth(index).unwrap();
                             Ok((ConfigFile {
                                 emby: a.emby,
+                                server_name: server_name.to_string(),
                                 ipaddress: a.ipaddress.clone(),
                                 device_id: a.device_id.clone(),
                                 user_id: user.user_id.clone(),

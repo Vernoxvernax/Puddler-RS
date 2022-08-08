@@ -15,7 +15,6 @@ ___
 
 * fully configured emby or jellyfin server (+account)
 * at least some knowledge of ipadresses and networking
-* git
 
 ___
 

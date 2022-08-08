@@ -1,6 +1,6 @@
 [package]
 name = "puddler"
-version = "0.5.6-1"
+version = "0.5.7"
 edition = "2021"
 
 [dependencies]
@@ -20,3 +20,4 @@ config = { version = "0.13.1", features = ["yaml"] }
 toml = "0.5.9"
 regex = "1.6.0"
 rpassword = "7.0.0"
+dialoguer = "0.10.2"
