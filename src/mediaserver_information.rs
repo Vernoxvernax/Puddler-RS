@@ -37,12 +37,6 @@ pub struct HeadDict {
 }
 
 
-#[derive(Debug, Serialize, Clone)]
-struct TranscodingInfo {
-
-}
-
-
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ConfigFile {
     pub emby: bool,

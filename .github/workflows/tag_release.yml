@@ -14,9 +14,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: mpv-dev
-      run: sudo apt update && sudo apt install libmpv-dev -y
-    # - name: mpv-rs dependency
-    #   run: git clone https://github.com/Vernoxvernax/mpv-rs.git ../mpv-rs
+      run: sudo apt update && sudo apt install libmpv-dev gcc-mingw-w64 -y
     - name: Build linux bin
       run: cargo build --release
     - name: Build windows bin
