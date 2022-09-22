@@ -116,7 +116,7 @@ pub fn started_playing(settings: &Settings, head_dict: &HeadDict, item: &Items, 
 }
 
 
-pub fn update_progress(settings: &Settings, head_dict: &HeadDict, item: &Items, time_pos: f64, paused: bool, playsession_id: &String, mediasource_id: &String) {
+pub fn update_progress(settings: &Settings, head_dict: &HeadDict, item: &Items, mut time_pos: f64, paused: bool, playsession_id: &String, mediasource_id: &String) {
     let ipaddress: &String = &head_dict.config_file.ipaddress;
     let item_id: &String = &item.Id;
     let media_server: &String = &head_dict.media_server;
@@ -126,10 +126,11 @@ pub fn update_progress(settings: &Settings, head_dict: &HeadDict, item: &Items, 
     } else {
         "TimeUpdate".to_string()
     };
-    let playmethod = if settings.transcoding {
-        "Transcode".to_string()
+    let playmethod: String;
+    (playmethod, time_pos) = if settings.transcoding {
+        ("Transcode".to_string(), time_pos + item.UserData.PlaybackPositionTicks as f64)
     } else {
-        "DirectPlay".to_string()
+        ("DirectPlay".to_string(), time_pos)
     };
     let update_obj = PlaybackObject {
         canseek: true,
@@ -183,12 +184,15 @@ struct NoProgressObject {
 }
 
 
-pub fn finished_playback(head_dict: &HeadDict, item: &Items, time_pos: f64, playsession_id: &String, mediasource_id: &String, eof: bool) {
+pub fn finished_playback(settings: &Settings, head_dict: &HeadDict, item: &Items, mut time_pos: f64, playsession_id: &String, mediasource_id: &String, eof: bool) {
     let ipaddress: &String = &head_dict.config_file.ipaddress;
     let item_id: &String = &item.Id;
     let session_id: &String = &head_dict.session_id;
     let media_server: &String = &head_dict.media_server;
     let user_id: &String = &head_dict.config_file.user_id;
+    if settings.transcoding {
+        time_pos = time_pos + item.UserData.PlaybackPositionTicks as f64
+    };
     if ! eof {
         let result = no_res_post(format!("{}{}/Users/{}/PlayedItems/{}", ipaddress, media_server, user_id, item_id), &head_dict.auth_header, "".to_string());
         match result {
@@ -238,40 +242,13 @@ pub fn finished_playback(head_dict: &HeadDict, item: &Items, time_pos: f64, play
                     println!("Playback progress couldn't be logged to your server.")
                 }
             }
-        } else if item.UserData.PlaybackPositionTicks != 0 {
-            let finished_obj = FinishedObject {
-                itemid: item_id.to_string(),
-                playsessionid: playsession_id.to_string(),
-                sessionid: session_id.to_string(),
-                mediasourceid: mediasource_id.to_string(),
-                positionticks: (item.UserData.PlaybackPositionTicks as f64).to_string()
-            };
-            let response = no_res_post(format!("{}{}/Sessions/Playing/Stopped", ipaddress, media_server), &head_dict.auth_header, serde_json::to_string_pretty(&finished_obj).unwrap());
-            match response {
-                Ok(_) => {
-                    let time = (item.UserData.PlaybackPositionTicks as f64) / 10000000.0;
-                    let formated: String = if time > 60.0 {
-                        if (time / 60.0) > 60.0 {
-                            format!("{:02}:{:02}:{:02}", ((time / 60.0) / 60.0).trunc(), ((((time / 60.0) / 60.0) - ((time / 60.0) / 60.).trunc()) * 60.0).trunc(), (((time / 60.0) - (time / 60.0).trunc()) * 60.0).trunc())
-                        } else {
-                            format!("00:{:02}:{:02}", (time / 60.0).trunc(), (((time / 60.0) - (time / 60.0).trunc()) * 60.0).trunc())
-                        }
-                    } else {
-                        time.to_string()
-                    };
-                    println!("Playback progress ({}) has been sent to your server.", formated)
-                }
-                Err(_) => {
-                    println!("Playback progress couldn't be logged to your server.")
-                }
-            }
         } else {
             let finished_obj = NoProgressObject {
                 itemid: item_id.to_string(),
                 playsessionid: playsession_id.to_string(),
                 sessionid: session_id.to_string(),
                 mediasourceid: mediasource_id.to_string(),
-                positionticks: "0".to_string()
+                positionticks: (item.UserData.PlaybackPositionTicks as f64).to_string()
             };
             let response = no_res_post(format!("{}{}/Sessions/Playing/Stopped", ipaddress, media_server), &head_dict.auth_header, serde_json::to_string_pretty(&finished_obj).unwrap());
             match response {

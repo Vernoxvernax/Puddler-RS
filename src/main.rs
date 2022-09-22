@@ -287,7 +287,7 @@ fn process_input(item_list: &Vec<Items>, number: Option<String>) -> Option<i32> 
         let pick = raw_input.parse::<i32>().unwrap();
         if pick < items_in_list + 1 && pick >= 0 {
             let item = item_list.iter().nth(pick as usize).unwrap();
-            if item.Type == "Episode" {
+            if "Episode Special".contains(&item.Type) {
                 println!("\nYou've chosen {}.\n", format!("{} ({}) - {} - {}", item.SeriesName.as_ref().unwrap(), (&item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4]), item.SeasonName.as_ref().unwrap(), item.Name).cyan());
             } else {
                 println!("\nYou've chosen {}.\n", format!("{} ({})", item.Name, &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4]).cyan());
@@ -327,7 +327,7 @@ fn item_parse(head_dict: &HeadDict, item_list: &Vec<Items>, pick: i32, settings:
             }
             Err(e) => panic!("failed to parse series request: {}", e)
         };
-        let item_list: Vec<Items> = print_series(&series_json, head_dict, true);
+        let item_list: Vec<Items> = process_series(&series_json, head_dict, true);
         let filtered_input: i32;
         let items_in_list: i32 = item_list.len().try_into().unwrap();
         if items_in_list > 1 {
@@ -340,7 +340,11 @@ fn item_parse(head_dict: &HeadDict, item_list: &Vec<Items>, pick: i32, settings:
             if filtered_input < items_in_list + 1 && filtered_input >= 0 {
                 let item_listed = item_list.clone();
                 let item = &item_listed.into_iter().nth(filtered_input as usize).unwrap();
-                println!("\nYou've chosen {}.\n", format!("{} ({})", item.SeriesName.as_ref().unwrap(), (&item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4])).cyan());
+                if "Episode Special".contains(&item.Type) {
+                    println!("\nYou've chosen {}.\n", format!("{} ({}) - {} - {}", item.SeriesName.as_ref().unwrap(), (&item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4]), item.SeasonName.as_ref().unwrap(), item.Name).cyan());
+                } else {
+                    println!("\nYou've chosen {}.\n", format!("{} ({})", item.Name, &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4]).cyan());
+                }
             } else {
                 println!("{}", "Are you stupid?!".to_string().red());
                 process::exit(0x0100);
@@ -359,10 +363,14 @@ fn item_parse(head_dict: &HeadDict, item_list: &Vec<Items>, pick: i32, settings:
             }
             Err(e) => panic!("failed to parse series request: {}", e)
         };
-        let item_list: Vec<Items> = print_series(&series_json, head_dict, false);
+        let item_list: Vec<Items> = process_series(&series_json, head_dict, false);
         let mut item_pos: i32 = 0;
         for things in 0..item_list.len() {
             if item_list[things].Id == item.Id {
+                if item_list[things].Type == "Special" {
+                    item_pos = things.try_into().unwrap();
+                    continue;
+                };
                 item_pos = things.try_into().unwrap();
                 break;
             }
@@ -374,22 +382,28 @@ fn item_parse(head_dict: &HeadDict, item_list: &Vec<Items>, pick: i32, settings:
 
 fn series_play(item_list: &Vec<Items>, mut pick: i32, head_dict: &HeadDict, settings: &Settings) {
     let episode_amount: i32 = item_list.len().try_into().unwrap();
+    let item = &item_list.iter().nth(pick as usize).unwrap();
+    println!("Starting mpv ...");
+    play(settings, head_dict, item);
     loop {
-        let item = &item_list.iter().nth(pick as usize).unwrap();
-        println!("Starting mpv ...");
-        play(settings, head_dict, item);
         if ( pick + 2 ) > episode_amount { // +1 since episode_amount counts from 1 and +1 for next ep
-            println!("You've reached the end of your episode list. Returning to menu ...");
+            println!("\nYou've reached the end of your episode list. Returning to menu ...");
             break
         } else {
             pick += 1;
             if item_list.iter().nth(pick as usize).is_some() {
                 let next_item = &item_list.iter().nth(pick as usize).unwrap();
+                if next_item.UserData.Played {
+                    continue
+                };
                 println!("\nWelcome back. Do you want to continue playback with:\n{}", format!("   {} ({}) - {} - {}", next_item.SeriesName.as_ref().unwrap(), &next_item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4], next_item.SeasonName.as_ref().unwrap(), next_item.Name).cyan());
-                print!(" (C)ontinue | (M)enu | (E)xit");
-                let cont = getch("CcEeMm");
+                print!(" (N)ext | (M)enu | (E)xit");
+                let cont = getch("NnEeMm");
                 match cont {
-                    'C' | 'c' => continue,
+                    'N' | 'n' => {
+                        let item = &item_list.iter().nth(pick as usize).unwrap();
+                        play(settings, head_dict, item);
+                    },
                     'M' | 'm' => break,
                     'E' | 'e' => {
                         process::exit(0x0100);
@@ -404,7 +418,7 @@ fn series_play(item_list: &Vec<Items>, mut pick: i32, head_dict: &HeadDict, sett
 }
 
 
-fn print_series(series: &SeriesStruct, head_dict: &HeadDict, printing: bool) -> Vec<Items> {
+fn process_series(series: &SeriesStruct, head_dict: &HeadDict, printing: bool) -> Vec<Items> {
     let ipaddress: &String = &head_dict.config_file.ipaddress;
     let media_server: &String = &head_dict.media_server;
     let user_id: &String = &head_dict.config_file.user_id;
@@ -440,13 +454,12 @@ fn print_series(series: &SeriesStruct, head_dict: &HeadDict, printing: bool) -> 
             } else {
                 "│    ├──"
             };
-            if episode_list.contains(&episode) && season.Type != "Specials" {
-                continue
-            }
-            episode_list.push(season_json.Items[episode_numb].clone());
+            if ! episode_list.contains(&episode) {
+                episode_list.push(season_json.Items[episode_numb].clone());
+            };
             if ! printing {
                 continue
-            }
+            };
             if episode.UserData.PlayedPercentage.is_some() {
                 let long_perc: f64 = episode.UserData.PlayedPercentage.unwrap();
                 println!("  {} [{}] {} {} ", episode_branches, &episode_list.iter().position(|y| y == &episode).unwrap(), episode.Name, format!("{}%", long_perc.round() as i64))

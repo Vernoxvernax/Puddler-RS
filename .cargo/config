@@ -1,7 +1,7 @@
 [target.x86_64-pc-windows-gnu]
 #rustflags = ["-L./mpv", "-C target-feature=+crt-static"]
-rustflags = ["-L./mpv"]
+rustflags = ["-l./mpv"]
 
 [target.x86_64-pc-windows-msvc]
 #rustflags = ["-L./mpv", "-C", "target-feature=+crt-static"]
-rustflags = ["-L./mpv"]
+rustflags = ["-l./mpv"]

@@ -48,14 +48,20 @@ Then you should be able to run it.
 
 ___
 
+### Limitations:
+
+* The api doesn't support transcoding while also delivering font attachments.
+    *  Heavily stylied subtitles won't display as intended, and it seems there is currently no feasable way around it
+
+___
+
 ## Compiling:
 
 What you'll need:
 
 * cargo
 * git
-
-
+___
 
 ### Linux:
 
@@ -85,7 +91,6 @@ Cargo will print the output folder of the `.exe` so that you know what folder to
 
 ___
 
-
 ### Linux-to-Windows Cross-Compile:
 
 In case someone struggles with linking to libmpv just like me:
@@ -100,32 +105,32 @@ Additionally you will need the following tools:
 #### **Procedure:**
 
 + Get the newest libmpv-dev from sourceforge [here](https://sourceforge.net/projects/mpv-player-windows/files/libmpv/) (wget command below).
++ Visual Studio (f.e. the community edition) [microsoft.com](https://visualstudio.microsoft.com/vs/features/cplusplus)
+    + for the sole purpose of libmpv, you will only need `Desktop Development With C++ Workload`.
 
 
 ```
-$ rustup target add x86_64-pc-windows-gnu
-$ git clone https://github.com/VernoxVernax/Puddler-RS.git
-$ cd Puddler-RS
-$ wget https://sourceforge.net/projects/mpv-player-windows/files/libmpv/mpv-dev-x86_64-20220626-git-3a2838c.7z/download -O mpv.7z
-$ 7z e -y mpv-dev.7z -ompv-dev
-$ cd mpv-dev
-$ gendef mpv-2.dll
+rustup target add x86_64-pc-windows-gnu
+git clone https://github.com/VernoxVernax/Puddler-RS.git
+cd Puddler-RS
+wget https://sourceforge.net/projects/mpv-player-windows/files/libmpv/mpv-dev-x86_64-20220626-git-3a2838c.7z/download -O mpv.7z
+7z e -y mpv-dev.7z -ompv-dev
+cd mpv-dev
+gendef mpv-2.dll
 ```
 
 On a windows system, you'll now have to open `cmd` and `cd` in to the `mpv-dev` folder.
 
 ```
-$ "C:\Progam Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat"
-$ lib /def:mpv-2.def /name:mpv-2.dll /out:mpv.lib
+"C:\Progam Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" x86_amd64
+lib /def:mpv-2.def /name:mpv-2.dll /out:mpv.lib
 ```
+then copy `mpv.lib` to the `mpv` folder
+
 
 Back on linux you should now be able to compile it just like this:
 ```
-$ cargo build --target=x86_64-pc-windows-gnu --release
+cargo build --target=x86_64-pc-windows-gnu --release
 ```
 
 Errors upon compiling? Take a look at `./.cargo/config`.
-
-___
-
-Now features everything the python version does, just a little better.

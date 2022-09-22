@@ -6,6 +6,7 @@ use mpv::MpvHandler;
 use serde_derive::{Deserialize};
 use serde::Serialize;
 use isahc::ReadResponseExt;
+use crate::getch;
 use crate::discord;
 use crate::discord::DiscordClient;
 use crate::APPNAME;
@@ -122,7 +123,48 @@ fn choose_trackIndexx(item: &Items) -> (usize, usize) {
 }
 
 
-pub fn play(settings: &Settings, head_dict: &HeadDict, item: &Items) {
+pub fn play(settings: &Settings, head_dict: &HeadDict, Item: &Items) {
+    let item: &mut Items = &mut Item.clone();
+    item.UserData.PlaybackPositionTicks = {
+        if item.UserData.PlaybackPositionTicks == 0 || ! settings.transcoding {
+            0
+        } else {
+            let time = (item.UserData.PlaybackPositionTicks as f64) / 10000000.0;
+            let formated: String = if time > 60.0 {
+                if (time / 60.0) > 60.0 {
+                    format!("{:02}:{:02}:{:02}", ((time / 60.0) / 60.0).trunc(), ((((time / 60.0) / 60.0) - ((time / 60.0) / 60.).trunc()) * 60.0).trunc(), (((time / 60.0) - (time / 60.0).trunc()) * 60.0).trunc())
+                } else {
+                    format!("00:{:02}:{:02}", (time / 60.0).trunc(), (((time / 60.0) - (time / 60.0).trunc()) * 60.0).trunc())
+                }
+            } else {
+                time.to_string()
+            };
+            print!("Do you want to continue at time: {}?\n  (Y)es | (N)o (from the beginning) | (O)ther position", formated);
+            match getch("YyNnOo") {
+                'N' | 'n' => {
+                    0
+                },
+                'O' | 'o' => {
+                    print!("Please enter a playback position in minutes: ");
+                    io::stdout().flush().expect("Failed to flush stdout");
+                    let mut input = String::new();
+                    loop {
+                        io::stdin().read_line(&mut input).unwrap();
+                        if input.trim().parse::<u64>().is_err() {
+                            print!("\nInvalid input, please try again.\n: ");
+                        } else {
+                            break
+                        }
+                    }
+                    input.trim().parse::<u64>().unwrap() * 60 * 10000000
+                },
+                _ => {
+                    item.UserData.PlaybackPositionTicks
+                }
+            }
+
+        }
+    };
     let playback_info: PlaybackInfo = if settings.transcoding {
         let (audioIndex, subIndex) = choose_trackIndexx(item);
         print!("Please enter your internet speed in mbps: ");
@@ -256,11 +298,11 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, item: &Items) {
                     }
                 }
                 mpv::Event::Shutdown => {
-                    finished_playback(head_dict, item, old_pos * 10000000.0, &playback_info.PlaySessionId, &playback_info.MediaSources[0].Id, false);
+                    finished_playback(settings, head_dict, item, old_pos * 10000000.0, &playback_info.PlaySessionId, &playback_info.MediaSources[0].Id, false);
                     break 'main;
                 }
                 mpv::Event::EndFile(_t) => {
-                    finished_playback(head_dict, item, old_pos * 10000000.0, &playback_info.PlaySessionId, &playback_info.MediaSources[0].Id, true);
+                    finished_playback(settings, head_dict, item, old_pos * 10000000.0, &playback_info.PlaySessionId, &playback_info.MediaSources[0].Id, true);
                     break 'main;
                 }
                 mpv::Event::Seek | mpv::Event::PlaybackRestart => {
