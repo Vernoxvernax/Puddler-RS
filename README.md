@@ -123,7 +123,7 @@ On a windows system, you'll now have to open `cmd` and `cd` in to the `mpv-dev` 
 
 ```
 "C:\Progam Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" x86_amd64
-lib /def:mpv-2.def /name:mpv-2.dll /out:mpv.lib
+lib /def:mpv-2.def /name:mpv-2.dll /out:mpv.lib /MACHINE:x64
 ```
 then copy `mpv.lib` to the `mpv` folder
 

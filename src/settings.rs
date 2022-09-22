@@ -155,7 +155,7 @@ fn search_server_configs() -> Option<String> {
     let config_path = get_app_root(AppDataType::UserConfig, &APP_INFO).unwrap();
     println!("Searching in \"{}\" for emby or jellyfin configuration files ...", &config_path.display());
     if fs::read_dir(&config_path).is_err() {
-        fs::create_dir(&config_path).expect("Could not create config directory!")
+        fs::create_dir_all(&config_path).expect("Could not create config directory!")
     };
     let path: Vec<_> = fs::read_dir(&config_path).unwrap().map(|r| r.unwrap()).collect();
     let mut files: Vec<String> = [].to_vec();
