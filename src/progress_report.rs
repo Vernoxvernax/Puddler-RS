@@ -66,7 +66,7 @@ pub struct MediaStream {
     pub DisplayTitle: Option<String>,
     pub DisplayLanguage: Option<String>,
     pub Title: Option<String>,
-    pub Codec: String,
+    pub Codec: Option<String>,
     pub Width: Option<u32>,
     pub Height: Option<u32>,
     pub IsDefault: bool
@@ -76,9 +76,9 @@ pub struct MediaStream {
 impl fmt::Display for MediaStream {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if self.IsDefault {
-            write!(f, "Title = \"{}\", Language = \"{}\", Codec = \"{}\" {}", self.Title.as_ref().unwrap_or(&self.DisplayTitle.as_ref().unwrap_or(&"".to_string())), self.DisplayLanguage.as_ref().unwrap_or(&self.Language.as_ref().unwrap_or(&"undefined".to_string())), self.Codec.to_uppercase(), format!("[Default]").green())
+            write!(f, "Title = \"{}\", Language = \"{}\", Codec = \"{}\" {}", self.Title.as_ref().unwrap_or(&self.DisplayTitle.as_ref().unwrap_or(&"".to_string())), self.DisplayLanguage.as_ref().unwrap_or(&self.Language.as_ref().unwrap_or(&"undefined".to_string())), self.Codec.as_ref().unwrap_or(&"???".to_string()).to_uppercase(), format!("[Default]").green())
         } else {
-            write!(f, "Title = \"{}\", Language = \"{}\", Codec = \"{}\"", self.Title.as_ref().unwrap_or(&self.DisplayTitle.as_ref().unwrap_or(&"".to_string())), self.DisplayLanguage.as_ref().unwrap_or(&self.Language.as_ref().unwrap_or(&"undefined".to_string())), self.Codec.to_uppercase())
+            write!(f, "Title = \"{}\", Language = \"{}\", Codec = \"{}\"", self.Title.as_ref().unwrap_or(&self.DisplayTitle.as_ref().unwrap_or(&"".to_string())), self.DisplayLanguage.as_ref().unwrap_or(&self.Language.as_ref().unwrap_or(&"undefined".to_string())), self.Codec.as_ref().unwrap_or(&"???".to_string()).to_uppercase())
         }
     }
 }

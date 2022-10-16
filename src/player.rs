@@ -316,18 +316,20 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, Item: &Items) {
                             Ok(nice) => {
                                     update_progress(settings, head_dict, item, nice * 10000000.0, paused, &playback_info.PlaySessionId, &playback_info.MediaSources[0].Id);
                                     old_pos = nice;
-                                    if item.Type == "Movie" {
-                                        DiscordClient::pause(&mut discord, head_dict,
-                                            "".to_string(),
-                                            format!("Streaming: {} ({})", &item.Name, &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4]),
-                                            nice,
-                                        );
-                                    } else {
-                                        DiscordClient::pause(&mut discord, head_dict,
-                                            format!("Streaming: {} ({})", &item.SeriesName.as_ref().unwrap(), &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4]),
-                                            format!("{} ({})", item.Name, item.SeasonName.as_ref().unwrap()),
-                                            nice,
-                                        );
+                                    if settings.discord_presence {
+                                        if item.Type == "Movie" {
+                                            DiscordClient::pause(&mut discord, head_dict,
+                                                "".to_string(),
+                                                format!("Streaming: {} ({})", &item.Name, &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4]),
+                                                nice,
+                                            );
+                                        } else {
+                                            DiscordClient::pause(&mut discord, head_dict,
+                                                format!("Streaming: {} ({})", &item.SeriesName.as_ref().unwrap(), &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4]),
+                                                format!("{} ({})", item.Name, item.SeasonName.as_ref().unwrap()),
+                                                nice,
+                                            );
+                                        }
                                     }
                             }
                             _ => ()

@@ -164,24 +164,26 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
         println!("\nContinue Watching:");
         item_list = print_menu(&response, true, item_list);
     }
-    if media_server != "/emby" {
-        let jellyfin_nextup = puddler_get(format!("{}{}/Shows/NextUp?Fields=PremiereDate,MediaSources&UserId={}", &ipaddress, &media_server, &user_id), head_dict);
-        let jellyfin_response: ItemJson = match jellyfin_nextup {
-            Ok(mut t) => {
-                let jellyfin_response_text = &t.text().unwrap();
-                serde_json::from_str(jellyfin_response_text).unwrap()
-            }
-            Err(e) => panic!("failed to parse get request: {}", e)
-        };
-        if jellyfin_response.TotalRecordCount.unwrap() != 0 {
-            if response.TotalRecordCount.unwrap() == 0 {
-                println!("\nContinue Watching:");
-            }
-            item_list = print_menu(&jellyfin_response, true, item_list);
+    // if media_server != "/emby" {
+    let latest_series = puddler_get(format!("{}{}/Users/{}/Items/Latest?Limit=10&IncludeItemTypes=Episode&Fields=PremiereDate,MediaSources", &ipaddress, &media_server, &user_id), head_dict);
+    let latest_series_response: ItemJson = match latest_series {
+        Ok(mut t) => {
+            let response_text = &t.text().unwrap();
+            let response_text = format!("{{\"Items\":{}}}", &response_text.to_string());
+            serde_json::from_str(&response_text).unwrap()
         }
+        Err(e) => panic!("failed to parse get request: {}", e)
+    };
+    if latest_series_response.Items.len() > 0 {
+        println!("\nLatest:");
+        // if response.TotalRecordCount.unwrap() == 0 {
+        //     println!("\nContinue Watching:");
+        // }
+        item_list = print_menu(&latest_series_response, true, item_list);
     }
+    // }
     // latest
-    let latest = puddler_get(format!("{}{}/Users/{}/Items/Latest?Fields=PremiereDate,MediaSources", &ipaddress, &media_server, &user_id), head_dict);
+    let latest = puddler_get(format!("{}{}/Users/{}/Items/Latest?Limit=10&IncludeItemTypes=Movie&Fields=PremiereDate,MediaSources", &ipaddress, &media_server, &user_id), head_dict);
     let latest_response: ItemJson = match latest {
         Ok(mut t) => {
             let response_text: &String = &t.text().unwrap();
@@ -190,8 +192,12 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
         }
         Err(e) => panic!("failed to parse get request: {}", e)
     };
-    println!("\nLatest:");
-    item_list = print_menu(&latest_response, true, item_list);
+    if latest_response.Items.len() > 0 {
+        if latest_series_response.Items.len() == 0 {
+            println!("\nLatest:");
+        }
+        item_list = print_menu(&latest_response, true, item_list);
+    }
     print!("Please choose from above, enter a search term, or type \"ALL\" to display literally everything.\n: ");
     io::stdout().flush().expect("Failed to flush stdout");
     let mut input = String::new();
@@ -422,6 +428,7 @@ fn process_series(series: &SeriesStruct, head_dict: &HeadDict, printing: bool) -
     let ipaddress: &String = &head_dict.config_file.ipaddress;
     let media_server: &String = &head_dict.media_server;
     let user_id: &String = &head_dict.config_file.user_id;
+    let mut index_iterator: i32 = 0;
     let mut episode_list: Vec<Items> = Vec::new();
     for season_numb in 0..series.Items.len() {
         let last_season = series.Items.len() == season_numb + 1;
@@ -442,7 +449,7 @@ fn process_series(series: &SeriesStruct, head_dict: &HeadDict, printing: bool) -
             }
             Err(e) => panic!("failed to parse series request: {}", e)
         };
-        for episode_numb in 0..season_json.Items.len() { // for the code readers: the "season_json" vector obviously is different to "season" since the latter doesn't include any episodes.
+        for episode_numb in 0..season_json.Items.len() { // for the code readers: the "season_json" vector is obviously different to "season" since the latter doesn't include any episodes.
             let episode: Items = season_json.Items[episode_numb].clone();
             let last_episode = season_json.Items.len() == episode_numb + 1;
             let episode_branches = if last_episode && last_season {
@@ -456,18 +463,21 @@ fn process_series(series: &SeriesStruct, head_dict: &HeadDict, printing: bool) -
             };
             if ! episode_list.contains(&episode) {
                 episode_list.push(season_json.Items[episode_numb].clone());
-            };
+            } else if episode.SeasonName == Some("Specials".to_string()) {
+                episode_list.push(season_json.Items[episode_numb].clone());
+            }
             if ! printing {
                 continue
             };
             if episode.UserData.PlayedPercentage.is_some() {
                 let long_perc: f64 = episode.UserData.PlayedPercentage.unwrap();
-                println!("  {} [{}] {} {} ", episode_branches, &episode_list.iter().position(|y| y == &episode).unwrap(), episode.Name, format!("{}%", long_perc.round() as i64))
+                println!("  {} [{}] {} {} ", episode_branches, index_iterator, episode.Name, format!("{}%", long_perc.round() as i64))
             } else if episode.UserData.Played {
-                println!("  {} [{}] {} {} ", episode_branches, &episode_list.iter().position(|y| y == &episode).unwrap(), episode.Name, "[PLAYED]".to_string().green());
+                println!("  {} [{}] {} {} ", episode_branches, index_iterator, episode.Name, "[PLAYED]".to_string().green());
             } else {
-                println!("  {} [{}] {}", episode_branches, &episode_list.iter().position(|y| y == &episode).unwrap(), episode.Name);
-            }
+                println!("  {} [{}] {}", episode_branches, index_iterator, episode.Name);
+            };
+            index_iterator += 1;
         }
     };
     episode_list
@@ -493,7 +503,7 @@ fn print_menu(items: &ItemJson, recommendation: bool, mut item_list: Vec<Items>)
                     let long_perc: f64 = x.UserData.PlayedPercentage.unwrap();
                     let percentage = format!("{}%", long_perc.round() as i64); // Pardon the `.round`
                     if count != 1 {
-                        if x.Type == *"Episode" {
+                        if x.Type == *"Episode" || x.Type == *"Special" {
                             println!("      [{}] {} ({}) - {} - {} - ({}) {}", &item_list.iter().position(|y| y == &x).unwrap(), x.SeriesName.unwrap(), &x.PremiereDate.unwrap_or("????".to_string())[0..4], x.SeasonName.unwrap(), x.Name, x.Type, percentage);
                         } else {
                             println!("      [{}] {} ({}) - ({}) {}", &item_list.iter().position(|y| y == &x).unwrap(), x.Name, &x.PremiereDate.unwrap_or("????".to_string())[0..4], x.Type, percentage);
@@ -502,7 +512,7 @@ fn print_menu(items: &ItemJson, recommendation: bool, mut item_list: Vec<Items>)
                         println!("\nOnly one item has been found.\nDo you want to select this title?\n      {}", format!("[Enter] {} ({}) - ({})", x.Name, &x.PremiereDate.unwrap_or("????".to_string())[0..4], x.Type).cyan());
                     }
                 } else if count != 1 {
-                    if x.Type == *"Episode" {
+                    if x.Type == *"Episode" || x.Type == *"Special" {
                         println!("      [{}] {} ({}) - {} - {} - ({})", &item_list.iter().position(|y| y == &x).unwrap(), x.SeriesName.unwrap(), &x.PremiereDate.unwrap_or("????".to_string())[0..4], x.SeasonName.unwrap(), x.Name, x.Type);
                     } else {
                         println!("      [{}] {} ({}) - ({})", &item_list.iter().position(|y| y == &x).unwrap(), x.Name, &x.PremiereDate.unwrap_or("????".to_string())[0..4], x.Type);
@@ -511,7 +521,11 @@ fn print_menu(items: &ItemJson, recommendation: bool, mut item_list: Vec<Items>)
                     println!("\nOnly one item has been found.\nDo you want to select this title?\n      {}", format!("[Enter] {} ({}) - ({})", x.Name, &x.PremiereDate.unwrap_or("????".to_string())[0..4], x.Type).cyan());
                 }
             } else if count != 1 {
-                println!("      [{}] {} ({}) - ({})  {}", &item_list.iter().position(|y| y == &x).unwrap(), x.Name, &x.PremiereDate.unwrap_or("????".to_string())[0..4], x.Type, "[PLAYED]".to_string().green());
+                if x.Type == *"Episode" || x.Type == *"Special" {
+                    println!("      [{}] {} ({}) - {} - {} - ({})  {}", &item_list.iter().position(|y| y == &x).unwrap(), x.SeriesName.unwrap(), &x.PremiereDate.unwrap_or("????".to_string())[0..4], x.SeasonName.unwrap(), x.Name, x.Type, "[PLAYED]".to_string().green());
+                } else {
+                    println!("      [{}] {} ({}) - ({})  {}", &item_list.iter().position(|y| y == &x).unwrap(), x.Name, &x.PremiereDate.unwrap_or("????".to_string())[0..4], x.Type, "[PLAYED]".to_string().green());
+                }
             } else {
                 println!("\nOnly one item has been found.\nDo you want to select this title?\n      {}", format!("[Enter] {} ({}) - ({})", x.Name, &x.PremiereDate.unwrap_or("????".to_string())[0..4], x.Type).cyan());
             }
