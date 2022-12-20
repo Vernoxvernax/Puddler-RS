@@ -143,9 +143,7 @@ fn initiate_discord() -> bool {
         'N' | 'n' => {
             false
         },
-        _ => (
-            false
-        )
+        _ => false
     };
     connection
 }
@@ -210,9 +208,7 @@ fn transcoding() -> bool {
         'N' | 'n' => {
             false
         },
-        _ => (
-            false
-        )
+        _ => false
     }
 }
 
@@ -227,9 +223,7 @@ fn start_fullscreen() -> bool {
         'N' | 'n' => {
             false
         },
-        _ => (
-            false
-        )
+        _ => false
     }
 }
 
@@ -284,8 +278,6 @@ fn automatically_login() -> bool {
         'N' | 'n' => {
             false
         },
-        _ => (
-            false
-        )
+        _ => false
     }
 }

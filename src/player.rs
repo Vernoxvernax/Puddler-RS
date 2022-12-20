@@ -77,56 +77,41 @@ struct SubtitleProfile {
 
 
 fn choose_trackIndexx(item: &Items) -> (usize, usize) {
+    fn select_ind(tracks: Vec<MediaStream>, kind: &str) -> usize {
+        if tracks.len() > 1 {
+            return tracks[Select::with_theme(&ColorfulTheme::default())
+            .with_prompt("Please select which ".to_owned() + &kind + " track you want to use:")
+            .default(0)
+            .items(&tracks[..])
+            .interact()
+            .unwrap()].Index
+        } else if tracks.len() == 1 {
+            println!("The following {} track will be used:\n{}", kind, tracks.first().unwrap().to_string().green());
+            return tracks[0].Index
+        } else {
+            println!("This file doesn't have any {} track.", kind);
+            return 0
+        }
+    }
     let mut subtitle_tracks: Vec<MediaStream> = [].to_vec();
     let mut audio_tracks: Vec<MediaStream> = [].to_vec();
     let mediaStreams: &Vec<MediaStream> = &item.MediaSources.as_ref().unwrap().first().unwrap().MediaStreams;
     for track in mediaStreams.into_iter() {
         match &track.Type as &str {
-            "Audio" => (
-                audio_tracks.append(&mut [track.clone()].to_vec())
-            ),
-            "Subtitle" => (
-                subtitle_tracks.append(&mut [track.clone()].to_vec())
-            ),
+            "Audio" => audio_tracks.append(&mut [track.clone()].to_vec()),
+            "Subtitle" => subtitle_tracks.append(&mut [track.clone()].to_vec()),
             _ => ()
         }
     };
     println!("");
-    let audioIndex = if audio_tracks.len() > 1 {
-        Select::with_theme(&ColorfulTheme::default())
-            .with_prompt("Please select which audio track you want to use:")
-            .default(0)
-            .items(&audio_tracks[..])
-            .interact()
-            .unwrap()
-    } else {
-        println!("The following audio track will be used:\n{}", audio_tracks.first().unwrap().to_string().green());
-        0
-    };
-    println!("");
-    let subIndex = if subtitle_tracks.len() > 1 {
-        Select::with_theme(&ColorfulTheme::default())
-            .with_prompt("Please select which subtitle track you want to use:")
-            .default(0)
-            .items(&subtitle_tracks[..])
-            .interact()
-            .unwrap()
-    } else if subtitle_tracks.len() == 1 {
-        println!("The following subtitle track will be used:\n{}", subtitle_tracks.first().unwrap().to_string().green());
-        0
-    } else {
-        println!("This file doesn't have any subtitles.");
-        0
-    };
-    println!("");
-    (audio_tracks[audioIndex].Index, subtitle_tracks[subIndex].Index)
+    (select_ind(audio_tracks, "audio"), select_ind(subtitle_tracks, "subtitle"))
 }
 
 
 pub fn play(settings: &Settings, head_dict: &HeadDict, Item: &Items) {
     let item: &mut Items = &mut Item.clone();
     item.UserData.PlaybackPositionTicks = {
-        if item.UserData.PlaybackPositionTicks == 0 || ! settings.transcoding {
+        if item.UserData.PlaybackPositionTicks == 0 && ! settings.transcoding {
             0
         } else {
             let time = (item.UserData.PlaybackPositionTicks as f64) / 10000000.0;
@@ -139,24 +124,28 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, Item: &Items) {
             } else {
                 time.to_string()
             };
-            print!("Do you want to continue at time: {}?\n  (Y)es | (N)o (from the beginning) | (O)ther position", formated);
+            print!("Do you want to continue at time: {}?\n  (Y)es | (N)o (start from a different position)", formated);
             match getch("YyNnOo") {
                 'N' | 'n' => {
-                    0
-                },
-                'O' | 'o' => {
                     print!("Please enter a playback position in minutes: ");
-                    io::stdout().flush().expect("Failed to flush stdout");
-                    let mut input = String::new();
+                    let mut input: String;
                     loop {
+                        input = String::new();
+                        io::stdout().flush().expect("Failed to flush stdout");
                         io::stdin().read_line(&mut input).unwrap();
-                        if input.trim().parse::<u64>().is_err() {
+                        if input.trim().parse::<f64>().is_err() {
                             print!("\nInvalid input, please try again.\n: ");
+                        } else if input.contains(".") {
+                            if input.split(".").collect::<Vec<&str>>().get(1).unwrap().len() > 8 {
+                                print!("\nInvalid input, please lower the amount of decimal places.\n: ");
+                            } else {
+                                break
+                            }
                         } else {
                             break
                         }
                     }
-                    input.trim().parse::<u64>().unwrap() * 60 * 10000000
+                    (input.trim().parse::<f64>().unwrap() * 60.0 * 10000000.0).to_string().parse::<u64>().unwrap()
                 },
                 _ => {
                     item.UserData.PlaybackPositionTicks
@@ -167,7 +156,7 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, Item: &Items) {
     };
     let playback_info: PlaybackInfo = if settings.transcoding {
         let (audioIndex, subIndex) = choose_trackIndexx(item);
-        print!("Please enter your internet speed in mbps: ");
+        print!("\nPlease enter your internet speed in mbps: ");
         let mut mbps: String = String::new();
         loop {
             io::stdout().flush().expect("Failed to flush stdout");
@@ -276,12 +265,13 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, Item: &Items) {
     if settings.fullscreen {
         mpv.set_property("fullscreen", "yes").expect("Couldn't configure fullscreen.");
     }
-    mpv.set_property("title", format!("{} - Streaming: {} ({})", APPNAME, item.Name, &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4]).as_str()).expect("Couldn't configure title.");
     mpv.set_property("user-agent", APPNAME).expect("Couldn't configure user-agent.");
     if item.Type == "Movie" {
         mpv.set_property("force-media-title", format!("{} ({}) | {}", item.Name, &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4], head_dict.media_server_name).as_str()).expect("Couldn't configure force-media-title.");
+        mpv.set_property("title", format!("{} - Streaming: {} ({})", APPNAME, item.Name, &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4]).as_str()).expect("Couldn't configure title.");
     } else {
         mpv.set_property("force-media-title", format!("{} ({}) - {} - {} | {}", item.SeriesName.as_ref().unwrap(), &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4], item.SeasonName.as_ref().unwrap(), item.Name, head_dict.media_server_name).as_str()).expect("Couldn't configure force-media-title.");
+        mpv.set_property("title", format!("{} - Streaming: {} ({}) - {} - {}", APPNAME, item.SeriesName.as_ref().unwrap(), &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4], item.SeasonName.as_ref().unwrap(), item.Name).as_str()).expect("Couldn't configure title.");
     }
     mpv.command(&["loadfile", &stream_url as &str]).expect("Failed to stream the file :/");
     let mut discord: DiscordClient = discord::mpv_link(settings.discord_presence);
@@ -402,5 +392,4 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, Item: &Items) {
         }
         thread::sleep(time::Duration::from_millis(500));
     }
-    // Here, you can add more commands on what should happen after playback.
 }

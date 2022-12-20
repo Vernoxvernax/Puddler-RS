@@ -1,13 +1,13 @@
 [package]
 name = "puddler"
-version = "0.5.9"
+version = "0.5.10"
 edition = "2021"
 
 [dependencies]
 getch = "0.3.1"
 isahc = { version = "1.7.2", features = ["json"]}
 app_dirs = { package = "app_dirs2", version = "2.5" }
-serde_json = "1.0.82"
+serde_json = "1.0.89"
 serde = { version = "1.0.140", features = ["derive"] }
 serde_derive = "1.0.140"
 http = "0.2.8"

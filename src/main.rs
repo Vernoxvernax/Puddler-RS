@@ -164,7 +164,22 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
         println!("\nContinue Watching:");
         item_list = print_menu(&response, true, item_list);
     }
-    // if media_server != "/emby" {
+    if media_server != "/emby" {
+        let jellyfin_nextup = puddler_get(format!("{}{}/Shows/NextUp?Fields=PremiereDate,MediaSources&UserId={}", &ipaddress, &media_server, &user_id), head_dict);
+        let jellyfin_response: ItemJson = match jellyfin_nextup {
+            Ok(mut t) => {
+                let jellyfin_response_text = &t.text().unwrap();
+                serde_json::from_str(jellyfin_response_text).unwrap()
+            }
+            Err(e) => panic!("failed to parse get request: {}", e)
+        };
+        if jellyfin_response.TotalRecordCount.unwrap() != 0 {
+            if response.TotalRecordCount.unwrap() == 0 {
+                println!("\nContinue Watching:");
+            }
+            item_list = print_menu(&jellyfin_response, true, item_list);
+        }
+    }
     let latest_series = puddler_get(format!("{}{}/Users/{}/Items/Latest?Limit=10&IncludeItemTypes=Episode&Fields=PremiereDate,MediaSources", &ipaddress, &media_server, &user_id), head_dict);
     let latest_series_response: ItemJson = match latest_series {
         Ok(mut t) => {
@@ -176,9 +191,6 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
     };
     if latest_series_response.Items.len() > 0 {
         println!("\nLatest:");
-        // if response.TotalRecordCount.unwrap() == 0 {
-        //     println!("\nContinue Watching:");
-        // }
         item_list = print_menu(&latest_series_response, true, item_list);
     }
     // }

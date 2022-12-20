@@ -1,5 +1,4 @@
-* emby now prints series and movies in the latest section (limited to 10 entries each)
-* fixed printing when a played episode/special is shown at "continue-watching" (yes this can happend)
-* specials can now appear in the "play-next" prompt after finishing an episode
-* discord presence actually turned off (paused state wasn't blocked)
-* the codec field can apparently be undefined -> fallback to "???" added
+* reinstatet nextup tv-show for jellyfin servers (don't ask me)
+* activated the "do you want to continue at" question for all transcoding requests
+* turned transcoding question input to float, so you can type something like `3.5` being `3min 30seconds`
+* fixed window title in series mode
