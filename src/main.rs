@@ -87,7 +87,8 @@ struct SeasonStruct {
 
 fn main() {
     let mut settings: Settings = initialize_settings(0);
-    println!("{}", r"     ____            __    ____         
+    println!("{}", r"\
+     ____            __    ____         
     / __ \__  ______/ /___/ / /__  _____
    / /_/ / / / / __  / __  / / _ \/ ___/
   / ____/ /_/ / /_/ / /_/ / /  __/ /    
@@ -158,7 +159,10 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
             let response_text = &t.text().unwrap();
             serde_json::from_str(response_text).unwrap()
         }
-        Err(e) => panic!("failed to parse get request: {}", e)
+        Err(e) => {
+            println!("Your network connection seems to be limited. Error: {}\nUnable to continue.", e);
+            process::exit(0x0100);
+        }
     };
     if response.TotalRecordCount.unwrap() != 0 {
         println!("\nContinue Watching:");
@@ -180,6 +184,7 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
             item_list = print_menu(&jellyfin_response, true, item_list);
         }
     }
+    // latest
     let latest_series = puddler_get(format!("{}{}/Users/{}/Items/Latest?Limit=10&IncludeItemTypes=Episode&Fields=PremiereDate,MediaSources", &ipaddress, &media_server, &user_id), head_dict);
     let latest_series_response: ItemJson = match latest_series {
         Ok(mut t) => {
@@ -193,8 +198,6 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
         println!("\nLatest:");
         item_list = print_menu(&latest_series_response, true, item_list);
     }
-    // }
-    // latest
     let latest = puddler_get(format!("{}{}/Users/{}/Items/Latest?Limit=10&IncludeItemTypes=Movie&Fields=PremiereDate,MediaSources", &ipaddress, &media_server, &user_id), head_dict);
     let latest_response: ItemJson = match latest {
         Ok(mut t) => {
@@ -216,7 +219,7 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
     io::stdin().read_line(&mut input).unwrap();
     // processing input
     if input.trim() == "ALL" {
-        let all = puddler_get(format!("{}{}/Items?UserId={}&Recursive=true&IncludeItemTypes=Series,Movie&Fields=PremiereDate,MediaSources", &ipaddress, &media_server, &user_id), head_dict);
+        let all = puddler_get(format!("{}{}/Items?UserId={}&Recursive=true&IncludeItemTypes=Series,Movie&Fields=PremiereDate,MediaSources&collapseBoxSetItems=False", &ipaddress, &media_server, &user_id), head_dict);
         let all_response: ItemJson = match all {
             Ok(mut t) => {
                 let response_text: &String = &t.text().unwrap();
@@ -311,7 +314,7 @@ fn process_input(item_list: &Vec<Items>, number: Option<String>) -> Option<i32> 
                 println!("\nYou've chosen {}.\n", format!("{} ({})", item.Name, &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4]).cyan());
             }
         } else {
-            println!("{}", "Are you stupid?!".to_string().red());
+            println!("{}", "Are you mentally ill?!".to_string().red());
             process::exit(0x0100);
         }
         Some(pick)
@@ -364,7 +367,7 @@ fn item_parse(head_dict: &HeadDict, item_list: &Vec<Items>, pick: i32, settings:
                     println!("\nYou've chosen {}.\n", format!("{} ({})", item.Name, &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4]).cyan());
                 }
             } else {
-                println!("{}", "Are you stupid?!".to_string().red());
+                println!("{}", "Are you mentally ill?!".to_string().red());
                 process::exit(0x0100);
             }
         } else {

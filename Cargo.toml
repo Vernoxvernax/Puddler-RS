@@ -1,23 +1,23 @@
 [package]
 name = "puddler"
-version = "0.5.10"
+version = "0.5.11"
 edition = "2021"
 
 [dependencies]
 getch = "0.3.1"
 isahc = { version = "1.7.2", features = ["json"]}
-app_dirs = { package = "app_dirs2", version = "2.5" }
-serde_json = "1.0.89"
-serde = { version = "1.0.140", features = ["derive"] }
-serde_derive = "1.0.140"
+app_dirs = { package = "app_dirs2", version = "2.5.4" }
+serde_json = "1.0.91"
+serde = { version = "1.0.152", features = ["derive"] }
+serde_derive = "1.0.152"
 http = "0.2.8"
 colored = "2.0.0"
-urlencoding = "2.1.0"
-mpv = { version = "0.2.4", git = "https://github.com/Vernoxvernax/mpv-rs.git"}
-discord-rich-presence = "0.2.1"
-uuid = { version = "1.1.2", features = ["v4"] }
-config = { version = "0.13.1", features = ["yaml"] }
-toml = "0.5.9"
-regex = "1.6.0"
-rpassword = "7.0.0"
-dialoguer = "0.10.2"
+urlencoding = "2.1.2"
+mpv = { git = "https://github.com/Vernoxvernax/mpv-rs.git" }
+discord-rich-presence = "0.2.3"
+uuid = { version = "1.2.2", features = ["v4"] }
+config = { version = "0.13.3", features = ["yaml"] }
+toml = "0.7.1"
+regex = "1.7.1"
+rpassword = "7.2.0"
+dialoguer = "0.10.3"

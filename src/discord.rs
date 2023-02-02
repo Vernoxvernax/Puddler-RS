@@ -55,7 +55,7 @@ impl DiscordClient {
             }
         }
     }
-    pub fn pause(&mut self, head_dict: &HeadDict, details: String, state: String, _time: f64) {
+    pub fn pause(&mut self, head_dict: &HeadDict, details: String, state: String) {
         if !self.connection {
             self.connection = self.client.connect().is_ok();
         }
@@ -64,17 +64,24 @@ impl DiscordClient {
                 self.client
                     .set_activity(
                         activity::Activity::new()
-                            .assets(activity::Assets::new().small_image(&head_dict.media_server_name.to_lowercase()))
+                            .assets(
+                                activity::Assets::new()
+                                    .large_image(&head_dict.media_server_name.to_lowercase())
+                                    .small_image("pause2")
+                                )
                             .details(&state)
-                            .state("Paused.".to_string().as_str())
                     ).ok();
             } else {
                 self.client
                     .set_activity(
                         activity::Activity::new()
-                            .assets(activity::Assets::new().small_image(&head_dict.media_server_name.to_lowercase()))
-                            .details(details.as_str())
-                            .state(format!("{}: Paused", &state).as_str())
+                            .assets(
+                                activity::Assets::new()
+                                    .large_image(&head_dict.media_server_name.to_lowercase())
+                                    .small_image("pause2")
+                                )
+                            .details(&details)
+                            .state(&state)
                     ).ok();
             }
         }

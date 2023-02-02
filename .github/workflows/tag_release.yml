@@ -37,7 +37,7 @@ jobs:
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ./target/release/puddler
-        asset_name: Puddler
+        asset_name: puddler
         asset_content_type: application/octet-stream
     - name: upload windows artifact
       uses: actions/upload-release-asset@v1
@@ -46,5 +46,5 @@ jobs:
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ./target/x86_64-pc-windows-gnu/release/puddler.exe
-        asset_name: Puddler.exe
+        asset_name: puddler.exe
         asset_content_type: application/octet-stream

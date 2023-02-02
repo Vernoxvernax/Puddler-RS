@@ -276,9 +276,8 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, Item: &Items) {
     mpv.command(&["loadfile", &stream_url as &str]).expect("Failed to stream the file :/");
     let mut discord: DiscordClient = discord::mpv_link(settings.discord_presence);
     let mut old_pos: f64 = -15.0;
-    let mut paused: bool = false;
+    let mut last_time_update: f64 = 0.0;
     let total_runtime: f64 = item.RunTimeTicks.unwrap() as f64 / 10000000.0;
-    let mut pause_update_counter: u8 = 0; // Since the mpv api for some reason sends two "Pause" events at once
     'main: loop {
         while let Some(event) = mpv.wait_event(0.0) {
             match event {
@@ -298,68 +297,6 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, Item: &Items) {
                 mpv::Event::Seek | mpv::Event::PlaybackRestart => {
                     old_pos -= 16.0
                 }
-                mpv::Event::Pause => {
-                    paused = true;
-                    if pause_update_counter == 0 {
-                        let result: Result<f64, mpv::Error> = mpv.get_property("time-pos");
-                        match result {
-                            Ok(nice) => {
-                                    update_progress(settings, head_dict, item, nice * 10000000.0, paused, &playback_info.PlaySessionId, &playback_info.MediaSources[0].Id);
-                                    old_pos = nice;
-                                    if settings.discord_presence {
-                                        if item.Type == "Movie" {
-                                            DiscordClient::pause(&mut discord, head_dict,
-                                                "".to_string(),
-                                                format!("Streaming: {} ({})", &item.Name, &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4]),
-                                                nice,
-                                            );
-                                        } else {
-                                            DiscordClient::pause(&mut discord, head_dict,
-                                                format!("Streaming: {} ({})", &item.SeriesName.as_ref().unwrap(), &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4]),
-                                                format!("{} ({})", item.Name, item.SeasonName.as_ref().unwrap()),
-                                                nice,
-                                            );
-                                        }
-                                    }
-                            }
-                            _ => ()
-                        }
-                        pause_update_counter = 1
-                    } else {
-                        pause_update_counter = 0
-                    }
-                }
-                mpv::Event::Unpause => {
-                    paused = false;
-                    if pause_update_counter == 0 {
-                        let result: Result<f64, mpv::Error> = mpv.get_property("time-pos");
-                        match result {
-                            Ok(nice) => {
-                                update_progress(settings, head_dict, item, nice * 10000000.0, paused, &playback_info.PlaySessionId, &playback_info.MediaSources[0].Id);
-                                if settings.discord_presence && ! paused {
-                                    if item.Type == "Movie" {
-                                        DiscordClient::update_presence(&mut discord, head_dict,
-                                            "".to_string(),
-                                            format!("Streaming: {} ({})", &item.Name, &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4]),
-                                            SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs_f64() + total_runtime - nice,
-                                        );
-                                    } else {
-                                        DiscordClient::update_presence(&mut discord, head_dict,
-                                            format!("Streaming: {} ({})", &item.SeriesName.as_ref().unwrap(), &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4]),
-                                            format!("{} ({})", item.Name, item.SeasonName.as_ref().unwrap()),
-                                            SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs_f64() + total_runtime - nice,
-                                        );
-                                    }
-                                }
-                                old_pos = nice;
-                            }
-                            _ => ()
-                        }
-                        pause_update_counter = 1
-                    } else {
-                        pause_update_counter = 0
-                    }
-                }
                 _ => {
                     // println!("{:#?}", event); // for debugging
                 }
@@ -369,8 +306,8 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, Item: &Items) {
         match result {
             Ok(nice) => {
                 if nice > old_pos + 15.0 { // this was the most retarded solution, I could think of
-                    update_progress(settings, head_dict, item, nice * 10000000.0, paused, &playback_info.PlaySessionId, &playback_info.MediaSources[0].Id);
-                    if settings.discord_presence && ! paused {
+                    update_progress(settings, head_dict, item, nice * 10000000.0, false, &playback_info.PlaySessionId, &playback_info.MediaSources[0].Id);
+                    if settings.discord_presence {
                         if item.Type == "Movie" {
                             DiscordClient::update_presence(&mut discord, head_dict,
                                 "".to_string(),
@@ -386,9 +323,25 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, Item: &Items) {
                         }
                     }
                     old_pos = nice;
+                } else if nice == last_time_update {
+                    update_progress(settings, head_dict, item, nice * 10000000.0, true, &playback_info.PlaySessionId, &playback_info.MediaSources[0].Id);
+                    if settings.discord_presence {
+                        if item.Type == "Movie" {
+                            DiscordClient::pause(&mut discord, head_dict,
+                                "".to_string(),
+                                format!("Streaming: {} ({})", &item.Name, &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4]),
+                            );
+                        } else {
+                            DiscordClient::pause(&mut discord, head_dict,
+                                format!("Streaming: {} ({})", &item.SeriesName.as_ref().unwrap(), &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4]),
+                                format!("{} ({})", item.Name, item.SeasonName.as_ref().unwrap()),
+                            );
+                        }
+                    }
                 }
+                last_time_update = nice;
             }
-            _ => ()
+            _ => {}
         }
         thread::sleep(time::Duration::from_millis(500));
     }
