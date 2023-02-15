@@ -5,3 +5,5 @@
 * Discord-Presence: no more verbose information on the playback-state (like "Paused"). The script will now just remove the timer and put a small pause-icon-indicator on the bottom right of the application icon
 * Updated `mpv.lib` just in case
 * If you want features, changes, improvements, then please open an issue or contact me. I'm bored.
+* Add autoplay option to continue after waiting 5 seconds (you can only exit these through CTRL+C, unless you've watched everything)
+* Refactoring code, removed pointless "Starting mpv..." message

@@ -76,9 +76,9 @@ pub struct MediaStream {
 impl fmt::Display for MediaStream {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if self.IsDefault {
-            write!(f, "Title = \"{}\", Language = \"{}\", Codec = \"{}\" {}", self.Title.as_ref().unwrap_or(&self.DisplayTitle.as_ref().unwrap_or(&"".to_string())), self.DisplayLanguage.as_ref().unwrap_or(&self.Language.as_ref().unwrap_or(&"undefined".to_string())), self.Codec.as_ref().unwrap_or(&"???".to_string()).to_uppercase(), format!("[Default]").green())
+            write!(f, "Title = \"{}\", Language = \"{}\", Codec = \"{}\" {}", self.Title.as_ref().unwrap_or(self.DisplayTitle.as_ref().unwrap_or(&"".to_string())), self.DisplayLanguage.as_ref().unwrap_or(self.Language.as_ref().unwrap_or(&"undefined".to_string())), self.Codec.as_ref().unwrap_or(&"???".to_string()).to_uppercase(), "[Default]".to_string().green())
         } else {
-            write!(f, "Title = \"{}\", Language = \"{}\", Codec = \"{}\"", self.Title.as_ref().unwrap_or(&self.DisplayTitle.as_ref().unwrap_or(&"".to_string())), self.DisplayLanguage.as_ref().unwrap_or(&self.Language.as_ref().unwrap_or(&"undefined".to_string())), self.Codec.as_ref().unwrap_or(&"???".to_string()).to_uppercase())
+            write!(f, "Title = \"{}\", Language = \"{}\", Codec = \"{}\"", self.Title.as_ref().unwrap_or(self.DisplayTitle.as_ref().unwrap_or(&"".to_string())), self.DisplayLanguage.as_ref().unwrap_or(self.Language.as_ref().unwrap_or(&"undefined".to_string())), self.Codec.as_ref().unwrap_or(&"???".to_string()).to_uppercase())
         }
     }
 }
@@ -106,13 +106,10 @@ pub fn started_playing(settings: &Settings, head_dict: &HeadDict, item: &Items, 
         playmethod,
         repeatmode: "RepeatNone".to_string()
     };
-    let post_res = no_res_post(format!("{}{}/Sessions/Playing?format=json", ipaddress, media_server), &head_dict.auth_header, serde_json::to_string_pretty(&playing_object).unwrap());
-    match post_res {
-        Err(error) => {
-            println!("Couldn't start playing session on {}. Error: {}", media_server_name, error)
-        },
-        _ => ()
-    };
+    let post_res = no_res_post(format!("{ipaddress}{media_server}/Sessions/Playing?format=json"), &head_dict.auth_header, serde_json::to_string_pretty(&playing_object).unwrap());
+    if let Err(error) = post_res {
+        println!("Couldn't start playing session on {media_server_name}. Error: {error}");
+    }
 }
 
 
@@ -143,13 +140,9 @@ pub fn update_progress(settings: &Settings, head_dict: &HeadDict, item: &Items, 
         repeastmode: "RepeatNone".to_string(),
         eventname: event_name
     };
-    let result = no_res_post(format!("{}{}/Sessions/Playing/Progress", ipaddress, media_server), &head_dict.auth_header, serde_json::to_string_pretty(&update_obj).unwrap());
-    match result {
-        Err(error) => {
-            println!("Couldn't send playback update to {}. Error: {}", media_server_name, error)
-        },
-        _ => {
-        }
+    let result = no_res_post(format!("{ipaddress}{media_server}/Sessions/Playing/Progress"), &head_dict.auth_header, serde_json::to_string_pretty(&update_obj).unwrap());
+    if let Err(error) = result {
+        println!("Couldn't send playback update to {media_server_name}. Error: {error}")
     }
 }
 
@@ -191,10 +184,10 @@ pub fn finished_playback(settings: &Settings, head_dict: &HeadDict, item: &Items
     let media_server: &String = &head_dict.media_server;
     let user_id: &String = &head_dict.config_file.user_id;
     if settings.transcoding {
-        time_pos = time_pos + item.UserData.PlaybackPositionTicks as f64
+        time_pos += item.UserData.PlaybackPositionTicks as f64
     };
     if ! eof {
-        let result = no_res_post(format!("{}{}/Users/{}/PlayedItems/{}", ipaddress, media_server, user_id, item_id), &head_dict.auth_header, "".to_string());
+        let result = no_res_post(format!("{ipaddress}{media_server}/Users/{user_id}/PlayedItems/{item_id}"), &head_dict.auth_header, "".to_string());
         match result {
             Ok(_) => {
                 println!("Item has been marked as [PLAYED].")
@@ -206,7 +199,7 @@ pub fn finished_playback(settings: &Settings, head_dict: &HeadDict, item: &Items
     } else {
         let difference = ((item.RunTimeTicks.unwrap() as f64) - time_pos) / (item.RunTimeTicks.unwrap() as f64);
         if difference < 0.10 {
-            let result = no_res_post(format!("{}{}/Users/{}/PlayedItems/{}", ipaddress, media_server, user_id, item_id), &head_dict.auth_header, "".to_string());
+            let result = no_res_post(format!("{ipaddress}{media_server}/Users/{user_id}/PlayedItems/{item_id}"), &head_dict.auth_header, "".to_string());
             match result {
                 Ok(_) => {
                     println!("Since you've watched more than 90% of the video, it has been marked as [PLAYED].")
@@ -223,10 +216,10 @@ pub fn finished_playback(settings: &Settings, head_dict: &HeadDict, item: &Items
                 mediasourceid: mediasource_id.to_string(),
                 positionticks: time_pos.to_string()
             };
-            let response = no_res_post(format!("{}{}/Sessions/Playing/Stopped", ipaddress, media_server), &head_dict.auth_header, serde_json::to_string_pretty(&finished_obj).unwrap());
+            let response = no_res_post(format!("{ipaddress}{media_server}/Sessions/Playing/Stopped"), &head_dict.auth_header, serde_json::to_string_pretty(&finished_obj).unwrap());
             match response {
                 Ok(_) => {
-                    let time = (time_pos as f64) / 10000000.0;
+                    let time = time_pos / 10000000.0;
                     let formated: String = if time > 60.0 {
                         if (time / 60.0) > 60.0 {
                             format!("{:02}:{:02}:{:02}", ((time / 60.0) / 60.0).trunc(), ((((time / 60.0) / 60.0) - ((time / 60.0) / 60.).trunc()) * 60.0).trunc(), (((time / 60.0) - (time / 60.0).trunc()) * 60.0).trunc())
@@ -236,7 +229,7 @@ pub fn finished_playback(settings: &Settings, head_dict: &HeadDict, item: &Items
                     } else {
                         time.to_string()
                     };
-                    println!("Playback progress ({}) has been sent to your server.", formated)
+                    println!("Playback progress ({formated}) has been sent to your server.")
                 }
                 Err(_) => {
                     println!("Playback progress couldn't be logged to your server.")
@@ -250,7 +243,7 @@ pub fn finished_playback(settings: &Settings, head_dict: &HeadDict, item: &Items
                 mediasourceid: mediasource_id.to_string(),
                 positionticks: (item.UserData.PlaybackPositionTicks as f64).to_string()
             };
-            let response = no_res_post(format!("{}{}/Sessions/Playing/Stopped", ipaddress, media_server), &head_dict.auth_header, serde_json::to_string_pretty(&finished_obj).unwrap());
+            let response = no_res_post(format!("{ipaddress}{media_server}/Sessions/Playing/Stopped"), &head_dict.auth_header, serde_json::to_string_pretty(&finished_obj).unwrap());
             match response {
                 Ok(_) => {
                     println!("Item has not been marked as [PLAYED].")

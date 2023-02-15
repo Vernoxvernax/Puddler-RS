@@ -78,32 +78,36 @@ struct SubtitleProfile {
 
 fn choose_trackIndexx(item: &Items) -> (usize, usize) {
     fn select_ind(tracks: Vec<MediaStream>, kind: &str) -> usize {
-        if tracks.len() > 1 {
-            return tracks[Select::with_theme(&ColorfulTheme::default())
-            .with_prompt("Please select which ".to_owned() + &kind + " track you want to use:")
-            .default(0)
-            .items(&tracks[..])
-            .interact()
-            .unwrap()].Index
-        } else if tracks.len() == 1 {
-            println!("The following {} track will be used:\n{}", kind, tracks.first().unwrap().to_string().green());
-            return tracks[0].Index
-        } else {
-            println!("This file doesn't have any {} track.", kind);
-            return 0
+        match tracks.len() {
+            n if n > 1 => {
+                tracks[Select::with_theme(&ColorfulTheme::default())
+                .with_prompt("Please select which ".to_owned() + kind + " track you want to use:")
+                .default(0)
+                .items(&tracks[..])
+                .interact()
+                .unwrap()].Index
+            },
+            1 => {
+                println!("The following {} track will be used:\n{}", kind, tracks.first().unwrap().to_string().green());
+                tracks[0].Index
+            },
+            _ => {
+                println!("This file doesn't have any {kind} track.");
+                0
+            }
         }
     }
     let mut subtitle_tracks: Vec<MediaStream> = [].to_vec();
     let mut audio_tracks: Vec<MediaStream> = [].to_vec();
     let mediaStreams: &Vec<MediaStream> = &item.MediaSources.as_ref().unwrap().first().unwrap().MediaStreams;
-    for track in mediaStreams.into_iter() {
+    for track in mediaStreams.iter() {
         match &track.Type as &str {
             "Audio" => audio_tracks.append(&mut [track.clone()].to_vec()),
             "Subtitle" => subtitle_tracks.append(&mut [track.clone()].to_vec()),
             _ => ()
         }
     };
-    println!("");
+    println!();
     (select_ind(audio_tracks, "audio"), select_ind(subtitle_tracks, "subtitle"))
 }
 
@@ -124,7 +128,7 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, Item: &Items) {
             } else {
                 time.to_string()
             };
-            print!("Do you want to continue at time: {}?\n  (Y)es | (N)o (start from a different position)", formated);
+            print!("Do you want to continue at time: {formated}?\n  (Y)es | (N)o (start from a different position)");
             match getch("YyNnOo") {
                 'N' | 'n' => {
                     print!("Please enter a playback position in minutes: ");
@@ -135,8 +139,8 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, Item: &Items) {
                         io::stdin().read_line(&mut input).unwrap();
                         if input.trim().parse::<f64>().is_err() {
                             print!("\nInvalid input, please try again.\n: ");
-                        } else if input.contains(".") {
-                            if input.split(".").collect::<Vec<&str>>().get(1).unwrap().len() > 8 {
+                        } else if input.contains('.') {
+                            if input.split('.').collect::<Vec<&str>>().get(1).unwrap().len() > 8 {
                                 print!("\nInvalid input, please lower the amount of decimal places.\n: ");
                             } else {
                                 break
@@ -156,12 +160,12 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, Item: &Items) {
     };
     let playback_info: PlaybackInfo = if settings.transcoding {
         let (audioIndex, subIndex) = choose_trackIndexx(item);
-        print!("\nPlease enter your internet speed in mbps: ");
+        print!("\nPlease enter your connection speed in mbps: ");
         let mut mbps: String = String::new();
         loop {
             io::stdout().flush().expect("Failed to flush stdout");
             io::stdin().read_line(&mut mbps).unwrap();
-            if ! numbers(&mbps.trim().to_string()) {
+            if ! numbers(mbps.trim()) {
                 print!("\nInvalid input! Enter something like \"25\" equal to ~3MB/s.\n: ")
             } else {
                 break
@@ -191,6 +195,12 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, Item: &Items) {
                         Type: "Video".to_string(),
                         Container: "mkv".to_string(),
                         VideoCodec: "hevc".to_string(),
+                        TranscodeSeekInfo: "Auto".to_string(),
+                    },
+                    TranscodingProfile {
+                        Type: "Video".to_string(),
+                        Container: "mkv".to_string(),
+                        VideoCodec: "avc".to_string(),
                         TranscodeSeekInfo: "Auto".to_string(),
                     }
                 ].to_vec(),
@@ -236,17 +246,17 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, Item: &Items) {
                 let search_text: &String = &t.text().unwrap();
                 serde_json::from_str(search_text).unwrap()
             }
-            Err(e) => panic!("failed to parse get playback info: {}", e)
+            Err(e) => panic!("failed to parse get playback info: {e}")
         };
         playback_info
     } else {
-        let playback_info_res: Result<http::Response<isahc::Body>, isahc::Error> = puddler_get(format!("{}{}/Items/{}/PlaybackInfo?UserId={}", head_dict.config_file.ipaddress, head_dict.media_server, item.Id, head_dict.config_file.user_id), &head_dict);
+        let playback_info_res: Result<http::Response<isahc::Body>, isahc::Error> = puddler_get(format!("{}{}/Items/{}/PlaybackInfo?UserId={}", head_dict.config_file.ipaddress, head_dict.media_server, item.Id, head_dict.config_file.user_id), head_dict);
         let playback_info: PlaybackInfo = match playback_info_res {
             Ok(mut t) => {
                 let search_text: &String = &t.text().unwrap();
                 serde_json::from_str(search_text).unwrap()
             }
-            Err(e) => panic!("failed to parse get playback info: {}", e)
+            Err(e) => panic!("failed to parse get playback info: {e}")
         };
         playback_info
     };
@@ -258,7 +268,7 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, Item: &Items) {
     mpv_handle.set_option("input-vo-keyboard", true).unwrap();
     let mut mpv: MpvHandler = mpv_handle.build().expect("Failed to create specified mpv configuration.");
     let stream_url: String = if settings.transcoding {
-        format!("{}{}{}", head_dict.config_file.ipaddress, head_dict.media_server, playback_info.MediaSources.iter().nth(0).unwrap().TranscodingUrl.as_ref().unwrap())
+        format!("{}{}{}", head_dict.config_file.ipaddress, head_dict.media_server, playback_info.MediaSources.get(0).unwrap().TranscodingUrl.as_ref().unwrap())
     } else {
         format!("{}{}/Videos/{}/stream?Container=mkv&Static=true&api_key={}", head_dict.config_file.ipaddress, head_dict.media_server, item.Id, head_dict.request_header.token)
     };
@@ -303,45 +313,42 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, Item: &Items) {
             };
         }
         let result: Result<f64, mpv::Error> = mpv.get_property("time-pos");
-        match result {
-            Ok(nice) => {
-                if nice > old_pos + 15.0 { // this was the most retarded solution, I could think of
-                    update_progress(settings, head_dict, item, nice * 10000000.0, false, &playback_info.PlaySessionId, &playback_info.MediaSources[0].Id);
-                    if settings.discord_presence {
-                        if item.Type == "Movie" {
-                            DiscordClient::update_presence(&mut discord, head_dict,
-                                "".to_string(),
-                                format!("Streaming: {} ({})", &item.Name, &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4]),
-                                SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs_f64() + total_runtime - nice,
-                            );
-                        } else {
-                            DiscordClient::update_presence(&mut discord, head_dict,
-                                format!("Streaming: {} ({})", &item.SeriesName.as_ref().unwrap(), &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4]),
-                                format!("{} ({})", item.Name, item.SeasonName.as_ref().unwrap()),
-                                SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs_f64() + total_runtime - nice,
-                            );
-                        }
-                    }
-                    old_pos = nice;
-                } else if nice == last_time_update {
-                    update_progress(settings, head_dict, item, nice * 10000000.0, true, &playback_info.PlaySessionId, &playback_info.MediaSources[0].Id);
-                    if settings.discord_presence {
-                        if item.Type == "Movie" {
-                            DiscordClient::pause(&mut discord, head_dict,
-                                "".to_string(),
-                                format!("Streaming: {} ({})", &item.Name, &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4]),
-                            );
-                        } else {
-                            DiscordClient::pause(&mut discord, head_dict,
-                                format!("Streaming: {} ({})", &item.SeriesName.as_ref().unwrap(), &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4]),
-                                format!("{} ({})", item.Name, item.SeasonName.as_ref().unwrap()),
-                            );
-                        }
+        if let Ok(nice) = result {
+            if nice > old_pos + 15.0 { // this was the most retarded solution, I could think of
+                update_progress(settings, head_dict, item, nice * 10000000.0, false, &playback_info.PlaySessionId, &playback_info.MediaSources[0].Id);
+                if settings.discord_presence {
+                    if item.Type == "Movie" {
+                        DiscordClient::update_presence(&mut discord, head_dict,
+                            "".to_string(),
+                            format!("Streaming: {} ({})", &item.Name, &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4]),
+                            SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs_f64() + total_runtime - nice,
+                        );
+                    } else {
+                        DiscordClient::update_presence(&mut discord, head_dict,
+                            format!("Streaming: {} ({})", &item.SeriesName.as_ref().unwrap(), &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4]),
+                            format!("{} ({})", item.Name, item.SeasonName.as_ref().unwrap()),
+                            SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs_f64() + total_runtime - nice,
+                        );
                     }
                 }
-                last_time_update = nice;
+                old_pos = nice;
+            } else if nice == last_time_update {
+                update_progress(settings, head_dict, item, nice * 10000000.0, true, &playback_info.PlaySessionId, &playback_info.MediaSources[0].Id);
+                if settings.discord_presence {
+                    if item.Type == "Movie" {
+                        DiscordClient::pause(&mut discord, head_dict,
+                            "".to_string(),
+                            format!("Streaming: {} ({})", &item.Name, &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4]),
+                        );
+                    } else {
+                        DiscordClient::pause(&mut discord, head_dict,
+                            format!("Streaming: {} ({})", &item.SeriesName.as_ref().unwrap(), &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4]),
+                            format!("{} ({})", item.Name, item.SeasonName.as_ref().unwrap()),
+                        );
+                    }
+                }
             }
-            _ => {}
+            last_time_update = nice;
         }
         thread::sleep(time::Duration::from_millis(500));
     }

@@ -96,7 +96,7 @@ pub fn getch(allowed: &str) -> char {
             if ch == '\n' {
                 println!("\n");
             } else {
-                println!("{}\n", ch);
+                println!("{ch}\n");
             }
             output = ch;
             break
@@ -122,7 +122,7 @@ pub fn check_information(settings: &Settings) -> HeadDict {
         print!("What kind of server do you want to stream from?\n   [1] Emby\n   [2] Jellyfin");
         getch("12")
     } else {
-        match read_config(&settings.server_config.as_ref().unwrap(), true) {
+        match read_config(settings.server_config.as_ref().unwrap(), true) {
             Ok((config, _raw)) => {
                 if config.emby {
                     '1'
@@ -142,7 +142,8 @@ pub fn check_information(settings: &Settings) -> HeadDict {
             media_server = "/emby";
             media_server_name = "Emby";
             auth_header = AuthHeader {
-                authorization: format!("Emby UserId=\"\", Client=\"Emby Theater\", Device=\"{}\", DeviceId=\"{}\", Version=\"{}\", Token=\"\"", APPNAME, device_id, VERSION)
+                authorization: format!("Emby UserId=\"\", Client=\"Emby Theater\", Device=\"{}\", DeviceId=\"{}\", Version=\"{}\", Token=\"\"",
+                APPNAME, device_id, VERSION)
             };
         }
         _ => {
@@ -166,24 +167,7 @@ pub fn check_information(settings: &Settings) -> HeadDict {
     let server_id: String;
     let mut device_id = uuid::Uuid::new_v4().to_string();
     let config_file: ConfigFile;
-    if config_path.is_none() {
-        app_root(AppDataType::UserConfig, &APP_INFO).expect("shit");
-        let (ipaddress, server_name) = configure_new_server(media_server_name);
-        let user_login = configure_new_login(media_server_name);
-        (auth_header, request_header, session_id, user_id, access_token, server_id) = test_auth(media_server_name, media_server, &ipaddress, &auth_header, &user_login, &device_id);
-        config_file = ConfigFile { 
-            emby,
-            server_name: server_name.clone(),
-            ipaddress,
-            user_id,
-            device_id,
-            access_token,
-            username: user_login.username
-        };
-        let config_path_string = generate_config_path(server_kind, server_id, server_name);
-        write_config(config_path_string, &config_file, None);
-    } else {
-        let config_path_string = config_path.unwrap();
+    if let Some(config_path_string) = config_path {
         println!("{}", "Configuration files found!".to_string().green());
         let config_file_raw: Result<(ConfigFile, ConfigFileRaw), (Option<ConfigFileRaw>, &str)> = read_config(&config_path_string, settings.autologin);
         match config_file_raw {
@@ -199,21 +183,7 @@ pub fn check_information(settings: &Settings) -> HeadDict {
                     println!("Logging in with {}.", file.username.green());
                 };
                 let session_id_test: Option<String> = re_auth(media_server_name, media_server, ipaddress, &auth_header, &device_id);
-                if session_id_test.is_none() {
-                    println!("\nYour {} session expired! Please re-login.", media_server_name);
-                    let user_login = configure_new_login(media_server_name);
-                    (auth_header, request_header, session_id, _, access_token, _) = test_auth(media_server_name, media_server, ipaddress, &auth_header, &user_login, &device_id);
-                    file.access_token = access_token;
-                    let mut i = 0;
-                    while i < raw_file.user.len() {
-                        if raw_file.user[i].username == file.username {
-                            println!("Replaced {} in the config file.", raw_file.user.remove(i).username.green());
-                        } else {
-                            i += 1;
-                        }
-                    }
-                    write_config(config_path_string, &file, Some(raw_file.user));
-                } else {
+                if let Some(res) = session_id_test {
                     if raw_file.user[0].username != file.username {
                         let mut i = 0;
                         while i < raw_file.user.len() {
@@ -226,7 +196,21 @@ pub fn check_information(settings: &Settings) -> HeadDict {
                         write_config(config_path_string, &file, Some(raw_file.user));
                     };
                     request_header = get_request_header(&file.access_token);
-                    session_id = session_id_test.unwrap();
+                    session_id = res;
+                } else {
+                    println!("\nYour {media_server_name} session expired! Please re-login.");
+                    let user_login = configure_new_login(media_server_name);
+                    (auth_header, request_header, session_id, _, access_token, _) = test_auth(media_server_name, media_server, ipaddress, &auth_header, &user_login, &device_id);
+                    file.access_token = access_token;
+                    let mut i = 0;
+                    while i < raw_file.user.len() {
+                        if raw_file.user[i].username == file.username {
+                            println!("Replaced {} in the config file.", raw_file.user.remove(i).username.green());
+                        } else {
+                            i += 1;
+                        }
+                    }
+                    write_config(config_path_string, &file, Some(raw_file.user));
                 }
                 config_file = ConfigFile {
                     emby,
@@ -293,6 +277,22 @@ pub fn check_information(settings: &Settings) -> HeadDict {
                 write_config(config_path_string, &config_file, None);
             }
         }
+    } else {
+        app_root(AppDataType::UserConfig, &APP_INFO).expect("shit");
+        let (ipaddress, server_name) = configure_new_server(media_server_name);
+        let user_login = configure_new_login(media_server_name);
+        (auth_header, request_header, session_id, user_id, access_token, server_id) = test_auth(media_server_name, media_server, &ipaddress, &auth_header, &user_login, &device_id);
+        config_file = ConfigFile { 
+            emby,
+            server_name: server_name.clone(),
+            ipaddress,
+            user_id,
+            device_id,
+            access_token,
+            username: user_login.username
+        };
+        let config_path_string = generate_config_path(server_kind, server_id, server_name);
+        write_config(config_path_string, &config_file, None);
     }
     HeadDict {
         media_server_name: media_server_name.to_string(),
@@ -317,16 +317,12 @@ fn configure_new_server(media_server_name: &str) -> (String, String) {
     let socket:UdpSocket = UdpSocket::bind("0.0.0.0:0").expect("Failed to bind to network socket.");
     socket.set_read_timeout(Some(Duration::new(5, 0))).expect("nothing");
     socket.set_broadcast(true).expect("errrrrrr");
-    if cfg!(windows) {
-        socket.send_to(&String::from(who_is).into_bytes(), "255.255.255.255:7359").expect("fdsfds");
-    } else {
-        socket.send_to(&String::from(who_is).into_bytes(), "255.255.255.255:7359").expect("fdsfds");
-    }
+    socket.send_to(&String::from(who_is).into_bytes(), "255.255.255.255:7359").expect("fdsfds");
     let mut buf  = [0; 4096];
     let udp_disco = socket.recv_from(&mut buf);
     match udp_disco {
         Ok(_t) => {
-            let parsed: UDP = byte_array_to_json(buf);
+            let parsed: Udp = byte_array_to_json(buf);
             ipaddress = parsed.Address;
             server_name = parsed.Name;
             print!("Is the {} at the following address the correct one?\n \"{}\"\n (Y)es / (N)o", server_name.green(), ipaddress);
@@ -365,7 +361,7 @@ fn configure_new_server(media_server_name: &str) -> (String, String) {
         },
     }
     if ! ipaddress.contains("http") {
-        ipaddress = format!("http://{}", ipaddress);
+        ipaddress = format!("http://{ipaddress}");
     }
     if ipaddress.ends_with('/') {
         ipaddress.pop();
@@ -375,14 +371,14 @@ fn configure_new_server(media_server_name: &str) -> (String, String) {
 
 
 #[derive(Serialize, Deserialize)]
-struct UDP {
+struct Udp {
     Address: String,
     Id: String,
     Name: String,
 }
 
 
-fn byte_array_to_json(buf: [u8; 4096]) -> UDP {
+fn byte_array_to_json(buf: [u8; 4096]) -> Udp {
     let response = from_utf8(&buf).expect("sos").trim_matches(char::from(0));
     serde_json::from_str(response).unwrap()
 }
@@ -391,13 +387,13 @@ fn byte_array_to_json(buf: [u8; 4096]) -> UDP {
 fn configure_new_login(media_server_name: &str) -> UserLogin {
     fn take_input(media_server_name: &str) -> (String, String) {
         let mut username = String::new();
-        print!("Please enter your {} username: ", media_server_name);
+        print!("Please enter your {media_server_name} username: ");
         io::stdout().flush().expect("Failed to flush stdout");
         io::stdin().read_line(  &mut username).unwrap();
-        print!("Please enter your {} password (hidden): ", media_server_name);
+        print!("Please enter your {media_server_name} password (hidden): ");
         io::stdout().flush().expect("Failed to flush stdout");
         let password = read_password().unwrap();
-        println!("");
+        println!();
         (password.trim().parse().unwrap(), username.trim().parse().unwrap())
     }
     let mut repeat: bool = true;
@@ -421,11 +417,11 @@ fn configure_new_login(media_server_name: &str) -> UserLogin {
 
 
 fn test_auth (media_server_name: &str, media_server: &str, ipaddress: &String, auth_header: &AuthHeader, user_login: &UserLogin, device_id: &String) -> (AuthHeader, RequestHeader, String, String, String, String) {
-    println!("Testing {} connection ...", media_server_name);
+    println!("Testing {media_server_name} connection ...");
     let username: String = user_login.username.clone();
     let password: String = user_login.pw.clone();
-    let bod = format!("{{\"Username\":\"{}\",\"pw\":\"{}\"}}", username, password);
-    let url = format!("{}{}/Users/AuthenticateByName", ipaddress, media_server);
+    let bod = format!("{{\"Username\":\"{username}\",\"pw\":\"{password}\"}}");
+    let url = format!("{ipaddress}{media_server}/Users/AuthenticateByName");
     let json_response = post_puddler(url, auth_header, bod);
     match json_response {
         Ok(mut t) => {
@@ -438,10 +434,11 @@ fn test_auth (media_server_name: &str, media_server: &str, ipaddress: &String, a
             let token = json_response["AccessToken"].as_str().unwrap();
             (
                 AuthHeader {
-                    authorization: format!("Emby UserId={}, Client=\"Emby Theater\", Device=\"{}\", DeviceId=\"{}\", Version=\"{}\", Token={}", user_id, APPNAME, device_id, VERSION, token)
+                    authorization: format!("Emby UserId={}, Client=\"Emby Theater\", Device=\"{}\", DeviceId=\"{}\", Version=\"{}\", Token={}",
+                    user_id, APPNAME, device_id, VERSION, token)
                 },
                 RequestHeader {
-                    application: format!("{}/{}", APPNAME, VERSION),
+                    application: format!("{APPNAME}/{VERSION}"),
                     token: token.to_string()
                 },
                 session_id.to_string(),
@@ -474,7 +471,7 @@ pub fn post_puddler (url: String, auth_header: &AuthHeader, bod: String) -> Resu
 
 
 fn re_auth(media_server_name: &str, media_server: &str, ipaddress: &String, auth_header: &AuthHeader, device_id: &String) -> Option<String> {
-    println!("Testing {} connection ...", media_server_name);
+    println!("Testing {media_server_name} connection ...");
     let re_auth_res = smol_puddler_get(format!("{}{}/Sessions?DeviceId={}", ipaddress, media_server, &device_id), auth_header);
     match re_auth_res {
         Ok(mut t) => {
@@ -524,10 +521,10 @@ fn smol_puddler_get(url: String, auth_header: &AuthHeader) -> Result<Response<Bo
 }
 
 
-fn get_request_header(access_token: &String) -> RequestHeader {
-    let token = access_token.clone();
+fn get_request_header(access_token: &str) -> RequestHeader {
+    let token = access_token.to_owned();
     RequestHeader {
-        application: format!("{}/{}", APPNAME, VERSION),
+        application: format!("{APPNAME}/{VERSION}"),
         token
     }
 }

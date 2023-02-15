@@ -1,4 +1,3 @@
-
 ## **0.5.10**
 
 * reinstated Next-Up TV-Show for Jellyfin servers (don't ask me)

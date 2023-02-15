@@ -2,6 +2,7 @@
 use colored::Colorize;
 use progress_report::MediaSourceInfo;
 use urlencoding::encode;
+use std::thread;
 use std::time::Duration;
 use std::process;
 use http::Response;
@@ -87,8 +88,8 @@ struct SeasonStruct {
 
 fn main() {
     let mut settings: Settings = initialize_settings(0);
-    println!("{}", r"\
-     ____            __    ____         
+    println!("{}",
+r"     ____            __    ____         
     / __ \__  ______/ /___/ / /__  _____
    / /_/ / / / / __  / __  / / _ \/ ___/
   / ____/ /_/ / /_/ / /_/ / /  __/ /    
@@ -160,7 +161,7 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
             serde_json::from_str(response_text).unwrap()
         }
         Err(e) => {
-            println!("Your network connection seems to be limited. Error: {}\nUnable to continue.", e);
+            println!("Your network connection seems to be limited. Error: {e}\nUnable to continue.");
             process::exit(0x0100);
         }
     };
@@ -175,7 +176,7 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
                 let jellyfin_response_text = &t.text().unwrap();
                 serde_json::from_str(jellyfin_response_text).unwrap()
             }
-            Err(e) => panic!("failed to parse get request: {}", e)
+            Err(e) => panic!("failed to parse get request: {e}")
         };
         if jellyfin_response.TotalRecordCount.unwrap() != 0 {
             if response.TotalRecordCount.unwrap() == 0 {
@@ -192,9 +193,9 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
             let response_text = format!("{{\"Items\":{}}}", &response_text.to_string());
             serde_json::from_str(&response_text).unwrap()
         }
-        Err(e) => panic!("failed to parse get request: {}", e)
+        Err(e) => panic!("failed to parse get request: {e}")
     };
-    if latest_series_response.Items.len() > 0 {
+    if !latest_series_response.Items.is_empty() {
         println!("\nLatest:");
         item_list = print_menu(&latest_series_response, true, item_list);
     }
@@ -205,10 +206,10 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
             let response_text = format!("{{\"Items\":{}}}", &response_text.to_string());
             serde_json::from_str(&response_text).unwrap()
         }
-        Err(e) => panic!("failed to parse get request: {}", e)
+        Err(e) => panic!("failed to parse get request: {e}")
     };
-    if latest_response.Items.len() > 0 {
-        if latest_series_response.Items.len() == 0 {
+    if !latest_response.Items.is_empty() {
+        if latest_series_response.Items.is_empty() {
             println!("\nLatest:");
         }
         item_list = print_menu(&latest_response, true, item_list);
@@ -225,7 +226,7 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
                 let response_text: &String = &t.text().unwrap();
                 serde_json::from_str(response_text).unwrap()
             }
-            Err(e) => panic!("failed to parse get request: {}", e)
+            Err(e) => panic!("failed to parse get request: {e}")
         };
         item_list = Vec::new();
         item_list = print_menu(&all_response, false, item_list);
@@ -244,9 +245,9 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
                 let search_text: &String = &t.text().unwrap();
                 serde_json::from_str(search_text).unwrap()
             }
-            Err(e) => panic!("failed to parse get request: {}", e)
+            Err(e) => panic!("failed to parse get request: {e}")
         };
-        if &search_response.Items.len() > &0 {
+        if !search_response.Items.is_empty() {
             item_list = Vec::new();
             item_list = print_menu(&search_response, false, item_list);
             if search_response.TotalRecordCount.unwrap() > 1 {
@@ -259,8 +260,8 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
             pick = None
         }
     }
-    if pick.is_some() {
-        item_parse(head_dict, &item_list, pick.unwrap(), settings);
+    if let Some(pick) = pick {
+        item_parse(head_dict, &item_list, pick, settings);
     }
 }
 
@@ -284,7 +285,7 @@ fn puddler_get(url: String, head_dict: &HeadDict) -> Result<Response<Body>, isah
 }
 
 
-fn numbers(input: &String) -> bool {
+fn numbers(input: &str) -> bool {
     for x in input.trim().chars() {
         if x.is_alphabetic() {
             return false
@@ -296,49 +297,50 @@ fn numbers(input: &String) -> bool {
 
 fn process_input(item_list: &Vec<Items>, number: Option<String>) -> Option<i32> {
     let items_in_list: i32 = item_list.len().try_into().unwrap();
-    if items_in_list > 1 {
-        let mut raw_input: String;
-        if number.is_none() {
-            raw_input = String::new();
-            io::stdin().read_line(&mut raw_input).unwrap();
-            raw_input = raw_input.trim().to_string();
-        } else {
-            raw_input = number.unwrap()
-        }
-        let pick = raw_input.parse::<i32>().unwrap();
-        if pick < items_in_list + 1 && pick >= 0 {
-            let item = item_list.iter().nth(pick as usize).unwrap();
-            if "Episode Special".contains(&item.Type) {
-                println!("\nYou've chosen {}.\n", format!("{} ({}) - {} - {}", item.SeriesName.as_ref().unwrap(), (&item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4]), item.SeasonName.as_ref().unwrap(), item.Name).cyan());
+    match items_in_list {
+        n if n > 1 => {
+            let mut raw_input: String;
+            if let Some(res) = number {
+                raw_input = res;
             } else {
-                println!("\nYou've chosen {}.\n", format!("{} ({})", item.Name, &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4]).cyan());
+                raw_input = String::new();
+                io::stdin().read_line(&mut raw_input).unwrap();
+                raw_input = raw_input.trim().to_string();
             }
-        } else {
-            println!("{}", "Are you mentally ill?!".to_string().red());
-            process::exit(0x0100);
-        }
-        Some(pick)
-    } else if items_in_list == 1 {
-        let mut raw_input = String::new();
-        io::stdin().read_line(&mut raw_input).unwrap();
-        let pick: i32 = 0;
-        Some(pick)
-    } else {
-        None
+            let pick = raw_input.parse::<i32>().unwrap();
+            if pick < items_in_list + 1 && pick >= 0 {
+                let item = item_list.get(pick as usize).unwrap();
+                if "Episode Special".contains(&item.Type) {
+                    println!("\nYou've chosen {}.\n", format!("{} ({}) - {} - {}", item.SeriesName.as_ref().unwrap(), (&item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4]), item.SeasonName.as_ref().unwrap(), item.Name).cyan());
+                } else {
+                    println!("\nYou've chosen {}.\n", format!("{} ({})", item.Name, &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4]).cyan());
+                }
+            } else {
+                println!("{}", "Are you mentally ill?!".to_string().red());
+                process::exit(0x0100);
+            }
+            Some(pick)
+        },
+        1 => {
+            let mut raw_input = String::new();
+            io::stdin().read_line(&mut raw_input).unwrap();
+            let pick: i32 = 0;
+            Some(pick)
+        },
+        _ => None
     }
 }
 
 
-fn item_parse(head_dict: &HeadDict, item_list: &Vec<Items>, pick: i32, settings: &Settings) {
+fn item_parse(head_dict: &HeadDict, item_list: &[Items], pick: i32, settings: &Settings) {
     let ipaddress: &String = &head_dict.config_file.ipaddress;
     let media_server: &String = &head_dict.media_server;
     let user_id: &String = &head_dict.config_file.user_id;
-    if item_list.iter().nth(pick as usize).unwrap().Type == *"Movie" {
-        let item = item_list.iter().nth(pick as usize).unwrap();
-        println!("Starting mpv ...");
+    if item_list.get(pick as usize).unwrap().Type == *"Movie" {
+        let item = item_list.get(pick as usize).unwrap();
         play(settings, head_dict, item);
-    } else if item_list.iter().nth(pick as usize).unwrap().Type == *"Series" {
-        let series = &item_list.iter().nth(pick as usize).unwrap();
+    } else if item_list.get(pick as usize).unwrap().Type == *"Series" {
+        let series = &item_list.get(pick as usize).unwrap();
         println!("{}:", series.Name);
         let series_response = puddler_get(format!("{}{}/Users/{}/Items?ParentId={}&Fields=PremiereDate,MediaSources", &ipaddress, &media_server, &user_id, &series.Id), head_dict);
         let series_json: SeriesStruct = match series_response {
@@ -346,7 +348,7 @@ fn item_parse(head_dict: &HeadDict, item_list: &Vec<Items>, pick: i32, settings:
                 let parse_text: &String = &t.text().unwrap();
                 serde_json::from_str(parse_text).unwrap()
             }
-            Err(e) => panic!("failed to parse series request: {}", e)
+            Err(e) => panic!("failed to parse series request: {e}")
         };
         let item_list: Vec<Items> = process_series(&series_json, head_dict, true);
         let filtered_input: i32;
@@ -374,21 +376,21 @@ fn item_parse(head_dict: &HeadDict, item_list: &Vec<Items>, pick: i32, settings:
             filtered_input = 0;
         }
         series_play(&item_list, filtered_input, head_dict, settings);
-    } else if "Special Episode".to_string().contains(&item_list.iter().nth(pick as usize).unwrap().Type) {
-        let item: &Items = item_list.iter().nth(pick as usize).unwrap();
+    } else if "Special Episode".to_string().contains(&item_list.get(pick as usize).unwrap().Type) {
+        let item: &Items = item_list.get(pick as usize).unwrap();
         let series_response = puddler_get(format!("{}{}/Users/{}/Items?ParentId={}&Fields=PremiereDate,MediaSources", &ipaddress, &media_server, &user_id, &item.SeriesId.as_ref().unwrap()), head_dict);
         let series_json: SeriesStruct = match series_response {
             Ok(mut t) => {
                 let parse_text: &String = &t.text().unwrap();
                 serde_json::from_str(parse_text).unwrap()
             }
-            Err(e) => panic!("failed to parse series request: {}", e)
+            Err(e) => panic!("failed to parse series request: {e}")
         };
         let item_list: Vec<Items> = process_series(&series_json, head_dict, false);
         let mut item_pos: i32 = 0;
-        for things in 0..item_list.len() {
-            if item_list[things].Id == item.Id {
-                if item_list[things].Type == "Special" {
+        for (things, item1) in item_list.iter().enumerate() {
+            if item1.Id == item.Id {
+                if item1.Type == "Special" {
                     item_pos = things.try_into().unwrap();
                     continue;
                 };
@@ -403,7 +405,7 @@ fn item_parse(head_dict: &HeadDict, item_list: &Vec<Items>, pick: i32, settings:
 
 fn series_play(item_list: &Vec<Items>, mut pick: i32, head_dict: &HeadDict, settings: &Settings) {
     let episode_amount: i32 = item_list.len().try_into().unwrap();
-    let item = &item_list.iter().nth(pick as usize).unwrap();
+    let item = &item_list.get(pick as usize).unwrap();
     println!("Starting mpv ...");
     play(settings, head_dict, item);
     loop {
@@ -412,24 +414,41 @@ fn series_play(item_list: &Vec<Items>, mut pick: i32, head_dict: &HeadDict, sett
             break
         } else {
             pick += 1;
-            if item_list.iter().nth(pick as usize).is_some() {
-                let next_item = &item_list.iter().nth(pick as usize).unwrap();
+            if item_list.get(pick as usize).is_some() {
+                let next_item = &item_list.get(pick as usize).unwrap();
                 if next_item.UserData.Played {
                     continue
                 };
-                println!("\nWelcome back. Do you want to continue playback with:\n{}", format!("   {} ({}) - {} - {}", next_item.SeriesName.as_ref().unwrap(), &next_item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4], next_item.SeasonName.as_ref().unwrap(), next_item.Name).cyan());
-                print!(" (N)ext | (M)enu | (E)xit");
-                let cont = getch("NnEeMm");
-                match cont {
-                    'N' | 'n' => {
-                        let item = &item_list.iter().nth(pick as usize).unwrap();
-                        play(settings, head_dict, item);
-                    },
-                    'M' | 'm' => break,
-                    'E' | 'e' => {
-                        process::exit(0x0100);
-                    },
-                    _ => (),
+                if settings.autoplay {
+                    println!("\nWelcome back. Continuing in 5 seconds:\n{}",
+                        format!("   {} ({}) - {} - {}",
+                            next_item.SeriesName.as_ref().unwrap(),
+                            &next_item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4],
+                            next_item.SeasonName.as_ref().unwrap(), next_item.Name).cyan()
+                    );
+                    thread::sleep(Duration::from_secs(5));
+                    let item = &item_list.get(pick as usize).unwrap();
+                    play(settings, head_dict, item);
+                } else {
+                    println!("\nWelcome back. Do you want to continue playback with:\n{}",
+                        format!("   {} ({}) - {} - {}",
+                            next_item.SeriesName.as_ref().unwrap(),
+                            &next_item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4],
+                            next_item.SeasonName.as_ref().unwrap(), next_item.Name).cyan()
+                    );
+                    print!(" (N)ext | (M)enu | (E)xit");
+                    let cont = getch("NnEeMm");
+                    match cont {
+                        'N' | 'n' => {
+                            let item = &item_list.get(pick as usize).unwrap();
+                            play(settings, head_dict, item);
+                        },
+                        'M' | 'm' => break,
+                        'E' | 'e' => {
+                            process::exit(0x0100);
+                        },
+                        _ => (),
+                    }
                 }
             } else {
                 break
@@ -462,23 +481,21 @@ fn process_series(series: &SeriesStruct, head_dict: &HeadDict, printing: bool) -
                 let parse_text: &String = &t.text().unwrap().to_string();
                 serde_json::from_str(parse_text).unwrap()
             }
-            Err(e) => panic!("failed to parse series request: {}", e)
+            Err(e) => panic!("failed to parse series request: {e}")
         };
         for episode_numb in 0..season_json.Items.len() { // for the code readers: the "season_json" vector is obviously different to "season" since the latter doesn't include any episodes.
             let episode: Items = season_json.Items[episode_numb].clone();
             let last_episode = season_json.Items.len() == episode_numb + 1;
             let episode_branches = if last_episode && last_season {
                 "     └──"
-            } else if last_episode &! last_season {
+            } else if last_episode && ! last_season {
                 "│    └──"
             } else if ! last_episode && last_season {
                 "     ├──"
             } else {
                 "│    ├──"
             };
-            if ! episode_list.contains(&episode) {
-                episode_list.push(season_json.Items[episode_numb].clone());
-            } else if episode.SeasonName == Some("Specials".to_string()) {
+            if ! episode_list.contains(&episode) || episode.SeasonName == Some("Specials".to_string()) {
                 episode_list.push(season_json.Items[episode_numb].clone());
             }
             if ! printing {
@@ -486,7 +503,7 @@ fn process_series(series: &SeriesStruct, head_dict: &HeadDict, printing: bool) -
             };
             if episode.UserData.PlayedPercentage.is_some() {
                 let long_perc: f64 = episode.UserData.PlayedPercentage.unwrap();
-                println!("  {} [{}] {} {} ", episode_branches, index_iterator, episode.Name, format!("{}%", long_perc.round() as i64))
+                println!("  {} [{}] {} {}% ", episode_branches, index_iterator, episode.Name, long_perc.round() as i64)
             } else if episode.UserData.Played {
                 println!("  {} [{}] {} {} ", episode_branches, index_iterator, episode.Name, "[PLAYED]".to_string().green());
             } else {
@@ -500,12 +517,11 @@ fn process_series(series: &SeriesStruct, head_dict: &HeadDict, printing: bool) -
 
 
 fn print_menu(items: &ItemJson, recommendation: bool, mut item_list: Vec<Items>) -> Vec<Items> {
-    let count: u16;
-    if items.TotalRecordCount.is_some() && ! recommendation {
-        count = items.TotalRecordCount.unwrap();
+    let count: u16 = if items.TotalRecordCount.is_some() && ! recommendation {
+        items.TotalRecordCount.unwrap()
     } else {
-        count = 10
-    }
+        10
+    };
     if count > 1 && ! recommendation {
         println!("\nPlease choose from the following results:")
     }

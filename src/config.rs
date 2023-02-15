@@ -31,7 +31,7 @@ pub fn choose_config(server_kind: char, autologin: bool) -> Option<String> {
     if file_count == 0 {
         None
     } else if file_count == 1 {
-        let file = files.nth(0).expect("impossible").unwrap().path();
+        let file = files.next().expect("impossible").unwrap().path();
         if file.display().to_string().ends_with(".config.json") {
             Some(file.display().to_string())
         } else {
@@ -46,7 +46,7 @@ pub fn choose_config(server_kind: char, autologin: bool) -> Option<String> {
             }
         };
         if autologin {
-            return Some(file_list.iter().nth(0).unwrap().to_string())
+            return Some(file_list.get(0).unwrap().to_string())
         };
         let copy = file_list.clone();
         println!("Please choose which configuration file you want to use.");
@@ -56,7 +56,7 @@ pub fn choose_config(server_kind: char, autologin: bool) -> Option<String> {
         print!(": ");
         let index: usize;
         loop {
-            io::stdout().flush().ok().expect("Failed to flush stdout");
+            io::stdout().flush().expect("Failed to flush stdout");
             let mut index_raw: String = String::new();
             io::stdin().read_line(  &mut index_raw).unwrap();
             index_raw.trim().parse::<String>().unwrap();
@@ -67,8 +67,8 @@ pub fn choose_config(server_kind: char, autologin: bool) -> Option<String> {
                 break
             }
         }
-        println!("");
-        Some(file_list.iter().nth(index).unwrap().to_string())
+        println!();
+        Some(file_list.get(index).unwrap().to_string())
     }
 }
 
@@ -106,7 +106,7 @@ pub fn read_config(config_path_string: &String, autologin: bool) -> Result<(Conf
             } else {
                 print!("Do you want to use this config?\n   {} ({}): {}\n   Username: {}\n (Y)es / (N)o", server_name.green(), media_server_name, a.ipaddress, a.user.first().unwrap().username);
                 let zhrtea = getch("YyNn");
-                io::stdout().flush().ok().expect("Failed to flush stdout");
+                io::stdout().flush().expect("Failed to flush stdout");
                 if "yY".contains(zhrtea) {
                     user = a.user.first().unwrap();
                     Ok((ConfigFile {
@@ -119,21 +119,19 @@ pub fn read_config(config_path_string: &String, autologin: bool) -> Result<(Conf
                         username: user.username.clone()
                     }, a))
                 } else {
-                    print!("Please choose from the following options:\n   [1] Switch to a different {}-user\n   [2] Switch to a different {}-server", media_server_name, media_server_name);
+                    print!("Please choose from the following options:\n   [1] Switch to a different {media_server_name}-user\n   [2] Switch to a different {media_server_name}-server");
                     let hngfje = getch("12");
                     match hngfje {
                         '1' => {
                             if a.user.len() == 1 {
                                 return Err((Some(a), "add user"))
                             }
-                            let mut user_index = 0;
                             println!("Please choose which user you want to switch to.\n(\"Add\" if you want to add a new user)");
-                            for thing in &a.user {
-                                println!("  [{}] {}", &user_index, thing.username);
-                                user_index += 1;
-                            };
+                            for (index, thing) in a.user.iter().enumerate() {
+                                println!("  [{}] {}", &index, thing.username);
+                            }
                             print!(": ");
-                            io::stdout().flush().ok().expect("Failed to flush stdout");
+                            io::stdout().flush().expect("Failed to flush stdout");
                             let index: usize;
                             loop {
                                 let mut index_raw: String = String::new();
@@ -144,15 +142,15 @@ pub fn read_config(config_path_string: &String, autologin: bool) -> Result<(Conf
                                         return Err((Some(a), "add user"))
                                     } else {
                                         print!("Invalid input, please try again.\n: ");
-                                        io::stdout().flush().ok().expect("Failed to flush stdout");
+                                        io::stdout().flush().expect("Failed to flush stdout");
                                     }
                                 } else {
                                     index = index_raw.trim().parse().unwrap();
                                     break
                                 }
                             };
-                            println!("");
-                            user = a.user.iter().nth(index).unwrap();
+                            println!();
+                            user = a.user.get(index).unwrap();
                             Ok((ConfigFile {
                                 emby: a.emby,
                                 server_name: server_name.to_string(),
@@ -164,7 +162,7 @@ pub fn read_config(config_path_string: &String, autologin: bool) -> Result<(Conf
                             }, a))
                         },
                         '2' => {
-                            return Err((None, "add server"))
+                            Err((None, "add server"))
                         }
                         _ => {
                             Err((None, "lol"))
@@ -188,9 +186,9 @@ pub fn write_config(config_path_string: String, config_file: &ConfigFile, other_
         access_token: config_file.access_token.clone(),
         username: config_file.username.clone()
     };
-    let config_file_raw = if other_users.is_some() {
+    let config_file_raw = if let Some(mut other_users) = other_users {
         let mut user_vec: Vec<ConfigFileUser> = [config_file_user].to_vec();
-        user_vec.append(&mut other_users.unwrap());
+        user_vec.append(&mut other_users);
         ConfigFileRaw {
             emby: config_file.emby,
             ipaddress: config_file.ipaddress.clone(),
