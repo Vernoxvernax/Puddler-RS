@@ -151,7 +151,8 @@ pub fn check_information(settings: &Settings) -> HeadDict {
             media_server = "";
             media_server_name = "Jellyfin";
             auth_header = AuthHeader {
-                authorization: format!("Emby UserId=\"\", Client=\"Emby Theater\", Device=\"{}\", DeviceId=\"{}\", Version=\"{}\", Token=\"\"", APPNAME, device_id, VERSION)
+                authorization: format!("Emby UserId=\"\", Client=\"Emby Theater\", Device=\"{}\", DeviceId=\"{}\", Version=\"{}\", Token=\"\"",
+                APPNAME, device_id, VERSION)
             };
         }
     };

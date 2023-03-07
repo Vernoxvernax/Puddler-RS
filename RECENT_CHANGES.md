@@ -6,4 +6,5 @@
 * Updated `mpv.lib` just in case
 * If you want features, changes, improvements, then please open an issue or contact me. I'm bored.
 * Add autoplay option to continue after waiting 5 seconds (you can only exit these through CTRL+C, unless you've watched everything)
-* Refactoring code, removed pointless "Starting mpv..." message
+* Add hardware decoding option (`auto-safe`)
+* Refactored code; removed pointless "Starting mpv..." message
