@@ -243,7 +243,7 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, Item: &Items) {
 				].to_vec()
 			}
 		};
-		let playback_info_res: Result<http::Response<isahc::Body>, isahc::Error> = post_puddler(format!("{}{}/Items/{}/PlaybackInfo?UserId={}", head_dict.config_file.ipaddress, head_dict.media_server, item.Id, head_dict.config_file.user_id), &head_dict.auth_header, serde_json::to_string_pretty(&sess).unwrap());
+		let playback_info_res: Result<http::Response<isahc::Body>, String> = post_puddler(format!("{}{}/Items/{}/PlaybackInfo?UserId={}", head_dict.config_file.ipaddress, head_dict.media_server, item.Id, head_dict.config_file.user_id), &head_dict.auth_header, serde_json::to_string_pretty(&sess).unwrap());
 		let playback_info: PlaybackInfo = match playback_info_res {
 			Ok(mut t) => {
 				let search_text: &String = &t.text().unwrap();
@@ -268,7 +268,13 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, Item: &Items) {
 
 	let resume_progress = item.UserData.PlaybackPositionTicks / 10000000;
 
-	let mut mpv_handle: mpv::MpvHandlerBuilder = mpv::MpvHandlerBuilder::new().expect("Couldn't create MPV builder.");
+	let total_runtime: f64 = if settings.transcoding {
+		(item.RunTimeTicks.unwrap() as f64 - item.UserData.PlaybackPositionTicks as f64) / 10000000.0
+	} else {
+		item.RunTimeTicks.unwrap() as f64 / 10000000.0
+	};
+
+	let mut mpv_handle: mpv::MpvHandlerBuilder = mpv::MpvHandlerBuilder::new().expect("Failed to create MPV builder.");
 	mpv_handle.set_option("osc", true).unwrap();
 	mpv_handle.set_option("input-default-bindings", true).unwrap();
 	mpv_handle.set_option("input-vo-keyboard", true).unwrap();
@@ -283,33 +289,34 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, Item: &Items) {
 	};
 	
 	if settings.fullscreen {
-		mpv.set_property("fullscreen", "yes").expect("Couldn't configure fullscreen.");
+		mpv.set_property("fullscreen", "yes").expect("Failed to configure fullscreen.");
 	}
 
   if settings.gpu {
-    mpv.set_property("hwdec", "auto-safe").expect("Couldn't configure hardware-decoding.")
+    mpv.set_property("hwdec", "auto-safe").expect("Failed to configure hardware-decoding.")
   }
 	
-	mpv.set_property("user-agent", APPNAME).expect("Couldn't configure user-agent.");
+	mpv.set_property("user-agent", APPNAME).expect("Failed to configure user-agent.");
 	
 	if item.Type == "Movie" {
-		mpv.set_property("force-media-title", format!("{} ({}) | {}", item.Name, &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4], head_dict.media_server_name).as_str()).expect("Couldn't configure force-media-title.");
-		mpv.set_property("title", format!("{} - Streaming: {} ({})", APPNAME, item.Name, &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4]).as_str()).expect("Couldn't configure title.");
+		mpv.set_property("force-media-title", format!("{} ({}) | {}", item.Name, &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4], head_dict.media_server_name).as_str()).expect("Failed to configure force-media-title.");
+		mpv.set_property("title", format!("{} - Streaming: {} ({})", APPNAME, item.Name, &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4]).as_str()).expect("Failed to configure title.");
 	} else {
-		mpv.set_property("force-media-title", format!("{} ({}) - {} - {} | {}", item.SeriesName.as_ref().unwrap(), &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4], item.SeasonName.as_ref().unwrap(), item.Name, head_dict.media_server_name).as_str()).expect("Couldn't configure force-media-title.");
-		mpv.set_property("title", format!("{} - Streaming: {} ({}) - {} - {}", APPNAME, item.SeriesName.as_ref().unwrap(), &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4], item.SeasonName.as_ref().unwrap(), item.Name).as_str()).expect("Couldn't configure title.");
+		mpv.set_property("force-media-title", format!("{} ({}) - {} - {} | {}", item.SeriesName.as_ref().unwrap(), &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4], item.SeasonName.as_ref().unwrap(), item.Name, head_dict.media_server_name).as_str()).expect("Failed to configure force-media-title.");
+		mpv.set_property("title", format!("{} - Streaming: {} ({}) - {} - {}", APPNAME, item.SeriesName.as_ref().unwrap(), &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4], item.SeasonName.as_ref().unwrap(), item.Name).as_str()).expect("Failed to configure title.");
 	}
+
 	mpv.command(&["loadfile", &stream_url as &str]).expect("Failed to stream the file :/");
+
 	let mut discord: DiscordClient = discord::mpv_link(settings.discord_presence);
 	let mut old_pos: f64 = -15.0;
 	let mut last_time_update: f64 = 0.0;
-	let total_runtime: f64 = item.RunTimeTicks.unwrap() as f64 / 10000000.0;
 	'main: loop {
 		while let Some(event) = mpv.wait_event(0.0) {
 			match event {
 				mpv::Event::FileLoaded => {
 					if resume_progress != 0 && ! settings.transcoding {
-						mpv.command(&["seek", format!("{}", &resume_progress).as_str()]).expect("Failed to seek")
+						mpv.command(&["seek", format!("{}", &resume_progress).as_str()]).expect("Failed to seek");
 					}
 				}
 				mpv::Event::Shutdown => {
