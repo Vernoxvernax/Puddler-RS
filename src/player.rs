@@ -15,7 +15,7 @@ use crate::mediaserver_information::HeadDict;
 use crate::mediaserver_information::post_puddler;
 use crate::progress_report::MediaStream;
 use crate::puddler_get;
-use crate::numbers;
+use crate::is_numeric;
 use crate::settings::Settings;
 use crate::progress_report::PlaybackInfo;
 use crate::progress_report::finished_playback;
@@ -29,7 +29,7 @@ use dialoguer::{theme::ColorfulTheme, Select};
 #[derive(Debug, Serialize, Deserialize)]
 struct SessionCapabilities {
 	UserId: String,
-	StartTimeTicks: u64,
+	StartTimeTicks: i64,
 	MediaSourceId: String,
 	AudioStreamIndex: usize,
 	SubtitleStreamIndex: usize,
@@ -149,7 +149,7 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, Item: &Items) {
 							break
 						}
 					}
-					(input.trim().parse::<f64>().unwrap() * 60.0 * 10000000.0).to_string().parse::<u64>().unwrap()
+					(input.trim().parse::<f64>().unwrap() * 60.0 * 10000000.0).to_string().parse::<i64>().unwrap()
 				},
 				_ => {
 					item.UserData.PlaybackPositionTicks
@@ -167,7 +167,7 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, Item: &Items) {
 		loop {
 			io::stdout().flush().expect("Failed to flush stdout");
 			io::stdin().read_line(&mut mbps).unwrap();
-			if ! numbers(mbps.trim()) {
+			if ! is_numeric(mbps.trim()) {
 				print!("\nInvalid input! Enter something like \"25\" equal to ~3MB/s.\n: ")
 			} else {
 				break

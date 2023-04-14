@@ -11,7 +11,7 @@ use crate::mediaserver_information::ConfigFileRaw;
 use crate::mediaserver_information::ConfigFile;
 use crate::mediaserver_information::ConfigFileUser;
 use crate::mediaserver_information::getch;
-use crate::numbers;
+use crate::is_numeric;
 
 
 pub fn choose_config(server_kind: char, autologin: bool) -> Option<String> {
@@ -60,7 +60,7 @@ pub fn choose_config(server_kind: char, autologin: bool) -> Option<String> {
             let mut index_raw: String = String::new();
             io::stdin().read_line(  &mut index_raw).unwrap();
             index_raw.trim().parse::<String>().unwrap();
-            if ! numbers(&index_raw) {
+            if ! is_numeric(&index_raw) {
                 print!("Invalid input, please try again.\n: ")
             } else {
                 index = index_raw.trim().parse::<usize>().unwrap();
@@ -137,7 +137,7 @@ pub fn read_config(config_path_string: &String, autologin: bool) -> Result<(Conf
                                 let mut index_raw: String = String::new();
                                 io::stdin().read_line(  &mut index_raw).unwrap();
                                 index_raw.trim().parse::<String>().unwrap();
-                                if ! numbers(&index_raw) {
+                                if ! is_numeric(&index_raw) {
                                     if index_raw.trim() == "Add" {
                                         return Err((Some(a), "add user"))
                                     } else {

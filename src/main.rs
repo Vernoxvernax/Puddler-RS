@@ -1,4 +1,5 @@
 #![allow(non_snake_case)]
+use colored::ColoredString;
 use colored::Colorize;
 use progress_report::MediaSourceInfo;
 use urlencoding::encode;
@@ -59,7 +60,7 @@ pub struct Items {
 #[derive(Debug, Deserialize, PartialEq, Clone)]
 pub struct UserData {
   pub PlayedPercentage: Option<f64>,
-  pub PlaybackPositionTicks: u64,
+  pub PlaybackPositionTicks: i64,
   pub Played: bool,
 }
 
@@ -155,6 +156,8 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
   let ipaddress = &head_dict.config_file.ipaddress;
   let media_server = &head_dict.media_server;
   let user_id = &head_dict.config_file.user_id;
+
+
   // nextup & resume
   let mut item_list: Vec<Items> = Vec::new();
   let pick: Option<i32>;
@@ -189,12 +192,13 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
       item_list = print_menu(&jellyfin_response, true, item_list);
     }
   }
+
+
   // latest
   let latest_series = puddler_get(format!("{}{}/Users/{}/Items/Latest?Limit=10&IncludeItemTypes=Episode&Fields=PremiereDate,MediaSources", &ipaddress, &media_server, &user_id), head_dict);
   let latest_series_response: ItemJson = match latest_series {
     Ok(mut t) => {
-      let response_text = &t.text().unwrap();
-      let response_text = format!("{{\"Items\":{}}}", &response_text.to_string());
+      let response_text = format!("{{\"Items\":{}}}", t.text().unwrap());
       serde_json::from_str(&response_text).unwrap()
     }
     Err(e) => panic!("failed to parse get request: {e}")
@@ -206,8 +210,7 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
   let latest = puddler_get(format!("{}{}/Users/{}/Items/Latest?Limit=10&IncludeItemTypes=Movie&Fields=PremiereDate,MediaSources", &ipaddress, &media_server, &user_id), head_dict);
   let latest_response: ItemJson = match latest {
     Ok(mut t) => {
-      let response_text: &String = &t.text().unwrap();
-      let response_text = format!("{{\"Items\":{}}}", &response_text.to_string());
+      let response_text = format!("{{\"Items\":{}}}", t.text().unwrap());
       serde_json::from_str(&response_text).unwrap()
     }
     Err(e) => panic!("failed to parse get request: {e}")
@@ -222,6 +225,8 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
   io::stdout().flush().expect("Failed to flush stdout");
   let mut input = String::new();
   io::stdin().read_line(&mut input).unwrap();
+
+
   // processing input
   if input.trim() == "ALL" {
     let all = puddler_get(format!("{}{}/Items?UserId={}&Recursive=true&IncludeItemTypes=Series,Movie&Fields=PremiereDate,MediaSources&collapseBoxSetItems=False", &ipaddress, &media_server, &user_id), head_dict);
@@ -234,16 +239,17 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
     };
     item_list = Vec::new();
     item_list = print_menu(&all_response, false, item_list);
-    if all_response.TotalRecordCount.unwrap() > 1 {
+
+    if all_response.Items.len() > 1 {
       print!(": ");
       io::stdout().flush().expect("Failed to flush stdout");
     }
     pick = process_input(&item_list, None);
-  } else if numbers(&input) {
+  } else if is_numeric(&input) {
     pick = process_input(&item_list, Some(input.trim().to_string()));
   } else {
     input = encode(input.trim()).into_owned();
-    let search = puddler_get(format!("{}{}/Items?SearchTerm={}&UserId={}&Recursive=true&IncludeItemTypes=Series,Movie&Fields=PremiereDate,MediaSources", &ipaddress, &media_server, &input, &user_id), head_dict);
+    let search = puddler_get(format!("{}{}/Items?SearchTerm={}&UserId={}&Recursive=true&IncludeItemTypes=Series,Movie&Fields=PremiereDate,MediaSources&collapseBoxSetItems=False", &ipaddress, &media_server, &input, &user_id), head_dict);
     let search_response: ItemJson = match search {
       Ok(mut t) => {
         let search_text: &String = &t.text().unwrap();
@@ -251,10 +257,11 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
       }
       Err(e) => panic!("failed to parse get request: {e}")
     };
+
     if !search_response.Items.is_empty() {
       item_list = Vec::new();
       item_list = print_menu(&search_response, false, item_list);
-      if search_response.TotalRecordCount.unwrap() > 1 {
+      if search_response.Items.len() > 1 {
         print!(": ");
         io::stdout().flush().expect("Failed to flush stdout");
       }
@@ -264,6 +271,7 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
       pick = None
     }
   }
+
   if let Some(pick) = pick {
     item_parse(head_dict, &item_list, pick, settings);
   }
@@ -289,7 +297,7 @@ fn puddler_get(url: String, head_dict: &HeadDict) -> Result<Response<Body>, isah
 }
 
 
-fn numbers(input: &str) -> bool {
+fn is_numeric(input: &str) -> bool {
   for x in input.trim().chars() {
     if x.is_alphabetic() {
       return false
@@ -300,12 +308,12 @@ fn numbers(input: &str) -> bool {
 
 
 fn process_input(item_list: &Vec<Items>, number: Option<String>) -> Option<i32> {
-  let items_in_list: i32 = item_list.len().try_into().unwrap();
+  let items_in_list = item_list.len().try_into().unwrap();
   match items_in_list {
     n if n > 1 => {
       let mut raw_input: String;
-      if let Some(res) = number {
-        raw_input = res;
+      if let Some(res) = number.as_ref() {
+        raw_input = res.to_string();
       } else {
         raw_input = String::new();
         io::stdin().read_line(&mut raw_input).unwrap();
@@ -314,13 +322,35 @@ fn process_input(item_list: &Vec<Items>, number: Option<String>) -> Option<i32> 
       let pick = raw_input.parse::<i32>().unwrap();
       if pick < items_in_list + 1 && pick >= 0 {
         let item = item_list.get(pick as usize).unwrap();
-        if "Episode Special".contains(&item.Type) {
-          println!("\nYou've chosen {}.\n", format!("{} ({}) - {} - {}", item.SeriesName.as_ref().unwrap(), (&item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4]), item.SeasonName.as_ref().unwrap(), item.Name).cyan());
+        if item.SeasonName == Some("Specials".to_string()) {
+          let first_occurence = item_list.iter().position(|i| i.Id == item.Id);
+          let first = first_occurence == Some(pick as usize);
+          let embedded: ColoredString = if number.is_some() || ! first {
+            "Embedded".bold()
+          } else {
+            "Embedded".strikethrough()
+          };
+          println!("\nYou've chosen {}. ({})\n",
+            format!("{} ({}) - {} - {}", item.SeriesName.as_ref().unwrap(),
+              (&item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4]),
+              item.SeasonName.as_ref().unwrap(),
+              item.Name
+            ).cyan(),
+            embedded
+          );
+        } else if item.Type == "Episode" {
+          println!("\nYou've chosen {}.\n",
+            format!("{} ({}) - {} - {}", item.SeriesName.as_ref().unwrap(),
+              (&item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4]),
+              item.SeasonName.as_ref().unwrap(),
+              item.Name
+            ).cyan()
+          );
         } else {
           println!("\nYou've chosen {}.\n", format!("{} ({})", item.Name, &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4]).cyan());
         }
       } else {
-        println!("{}", "Are you mentally ill?!".to_string().red());
+        println!("{}", "Are you ok?!".red());
         process::exit(0x0100);
       }
       Some(pick)
@@ -340,13 +370,15 @@ fn item_parse(head_dict: &HeadDict, item_list: &[Items], pick: i32, settings: &S
   let ipaddress: &String = &head_dict.config_file.ipaddress;
   let media_server: &String = &head_dict.media_server;
   let user_id: &String = &head_dict.config_file.user_id;
+
   if item_list.get(pick as usize).unwrap().Type == *"Movie" {
     let item = item_list.get(pick as usize).unwrap();
     play(settings, head_dict, item);
+
   } else if item_list.get(pick as usize).unwrap().Type == *"Series" {
     let series = &item_list.get(pick as usize).unwrap();
     println!("{}:", series.Name);
-    let series_response = puddler_get(format!("{}{}/Users/{}/Items?ParentId={}&Fields=PremiereDate,MediaSources", &ipaddress, &media_server, &user_id, &series.Id), head_dict);
+    let series_response = puddler_get(format!("{}{}/Users/{}/Items?ParentId={}&Fields=PremiereDate,MediaSources&collapseBoxSetItems=False", &ipaddress, &media_server, &user_id, &series.Id), head_dict);
     let series_json: SeriesStruct = match series_response {
       Ok(mut t) => {
         let parse_text: &String = &t.text().unwrap();
@@ -354,35 +386,22 @@ fn item_parse(head_dict: &HeadDict, item_list: &[Items], pick: i32, settings: &S
       }
       Err(e) => panic!("failed to parse series request: {e}")
     };
+
     let item_list: Vec<Items> = process_series(&series_json, head_dict, true);
-    let filtered_input: i32;
     let items_in_list: i32 = item_list.len().try_into().unwrap();
-    if items_in_list > 1 {
+
+    let filtered_input: i32 = if items_in_list > 1 {
       print!("Please enter which episode you want to continue at.\n: ");
       io::stdout().flush().expect("Failed to flush stdout");
-      let mut input = String::new();
-      io::stdin().read_line(&mut input).unwrap();
-      input = encode(input.trim()).into_owned();
-      filtered_input = input.parse::<i32>().unwrap();
-      if filtered_input < items_in_list + 1 && filtered_input >= 0 {
-        let item_listed = item_list.clone();
-        let item = &item_listed.into_iter().nth(filtered_input as usize).unwrap();
-        if "Episode Special".contains(&item.Type) {
-          println!("\nYou've chosen {}.\n", format!("{} ({}) - {} - {}", item.SeriesName.as_ref().unwrap(), (&item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4]), item.SeasonName.as_ref().unwrap(), item.Name).cyan());
-        } else {
-          println!("\nYou've chosen {}.\n", format!("{} ({})", item.Name, &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4]).cyan());
-        }
-      } else {
-        println!("{}", "Are you mentally ill?!".to_string().red());
-        process::exit(0x0100);
-      }
+      process_input(&item_list, None).unwrap()
     } else {
-      filtered_input = 0;
-    }
+      0
+    };
+
     series_play(&item_list, filtered_input, head_dict, settings);
-  } else if "Special Episode".to_string().contains(&item_list.get(pick as usize).unwrap().Type) {
+  } else if "Episode".to_string().contains(&item_list.get(pick as usize).unwrap().Type) {
     let item: &Items = item_list.get(pick as usize).unwrap();
-    let series_response = puddler_get(format!("{}{}/Users/{}/Items?ParentId={}&Fields=PremiereDate,MediaSources", &ipaddress, &media_server, &user_id, &item.SeriesId.as_ref().unwrap()), head_dict);
+    let series_response = puddler_get(format!("{}{}/Users/{}/Items?ParentId={}&Fields=PremiereDate,MediaSources&collapseBoxSetItems=False", &ipaddress, &media_server, &user_id, &item.SeriesId.as_ref().unwrap()), head_dict);
     let series_json: SeriesStruct = match series_response {
       Ok(mut t) => {
         let parse_text: &String = &t.text().unwrap();
@@ -392,16 +411,26 @@ fn item_parse(head_dict: &HeadDict, item_list: &[Items], pick: i32, settings: &S
     };
     let item_list: Vec<Items> = process_series(&series_json, head_dict, false);
     let mut item_pos: i32 = 0;
-    for (things, item1) in item_list.iter().enumerate() {
-      if item1.Id == item.Id {
-        if item1.Type == "Special" {
-          item_pos = things.try_into().unwrap();
-          continue;
-        };
-        item_pos = things.try_into().unwrap();
-        break;
+    let mut amount = item_list.iter().filter(|&i| i.Id == item.Id).count(); // how many times the episode exists in the list
+    if item.SeasonName == Some("Specials".to_string()) && amount > 1 {
+      for (things, item1) in item_list.iter().enumerate() {
+        if item1.Id == item.Id {
+          if amount == 1 {
+            item_pos = things.try_into().unwrap();
+            break;
+          } else {
+            amount -= 1;
+          }
+        }
       }
-    };
+    } else {
+      for (things, item1) in item_list.iter().enumerate() {
+        if item1.Id == item.Id {
+          item_pos = things.try_into().unwrap();
+          break;
+        }
+      };
+    }
     series_play(&item_list, item_pos, head_dict, settings);
   }
 }
@@ -412,7 +441,7 @@ fn series_play(item_list: &Vec<Items>, mut pick: i32, head_dict: &HeadDict, sett
   let item = &item_list.get(pick as usize).unwrap();
   play(settings, head_dict, item);
   loop {
-    if ( pick + 2 ) > episode_amount { // +1 since episode_amount counts from 1 and +1 for next ep
+    if ( pick + 2 ) > episode_amount { // +1 since episode_amount doesn't start at 0 AND +1 for next ep
       println!("\nYou've reached the end of your episode list. Returning to menu ...");
       break
     } else {
@@ -467,6 +496,7 @@ fn process_series(series: &SeriesStruct, head_dict: &HeadDict, printing: bool) -
   let user_id: &String = &head_dict.config_file.user_id;
   let mut index_iterator: i32 = 0;
   let mut episode_list: Vec<Items> = Vec::new();
+
   for season_numb in 0..series.Items.len() {
     let last_season = series.Items.len() == season_numb + 1;
     let season_branches = if last_season {
@@ -478,7 +508,7 @@ fn process_series(series: &SeriesStruct, head_dict: &HeadDict, printing: bool) -
     if printing {
       println!("  {} {}", season_branches, season.Name);
     }
-    let season_res = puddler_get(format!("{}{}/Users/{}/Items?ParentId={}&Fields=PremiereDate,MediaSources", &ipaddress, &media_server, &user_id, &season.Id), head_dict);
+    let season_res = puddler_get(format!("{}{}/Users/{}/Items?ParentId={}&Fields=PremiereDate,MediaSources&collapseBoxSetItems=False", &ipaddress, &media_server, &user_id, &season.Id), head_dict);
     let season_json: SeasonStruct = match season_res {
       Ok(mut t) => {
         let parse_text: &String = &t.text().unwrap().to_string();
@@ -504,13 +534,18 @@ fn process_series(series: &SeriesStruct, head_dict: &HeadDict, printing: bool) -
       if ! printing {
         continue
       };
+      let extra = if episode.SeasonName != Some(season.Name.clone()) { // If the special is listed in a normal season, the season name of it is different from the actual season which the special is assigned to (kinda makes sense to avoid duplicate items)
+        " (S)".to_string()
+      } else {
+        "".to_string()
+      };
       if episode.UserData.PlayedPercentage.is_some() {
         let long_perc: f64 = episode.UserData.PlayedPercentage.unwrap();
-        println!("  {} [{}] {} {}% ", episode_branches, index_iterator, episode.Name, long_perc.round() as i64)
+        println!("  {} [{}] {}{} {}% ", episode_branches, index_iterator, episode.Name, extra, long_perc.round() as i64)
       } else if episode.UserData.Played {
-        println!("  {} [{}] {} {} ", episode_branches, index_iterator, episode.Name, "[PLAYED]".to_string().green());
+        println!("  {} [{}] {}{} {} ", episode_branches, index_iterator, episode.Name, extra, "[PLAYED]".to_string().green());
       } else {
-        println!("  {} [{}] {}", episode_branches, index_iterator, episode.Name);
+        println!("  {} [{}] {}{}", episode_branches, index_iterator, episode.Name, extra);
       };
       index_iterator += 1;
     }
@@ -520,10 +555,10 @@ fn process_series(series: &SeriesStruct, head_dict: &HeadDict, printing: bool) -
 
 
 fn print_menu(items: &ItemJson, recommendation: bool, mut item_list: Vec<Items>) -> Vec<Items> {
-  let count: u16 = if items.TotalRecordCount.is_some() && ! recommendation {
-    items.TotalRecordCount.unwrap()
+  let count: usize = if recommendation {
+    2
   } else {
-    10
+    items.Items.len()
   };
   if count > 1 && ! recommendation {
     println!("\nPlease choose from the following results:")
