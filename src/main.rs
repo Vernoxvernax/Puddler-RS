@@ -11,7 +11,7 @@ use http::Response;
 use http::StatusCode;
 use std::io::prelude::*;
 use std::io;
-use serde_derive::{Deserialize};
+use serde_derive::Deserialize;
 use isahc::Body;
 use isahc::Request;
 use isahc::prelude::*;
@@ -319,7 +319,11 @@ fn process_input(item_list: &Vec<Items>, number: Option<String>) -> Option<i32> 
         io::stdin().read_line(&mut raw_input).unwrap();
         raw_input = raw_input.trim().to_string();
       }
-      let pick = raw_input.parse::<i32>().unwrap();
+      let pick = if raw_input.trim() == "" {
+        item_list.iter().position(|i| !i.UserData.Played).unwrap() as i32
+      } else {
+        raw_input.parse::<i32>().unwrap()
+      };
       if pick < items_in_list + 1 && pick >= 0 {
         let item = item_list.get(pick as usize).unwrap();
         if item.SeasonName == Some("Specials".to_string()) {
@@ -374,7 +378,6 @@ fn item_parse(head_dict: &HeadDict, item_list: &[Items], pick: i32, settings: &S
   if item_list.get(pick as usize).unwrap().Type == *"Movie" {
     let item = item_list.get(pick as usize).unwrap();
     play(settings, head_dict, item);
-
   } else if item_list.get(pick as usize).unwrap().Type == *"Series" {
     let series = &item_list.get(pick as usize).unwrap();
     println!("{}:", series.Name);

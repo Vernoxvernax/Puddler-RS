@@ -3,7 +3,7 @@ use std::io;
 use std::io::prelude::*;
 use colored::Colorize;
 use mpv::MpvHandler;
-use serde_derive::{Deserialize};
+use serde_derive::Deserialize;
 use serde::Serialize;
 use isahc::ReadResponseExt;
 use crate::getch;
