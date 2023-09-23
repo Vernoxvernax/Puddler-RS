@@ -113,8 +113,8 @@ fn main() -> ExitCode {
       .action(ArgAction::SetTrue)
     )
     .arg(
-      Arg::new("mpv-config")
-      .long("mpv-config")
+      Arg::new("mpv-config-dir")
+      .long("mpv-config-dir")
       .help("Overwrite MPV's default config location.")
       .required(false)
       .action(ArgAction::Set)
@@ -132,7 +132,7 @@ fn main() -> ExitCode {
 
   settings.mpv_debug = Some(command.get_flag("debug"));
 
-  settings.mpv_config_location = command.get_one::<String>("mpv-config").cloned();
+  settings.mpv_config_location = command.get_one::<String>("mpv-config-dir").cloned();
 
   println!("{}",
 r"     ____            __    ____         
