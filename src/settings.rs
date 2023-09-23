@@ -25,6 +25,7 @@ pub struct Settings {
   pub load_config: bool,
   pub glsl_shader: Option<Vec<String>>,
   pub mpv_debug: Option<bool>,
+  pub mpv_config_location: Option<String>
 }
 
 
@@ -60,7 +61,8 @@ fn read_settings() -> Settings {
       gpu,
       load_config,
       glsl_shader: None,
-      mpv_debug: None
+      mpv_debug: None,
+      mpv_config_location: None
     };
     let settings_file = toml::to_string_pretty(&settings).unwrap();
     std::fs::write(config_path_string, settings_file).expect("Saving settings.");
@@ -150,7 +152,8 @@ fn read_settings() -> Settings {
           gpu,
           load_config,
           glsl_shader: None,
-          mpv_debug: None
+          mpv_debug: None,
+          mpv_config_location: None
         };
         let settings_file = toml::to_string_pretty(&settings).unwrap();
         std::fs::write(config_path_string, settings_file).expect("Saving settings.");

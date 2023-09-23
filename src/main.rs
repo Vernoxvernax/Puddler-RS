@@ -112,6 +112,14 @@ fn main() -> ExitCode {
       .required(false)
       .action(ArgAction::SetTrue)
     )
+    .arg(
+      Arg::new("mpv-config")
+      .long("mpv-config")
+      .help("Overwrite MPV's default config location.")
+      .required(false)
+      .action(ArgAction::Set)
+      .num_args(1)
+    )
   .get_matches();
 
   let mut settings: Settings = initialize_settings(0);
@@ -123,6 +131,8 @@ fn main() -> ExitCode {
   };
 
   settings.mpv_debug = Some(command.get_flag("debug"));
+
+  settings.mpv_config_location = command.get_one::<String>("mpv-config").cloned();
 
   println!("{}",
 r"     ____            __    ____         

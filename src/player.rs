@@ -276,6 +276,10 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, Item: &Items) {
 
 	let mut mpv_handle: mpv::MpvHandlerBuilder = mpv::MpvHandlerBuilder::new().expect("Failed to create MPV builder.");
 
+	if settings.mpv_config_location.is_some() {
+		mpv_handle.set_option("config-dir", settings.mpv_config_location.clone().unwrap().as_str()).unwrap();
+	}
+
 	if settings.load_config {
 		mpv_handle.set_option("config", true).unwrap();
 	}
