@@ -21,7 +21,10 @@ pub struct Settings {
   pub fullscreen: bool,
   pub autologin: bool,
   pub autoplay: bool,
-  pub gpu: bool
+  pub gpu: bool,
+  pub load_config: bool,
+  pub glsl_shader: Option<Vec<String>>,
+  pub mpv_debug: Option<bool>,
 }
 
 
@@ -31,19 +34,21 @@ fn read_settings() -> Settings {
   if ! Path::new(&config_path_string).is_file() {
     println!("No settings file found!\nBuilding default settings ...\n");
     // Default <> server.
-    let server_config: Option<String> = search_server_configs();
+    let server_config: Option<String> = ask_search_server_configs();
     // Discord Presence default setting.
-    let discord_presence: bool = initiate_discord();
+    let discord_presence: bool = ask_initiate_discord();
     // Activate encoded streaming (requires fully configured media-server).
-    let transcoding: bool = transcoding();
+    let transcoding: bool = ask_transcoding();
     // Whether mpv should start in fullscreen mode.
-    let fullscreen: bool = start_fullscreen();
+    let fullscreen: bool = ask_start_fullscreen();
     // Whether the user should be prompted if the default login is correct.
-    let autologin: bool = automatically_login();
+    let autologin: bool = ask_automatically_login();
     // Whether the user should be prompted to continue after an episode has been finished.
-    let autoplay: bool = autoplay();
+    let autoplay: bool = ask_autoplay();
     // Whether mpv should try to use hardware decoding.
-    let gpu: bool = gpu();
+    let gpu: bool = ask_gpu();
+    // Whether to load the config file at $MPV_HOME
+    let load_config: bool = ask_load_config();
 
     let settings = Settings {
       server_config,
@@ -52,7 +57,10 @@ fn read_settings() -> Settings {
       fullscreen,
       autologin,
       autoplay,
-      gpu
+      gpu,
+      load_config,
+      glsl_shader: None,
+      mpv_debug: None
     };
     let settings_file = toml::to_string_pretty(&settings).unwrap();
     std::fs::write(config_path_string, settings_file).expect("Saving settings.");
@@ -70,44 +78,50 @@ fn read_settings() -> Settings {
           let mut settings_file = fs::OpenOptions::new().write(true).append(true).open(&config_path_string).unwrap();
           match &e.to_string()[e.to_string().find('`').unwrap() + 1..e.to_string().len() - 1] {
             "server_config" => {
-              let server_config: Option<String> = search_server_configs();
+              let server_config: Option<String> = ask_search_server_configs();
               write!(settings_file, "server_config = {server_config:?}").unwrap();
               let settings = read_settings();
               return settings;
             },
             "discord_presence" => {
-              let discord_presence: bool = initiate_discord();
+              let discord_presence: bool = ask_initiate_discord();
               write!(settings_file, "discord_presence = {discord_presence}").unwrap();
               let settings = read_settings();
               return settings;
             },
             "transcoding" => {
-              let transcoding: bool = transcoding();
+              let transcoding: bool = ask_transcoding();
               write!(settings_file, "transcoding = {transcoding}").unwrap();
               let settings = read_settings();
               return settings;
             },
             "fullscreen" => {
-              let fullscreen: bool = start_fullscreen();
+              let fullscreen: bool = ask_start_fullscreen();
               write!(settings_file, "fullscreen = {fullscreen}").unwrap();
               let settings = read_settings();
               return settings;
             },
             "autologin" => {
-              let autologin: bool = automatically_login();
+              let autologin: bool = ask_automatically_login();
               write!(settings_file, "autologin = {autologin}").unwrap();
               let settings = read_settings();
               return settings;
             },
             "autoplay" => {
-              let autoplay: bool = autoplay();
+              let autoplay: bool = ask_autoplay();
               write!(settings_file, "autoplay = {autoplay}").unwrap();
               let settings = read_settings();
               return settings;
             },
             "gpu" => {
-              let gpu: bool = gpu();
+              let gpu: bool = ask_gpu();
               write!(settings_file, "gpu = {gpu}").unwrap();
+              let settings = read_settings();
+              return settings;
+            }
+            "load_config" => {
+              let load_config: bool = ask_load_config();
+              write!(settings_file, "load_config = {load_config}").unwrap();
               let settings = read_settings();
               return settings;
             }
@@ -118,13 +132,14 @@ fn read_settings() -> Settings {
         } else {
           println!("{}", "Settings file is corrupt. Settings have to be reconfigured.\n".to_string().red());
         }
-        let server_config: Option<String> = search_server_configs();
-        let discord_presence: bool = initiate_discord();
-        let transcoding: bool = transcoding();
-        let fullscreen: bool = start_fullscreen();
-        let autologin: bool = automatically_login();
-        let autoplay: bool = autoplay();
-        let gpu: bool = gpu();
+        let server_config: Option<String> = ask_search_server_configs();
+        let discord_presence: bool = ask_initiate_discord();
+        let transcoding: bool = ask_transcoding();
+        let fullscreen: bool = ask_start_fullscreen();
+        let autologin: bool = ask_automatically_login();
+        let autoplay: bool = ask_autoplay();
+        let gpu: bool = ask_gpu();
+        let load_config: bool = ask_load_config();
         let settings = Settings {
           server_config,
           discord_presence,
@@ -132,7 +147,10 @@ fn read_settings() -> Settings {
           fullscreen,
           autologin,
           autoplay,
-          gpu
+          gpu,
+          load_config,
+          glsl_shader: None,
+          mpv_debug: None
         };
         let settings_file = toml::to_string_pretty(&settings).unwrap();
         std::fs::write(config_path_string, settings_file).expect("Saving settings.");
@@ -158,7 +176,7 @@ pub fn initialize_settings(mode: u8) -> Settings {
 }
 
 
-fn initiate_discord() -> bool {
+fn ask_initiate_discord() -> bool {
   print!("Do you want to activate Discord-Presence by default?\n (Y)es / (N)o");
   let presence = getch("YyNn");
   let connection: bool = match presence {
@@ -174,7 +192,7 @@ fn initiate_discord() -> bool {
 }
 
 
-fn search_server_configs() -> Option<String> {
+fn ask_search_server_configs() -> Option<String> {
   let config_path = get_app_root(AppDataType::UserConfig, &APP_INFO).unwrap();
   println!("Searching in \"{}\" for emby or jellyfin configuration files ...", &config_path.display());
   if fs::read_dir(&config_path).is_err() {
@@ -223,7 +241,7 @@ fn search_server_configs() -> Option<String> {
 }
 
 
-fn transcoding() -> bool {
+fn ask_transcoding() -> bool {
   print!("Do you want to transcode the video to hevc to save bandwidth?\n  (e.g.: if the emby/jellyfin instance isn't running locally)\n (Y)es / (N)o");
   let encode = getch("YyNn");
   match encode {
@@ -238,7 +256,7 @@ fn transcoding() -> bool {
 }
 
 
-fn start_fullscreen() -> bool {
+fn ask_start_fullscreen() -> bool {
   print!("Do you want mpv to start in fullscreen-mode?\n (Y)es / (N)o");
   let fullscreen = getch("YyNn");
   match fullscreen {
@@ -265,6 +283,7 @@ fn change_settings(mut settings: Settings) -> Settings {
   [5] Automatically login = {}
   [6] Autoplay = {}
   [7] Hardware decoding = {}
+  [8] Load MPV config and lua scripts = {}
 \n  [S] Save and return to the menu",
 settings.server_config.as_ref().unwrap_or(&"None".to_string()).to_string().green(),
 settings.discord_presence.to_string().green(),
@@ -272,31 +291,35 @@ settings.transcoding.to_string().green(),
 settings.fullscreen.to_string().green(),
 settings.autologin.to_string().green(),
 settings.autoplay.to_string().green(),
-settings.gpu.to_string().green()
+settings.gpu.to_string().green(),
+settings.load_config.to_string().green()
     );
-    let menu = getch("1234567Ss");
+    let menu = getch("12345678Ss");
     match menu {
       '1' => {
-        settings.server_config = search_server_configs();
+        settings.server_config = ask_search_server_configs();
       },
       '2' => {
-        settings.discord_presence = initiate_discord();
+        settings.discord_presence = ask_initiate_discord();
       },
       '3' => {
-        settings.transcoding = transcoding();
+        settings.transcoding = ask_transcoding();
       },
       '4' => {
-        settings.fullscreen = start_fullscreen();
+        settings.fullscreen = ask_start_fullscreen();
       },
       '5' => {
-        settings.autologin = automatically_login();
+        settings.autologin = ask_automatically_login();
       },
       '6' => {
-        settings.autoplay = autoplay();
+        settings.autoplay = ask_autoplay();
       },
       '7' => {
-        settings.gpu = gpu();
+        settings.gpu = ask_gpu();
       },
+      '8' => {
+        settings.load_config = ask_load_config();
+      }
       'S' | 's' => {
         break
       },
@@ -318,6 +341,7 @@ fn display_settings(settings: &Settings) {
   Automatically login = {}
   Autoplay = {}
   Hardware decoding = {}
+  Load MPV config and lua scripts = {}
 ",
   settings.server_config.as_ref().unwrap_or(&"None".to_string()).to_string().green(),
   settings.discord_presence.to_string().green(),
@@ -325,12 +349,13 @@ fn display_settings(settings: &Settings) {
   settings.fullscreen.to_string().green(),
   settings.autologin.to_string().green(),
   settings.autoplay.to_string().green(),
-  settings.gpu.to_string().green()
+  settings.gpu.to_string().green(),
+  settings.load_config.to_string().green()
   );
 }
 
 
-fn automatically_login() -> bool {
+fn ask_automatically_login() -> bool {
   print!("Do you want to enable autologin on start?\n (Y)es / (N)o");
   let autologin = getch("YyNn");
   match autologin {
@@ -344,7 +369,7 @@ fn automatically_login() -> bool {
   }
 }
 
-fn autoplay() -> bool {
+fn ask_autoplay() -> bool {
   print!("Do you want to enable autoplay for episodes?\n(You can only exit by CTRL+C)\n (Y)es / (N)o");
   let autologin = getch("YyNn");
   match autologin {
@@ -358,10 +383,24 @@ fn autoplay() -> bool {
   }
 }
 
-fn gpu() -> bool {
+fn ask_gpu() -> bool {
   print!("Do you want to enable hardware decoding for MPV?\n(Using \"auto-safe\" api)\n (Y)es / (N)o");
   let autologin = getch("YyNn");
   match autologin {
+    'Y' | 'y' => {
+      true
+    },
+    'N' | 'n' => {
+      false
+    },
+    _ => false
+  }
+}
+
+fn ask_load_config() -> bool {
+  print!("Do you want to load the mpv config-file?\n(including lua scripts)\n (Y)es / (N)o");
+  let load_config = getch("YyNn");
+  match load_config {
     'Y' | 'y' => {
       true
     },

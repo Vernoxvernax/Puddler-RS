@@ -275,9 +275,18 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, Item: &Items) {
 	};
 
 	let mut mpv_handle: mpv::MpvHandlerBuilder = mpv::MpvHandlerBuilder::new().expect("Failed to create MPV builder.");
+
+	if settings.load_config {
+		mpv_handle.set_option("config", true).unwrap();
+	}
+	
 	mpv_handle.set_option("osc", true).unwrap();
 	mpv_handle.set_option("input-default-bindings", true).unwrap();
 	mpv_handle.set_option("input-vo-keyboard", true).unwrap();
+
+	if settings.mpv_debug == Some(true) {
+		mpv_handle.set_option("log-file", "./mpv.log").unwrap();
+	}
 
 	let mut mpv: MpvHandler = mpv_handle.build().expect("Failed to create specified mpv configuration.");
 	
@@ -307,6 +316,13 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, Item: &Items) {
 	}
 
 	mpv.command(&["loadfile", &stream_url as &str]).expect("Failed to stream the file :/");
+
+	// Load files provided using the --glsl-shader option.
+	if settings.glsl_shader.is_some() {
+		for sh in settings.glsl_shader.clone().unwrap() {
+			mpv.command(&["change-list", "glsl-shaders", "append", sh.as_str()]).expect("Failed to add glsl-shader file");
+		}
+	}
 
 	let mut discord: DiscordClient = discord::mpv_link(settings.discord_presence);
 	let mut old_pos: f64 = -15.0;

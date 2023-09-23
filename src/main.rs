@@ -1,8 +1,11 @@
 #![allow(non_snake_case)]
+use clap::Arg;
+use clap::ArgAction;
+use clap::Command;
+use urlencoding::encode;
 use colored::ColoredString;
 use colored::Colorize;
 use progress_report::MediaSourceInfo;
-use urlencoding::encode;
 use std::process::ExitCode;
 use std::thread;
 use std::time::Duration;
@@ -15,6 +18,7 @@ use serde_derive::Deserialize;
 use isahc::Body;
 use isahc::Request;
 use isahc::prelude::*;
+
 mod progress_report;
 pub mod mediaserver_information;
 pub mod player;
@@ -24,14 +28,14 @@ pub mod discord;
 use player::play;
 use mediaserver_information::*;
 use settings::*;
+
 const APPNAME: &str = "Puddler";
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 use app_dirs::AppInfo;
-const APP_INFO: AppInfo = AppInfo{
+const APP_INFO: AppInfo = AppInfo {
   name: APPNAME,
   author: "VernoxVernax"
 };
-
 
 
 #[derive(Debug, Deserialize)]
@@ -89,7 +93,37 @@ struct SeasonStruct {
 
 
 fn main() -> ExitCode {
+  let command = Command::new("puddler")
+    .about("Simple command-line client for Emby and Jellyfin.")
+    .version(VERSION)
+    .author("VernoxVernax")
+    .arg(
+      Arg::new("glsl-shader")
+      .long("glsl-shader")
+      .help("Play MPV using this shader-file")
+      .required(false)
+      .action(ArgAction::Set)
+      .num_args(1..)
+    )
+    .arg(
+      Arg::new("debug")
+      .long("debug")
+      .help("Print MPV log messages to \"./mpv.log\"")
+      .required(false)
+      .action(ArgAction::SetTrue)
+    )
+  .get_matches();
+
   let mut settings: Settings = initialize_settings(0);
+
+  settings.glsl_shader = if command.get_many::<String>("glsl-shader").is_some() {
+    Some(command.get_many::<String>("glsl-shader").unwrap().map(|sh| sh.to_string()).collect())
+  } else {
+    None
+  };
+
+  settings.mpv_debug = Some(command.get_flag("debug"));
+
   println!("{}",
 r"     ____            __    ____         
     / __ \__  ______/ /___/ / /__  _____
