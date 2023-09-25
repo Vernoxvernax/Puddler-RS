@@ -19,19 +19,21 @@ use isahc::Body;
 use isahc::Request;
 use isahc::prelude::*;
 
-mod progress_report;
+pub mod progress_report;
 pub mod mediaserver_information;
 pub mod player;
 pub mod settings;
 pub mod config;
 pub mod discord;
 use player::play;
-use mediaserver_information::*;
 use settings::*;
+use mediaserver_information::*;
+use progress_report::mark_playstate;
 
 const APPNAME: &str = "Puddler";
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 use app_dirs::AppInfo;
+
 const APP_INFO: AppInfo = AppInfo {
   name: APPNAME,
   author: "VernoxVernax"
@@ -100,17 +102,10 @@ fn main() -> ExitCode {
     .arg(
       Arg::new("glsl-shader")
       .long("glsl-shader")
-      .help("Play MPV using this shader-file")
+      .help("Play MPV using this shader-file.")
       .required(false)
       .action(ArgAction::Set)
       .num_args(1..)
-    )
-    .arg(
-      Arg::new("debug")
-      .long("debug")
-      .help("Print MPV log messages to \"./mpv.log\"")
-      .required(false)
-      .action(ArgAction::SetTrue)
     )
     .arg(
       Arg::new("mpv-config-dir")
@@ -119,6 +114,13 @@ fn main() -> ExitCode {
       .required(false)
       .action(ArgAction::Set)
       .num_args(1)
+    )
+    .arg(
+      Arg::new("debug")
+      .long("debug")
+      .help("Print MPV log messages to \"./mpv.log\".")
+      .required(false)
+      .action(ArgAction::SetTrue)
     )
   .get_matches();
 
@@ -201,9 +203,8 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
   let media_server = &head_dict.media_server;
   let user_id = &head_dict.config_file.user_id;
 
-
   // nextup & resume
-  let mut item_list: Vec<Items> = Vec::new();
+  let mut item_list: Vec<Items> = vec![];
   let pick: Option<i32>;
   let nextup = puddler_get(format!("{}{}/Users/{}/Items/Resume?Fields=PremiereDate,MediaSources", &ipaddress, &media_server, &user_id), head_dict);
   let response: ItemJson = match nextup {
@@ -237,7 +238,6 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
     }
   }
 
-
   // latest
   let latest_series = puddler_get(format!("{}{}/Users/{}/Items/Latest?Limit=10&IncludeItemTypes=Episode&Fields=PremiereDate,MediaSources", &ipaddress, &media_server, &user_id), head_dict);
   let latest_series_response: ItemJson = match latest_series {
@@ -270,7 +270,6 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
   let mut input = String::new();
   io::stdin().read_line(&mut input).unwrap();
 
-
   // processing input
   if input.trim() == "ALL" {
     let all = puddler_get(format!("{}{}/Items?UserId={}&Recursive=true&IncludeItemTypes=Series,Movie&Fields=PremiereDate,MediaSources&collapseBoxSetItems=False", &ipaddress, &media_server, &user_id), head_dict);
@@ -281,8 +280,7 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
       }
       Err(e) => panic!("failed to parse get request: {e}")
     };
-    item_list = Vec::new();
-    item_list = print_menu(&all_response, false, item_list);
+    let item_list = print_menu(&all_response, false, vec![]);
 
     if all_response.Items.len() > 1 {
       print!(": ");
@@ -303,8 +301,7 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
     };
 
     if !search_response.Items.is_empty() {
-      item_list = Vec::new();
-      item_list = print_menu(&search_response, false, item_list);
+      item_list = print_menu(&search_response, false, vec![]);
       if search_response.Items.len() > 1 {
         print!(": ");
         io::stdout().flush().expect("Failed to flush stdout");
@@ -331,7 +328,7 @@ fn puddler_get(url: String, head_dict: &HeadDict) -> Result<Response<Body>, isah
     .header("Content-Type", "application/json")
     .body(())?
     .send()?;
-  let result = match  response.status() {
+  let result = match response.status() {
     StatusCode::OK => {
       response
     }
@@ -363,11 +360,13 @@ fn process_input(item_list: &Vec<Items>, number: Option<String>) -> Option<i32> 
         io::stdin().read_line(&mut raw_input).unwrap();
         raw_input = raw_input.trim().to_string();
       }
-      let pick = if raw_input.trim() == "" {
-        item_list.iter().position(|i| !i.UserData.Played).unwrap() as i32
+      
+      let pick = if is_numeric(raw_input.trim()) {
+        raw_input.trim().parse::<i32>().unwrap()
       } else {
-        raw_input.parse::<i32>().unwrap()
+        item_list.iter().position(|i| !i.UserData.Played).unwrap() as i32
       };
+
       if pick < items_in_list + 1 && pick >= 0 {
         let item = item_list.get(pick as usize).unwrap();
         if item.SeasonName == Some("Specials".to_string()) {
@@ -438,13 +437,48 @@ fn item_parse(head_dict: &HeadDict, item_list: &[Items], pick: i32, settings: &S
     let items_in_list: i32 = item_list.len().try_into().unwrap();
 
     let filtered_input: i32 = if items_in_list > 1 {
-      print!("Please enter which episode you want to continue at.\n: ");
-      io::stdout().flush().expect("Failed to flush stdout");
-      process_input(&item_list, None).unwrap()
+      loop {
+        print!("Enter which episode you want to play, or use the \"mark\" command to mark something as played. (\"2\", \"2-6\", \"2,3,6\")\n: ");
+        io::stdout().flush().expect("Failed to flush stdout");
+        let mut input = String::new();
+        io::stdin().read_line(&mut input).unwrap();
+        if input.contains("mark") {
+          let played: bool;
+          let parameters: String;
+          if input.contains("unmark") {
+            parameters = input.replace("unmark", "");
+            played = false;
+          } else {
+            parameters = input.replace("mark ", "");
+            played = true;
+          };
+          let mut temp = 0;
+          let mut indexes: Vec<u32> = vec![];
+          let mut range: bool = false;
+          for ch in parameters.chars() {
+            if ch == ',' {
+              indexes.append(&mut vec![temp]);
+            } else if ch == '-' {
+              range = true;
+            } else if range {
+              for num in temp + 1..ch.to_digit(10).unwrap() + 1 {
+                indexes.append(&mut vec![num]);
+              }
+              range = false;
+            } else if ch.is_alphanumeric() {
+              temp = ch.to_digit(10).unwrap();
+            }
+          }
+          indexes.append(&mut vec![temp]);
+          mark_items(&item_list, indexes, played, head_dict);
+          continue;
+        } else {
+          break process_input(&item_list, Some(input)).unwrap();
+        }
+      }
     } else {
       0
     };
-
     series_play(&item_list, filtered_input, head_dict, settings);
   } else if "Episode".to_string().contains(&item_list.get(pick as usize).unwrap().Type) {
     let item: &Items = item_list.get(pick as usize).unwrap();
@@ -480,6 +514,21 @@ fn item_parse(head_dict: &HeadDict, item_list: &[Items], pick: i32, settings: &S
     }
     series_play(&item_list, item_pos, head_dict, settings);
   }
+}
+
+
+fn mark_items(item_list: &[Items], indexes: Vec<u32>, played: bool, head_dict: &HeadDict) {
+  println!();
+  for index in indexes {
+    let item = item_list.get(index as usize).unwrap();
+    if played {
+      println!("Marking {} as played.", item.Name.cyan());
+    } else {
+      println!("Marking {} as un-played.", item.Name.cyan());
+    }
+    mark_playstate(head_dict, item, played);
+  }
+  println!();
 }
 
 

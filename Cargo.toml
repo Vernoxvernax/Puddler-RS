@@ -1,15 +1,16 @@
 [package]
 name = "puddler"
-version = "0.5.12"
+version = "0.5.13"
 edition = "2021"
 
 [dependencies]
 isahc = { version = "1.7.2", features=["json"] }
 app_dirs = { version = "2.5.5", package = "app_dirs2" }
-mpv = { git = "https://github.com/Vernoxvernax/mpv-rs.git" }
+mpv = { git = "https://github.com/Vernoxvernax/mpv-rs.git", rev = "592183f" }
 uuid = { version = "1.4.1", features = ["v4"] }
 config = { version = "0.13.3", features = ["yaml"] }
 tokio = { version = "1.32.0", features = ["full"] }
+chrono = { version = "0.4.31", features = ["alloc", "clock"] }
 getch = "0.3.1"
 serde = "1.0.188"
 serde_json = "1.0.107"
