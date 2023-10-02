@@ -206,7 +206,7 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
   // nextup & resume
   let mut item_list: Vec<Items> = vec![];
   let pick: Option<i32>;
-  let nextup = puddler_get(format!("{}{}/Users/{}/Items/Resume?Fields=PremiereDate,MediaSources", &ipaddress, &media_server, &user_id), head_dict);
+  let nextup = puddler_get(format!("{}{}/Users/{}/Items/Resume?Fields=PremiereDate,MediaSources&MediaTypes=Video", &ipaddress, &media_server, &user_id), head_dict);
   let response: ItemJson = match nextup {
     Ok(mut t) => {
       let response_text = &t.text().unwrap();
@@ -217,10 +217,12 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
       process::exit(0x0100);
     }
   };
+
   if response.TotalRecordCount.unwrap() != 0 {
     println!("\nContinue Watching:");
     item_list = print_menu(&response, true, item_list);
   }
+  
   if media_server != "/emby" {
     let jellyfin_nextup = puddler_get(format!("{}{}/Shows/NextUp?Fields=PremiereDate,MediaSources&UserId={}", &ipaddress, &media_server, &user_id), head_dict);
     let jellyfin_response: ItemJson = match jellyfin_nextup {
@@ -247,10 +249,12 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
     }
     Err(e) => panic!("failed to parse get request: {e}")
   };
+
   if !latest_series_response.Items.is_empty() {
     println!("\nLatest:");
     item_list = print_menu(&latest_series_response, true, item_list);
   }
+
   let latest = puddler_get(format!("{}{}/Users/{}/Items/Latest?Limit=10&IncludeItemTypes=Movie&Fields=PremiereDate,MediaSources", &ipaddress, &media_server, &user_id), head_dict);
   let latest_response: ItemJson = match latest {
     Ok(mut t) => {
@@ -259,12 +263,14 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
     }
     Err(e) => panic!("failed to parse get request: {e}")
   };
+
   if !latest_response.Items.is_empty() {
     if latest_series_response.Items.is_empty() {
       println!("\nLatest:");
     }
     item_list = print_menu(&latest_response, true, item_list);
   }
+
   print!("Please choose from above, enter a search term, or type \"ALL\" to display literally everything.\n: ");
   io::stdout().flush().expect("Failed to flush stdout");
   let mut input = String::new();
@@ -339,6 +345,9 @@ fn puddler_get(url: String, head_dict: &HeadDict) -> Result<Response<Body>, isah
 
 
 fn is_numeric(input: &str) -> bool {
+  if input.is_empty() {
+    return false;
+  }
   for x in input.trim().chars() {
     if x.is_alphabetic() {
       return false
