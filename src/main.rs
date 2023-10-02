@@ -206,7 +206,7 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
   // nextup & resume
   let mut item_list: Vec<Items> = vec![];
   let pick: Option<i32>;
-  let nextup = puddler_get(format!("{}{}/Users/{}/Items/Resume?Fields=PremiereDate,MediaSources&MediaTypes=Video", &ipaddress, &media_server, &user_id), head_dict);
+  let nextup = puddler_get(format!("{}{}/Users/{}/Items/Resume?Fields=PremiereDate,MediaSources&MediaTypes=Video&Limit=15", &ipaddress, &media_server, &user_id), head_dict);
   let response: ItemJson = match nextup {
     Ok(mut t) => {
       let response_text = &t.text().unwrap();
