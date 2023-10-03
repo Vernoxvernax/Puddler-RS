@@ -7,7 +7,7 @@ on:
     branches:
       - dev
     paths:
-      - "./github/workflows/**.yml"
+      - ".github/workflows/**.yml"
       - "./src/**.rs"
       - "./Cargo.toml"
       - "./mpv/**.lib" # Will hopefully soon be removed when I finally get to create the damn lib file in a CI
