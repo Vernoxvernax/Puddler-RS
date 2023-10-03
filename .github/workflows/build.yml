@@ -33,3 +33,11 @@ jobs:
       run: |
         cargo build --release
         cargo build --release --target=x86_64-pc-windows-gnu
+    
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: puddler-artifacts
+        path: |
+          ./target/release/puddler
+          ./target/x86_64-pc-windows-gnu/release/puddler.exe
