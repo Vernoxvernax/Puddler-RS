@@ -544,7 +544,7 @@ fn mark_items(item_list: &[Items], indexes: Vec<u32>, played: bool, head_dict: &
 fn series_play(item_list: &Vec<Items>, mut pick: i32, head_dict: &HeadDict, settings: &Settings) {
   let episode_amount: i32 = item_list.len().try_into().unwrap();
   let item = &item_list.get(pick as usize).unwrap();
-  play(settings, head_dict, item);
+  let watched_item: bool = play(settings, head_dict, item);
   loop {
     if ( pick + 2 ) > episode_amount { // +1 since episode_amount doesn't start at 0 AND +1 for next ep
       println!("\nYou've reached the end of your episode list. Returning to menu ...");
@@ -556,7 +556,7 @@ fn series_play(item_list: &Vec<Items>, mut pick: i32, head_dict: &HeadDict, sett
         if next_item.UserData.Played {
           continue
         };
-        if settings.autoplay {
+        if settings.autoplay && watched_item {
           println!("\nWelcome back. Continuing in 5 seconds:\n{}",
             format!("   {} ({}) - {} - {}",
               next_item.SeriesName.as_ref().unwrap(),
