@@ -48,5 +48,5 @@ jobs:
       with:
         name: puddler-artifacts
         path: |
-          puddler-${GITHUB_SHA::7}-dev
-          puddler-${GITHUB_SHA::7}-dev.exe
+          puddler-*-dev
+          puddler-*-dev.exe
