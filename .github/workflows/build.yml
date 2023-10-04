@@ -34,10 +34,15 @@ jobs:
         cargo build --release
         cargo build --release --target=x86_64-pc-windows-gnu
     
+    - name: Rename artifacts
+      run: |
+        mv ./target/release/puddler puddler-${GITHUB_SHA::7}-dev
+        mv ./target/x86_64-pc-windows-gnu/release/puddler.exe puddler-${GITHUB_SHA::7}-dev.exe
+
     - name: Upload build artifacts
       uses: actions/upload-artifact@v3
       with:
         name: puddler-artifacts
         path: |
-          ./target/release/puddler
-          ./target/x86_64-pc-windows-gnu/release/puddler.exe
+          puddler-${GITHUB_SHA::7}-dev
+          puddler-${GITHUB_SHA::7}-dev.exe
