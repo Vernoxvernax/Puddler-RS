@@ -7,7 +7,7 @@ use serde::Serialize;
 
 use crate::settings::Settings;
 use crate::mediaserver_information::AuthHeader;
-use crate::{HeadDict, Items};
+use crate::{HeadDict, Item};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 struct PlaybackObject {
@@ -95,7 +95,7 @@ impl fmt::Display for MediaStream {
 }
 
 
-pub fn started_playing(settings: &Settings, head_dict: &HeadDict, item: &Items, playback_info: &PlaybackInfo) {
+pub fn started_playing(settings: &Settings, head_dict: &HeadDict, item: &Item, playback_info: &PlaybackInfo) {
   let ipaddress: &String = &head_dict.config_file.ipaddress;
   let item_id: &String = &item.Id;
   let session_id: &String = &head_dict.session_id;
@@ -124,7 +124,7 @@ pub fn started_playing(settings: &Settings, head_dict: &HeadDict, item: &Items, 
 }
 
 
-pub fn update_progress(settings: &Settings, head_dict: &HeadDict, item: &Items, mut time_pos: f64, paused: bool, playsession_id: &String, mediasource_id: &String) {
+pub fn update_progress(settings: &Settings, head_dict: &HeadDict, item: &Item, mut time_pos: f64, paused: bool, playsession_id: &String, mediasource_id: &String) {
   let ipaddress: &String = &head_dict.config_file.ipaddress;
   let item_id: &String = &item.Id;
   let media_server: &String = &head_dict.media_server;
@@ -178,7 +178,7 @@ pub fn no_res_del (url: String, auth_header: &AuthHeader) -> Result<(), isahc::E
 }
 
 
-pub fn finished_playback(settings: &Settings, head_dict: &HeadDict, item: &Items, player_time: f64, playsession_id: &String, mediasource_id: &String, eof: bool) -> bool {
+pub fn finished_playback(settings: &Settings, head_dict: &HeadDict, item: &Item, player_time: f64, playsession_id: &String, mediasource_id: &String, eof: bool) -> bool {
   let ipaddress: &String = &head_dict.config_file.ipaddress;
   let item_id: &String = &item.Id;
   let session_id: &String = &head_dict.session_id;
@@ -274,7 +274,7 @@ pub fn finished_playback(settings: &Settings, head_dict: &HeadDict, item: &Items
 }
 
 
-pub fn mark_playstate(head_dict: &HeadDict, item: &Items, played: bool) {
+pub fn mark_playstate(head_dict: &HeadDict, item: &Item, played: bool) {
   let ipaddress: &String = &head_dict.config_file.ipaddress;
   let item_id: &String = &item.Id;
   let media_server: &String = &head_dict.media_server;

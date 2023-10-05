@@ -42,13 +42,13 @@ const APP_INFO: AppInfo = AppInfo {
 
 #[derive(Debug, Deserialize)]
 struct ItemJson {
-  Items: Vec<Items>,
+  Items: Vec<Item>,
   TotalRecordCount: Option<u16>
 }
 
 
 #[derive(Debug, Deserialize, PartialEq, Clone)]
-pub struct Items {
+pub struct Item {
   pub Name: String,
   pub Id: String,
   pub RunTimeTicks: Option<u64>,
@@ -90,7 +90,7 @@ struct Seasons {
 
 #[derive(Debug, Deserialize, PartialEq, Clone)]
 struct SeasonStruct {
-  Items: Vec<Items>
+  Items: Vec<Item>
 }
 
 
@@ -204,7 +204,7 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
   let user_id = &head_dict.config_file.user_id;
 
   // nextup & resume
-  let mut item_list: Vec<Items> = vec![];
+  let mut item_list: Vec<Item> = vec![];
   let pick: Option<i32>;
   let nextup = puddler_get(format!("{}{}/Users/{}/Items/Resume?Fields=PremiereDate,MediaSources&MediaTypes=Video&Limit=15", &ipaddress, &media_server, &user_id), head_dict);
   let response: ItemJson = match nextup {
@@ -357,7 +357,7 @@ fn is_numeric(input: &str) -> bool {
 }
 
 
-fn process_input(item_list: &Vec<Items>, number: Option<String>) -> Option<i32> {
+fn process_input(item_list: &Vec<Item>, number: Option<String>) -> Option<i32> {
   let items_in_list = item_list.len().try_into().unwrap();
   match items_in_list {
     n if n > 1 => {
@@ -422,7 +422,7 @@ fn process_input(item_list: &Vec<Items>, number: Option<String>) -> Option<i32> 
 }
 
 
-fn item_parse(head_dict: &HeadDict, item_list: &[Items], pick: i32, settings: &Settings) {
+fn item_parse(head_dict: &HeadDict, item_list: &[Item], pick: i32, settings: &Settings) {
   let ipaddress: &String = &head_dict.config_file.ipaddress;
   let media_server: &String = &head_dict.media_server;
   let user_id: &String = &head_dict.config_file.user_id;
@@ -442,7 +442,7 @@ fn item_parse(head_dict: &HeadDict, item_list: &[Items], pick: i32, settings: &S
       Err(e) => panic!("failed to parse series request: {e}")
     };
 
-    let item_list: Vec<Items> = process_series(&series_json, head_dict, true);
+    let item_list: Vec<Item> = process_series(&series_json, head_dict, true);
     let items_in_list: i32 = item_list.len().try_into().unwrap();
 
     let filtered_input: i32 = if items_in_list > 1 {
@@ -490,7 +490,7 @@ fn item_parse(head_dict: &HeadDict, item_list: &[Items], pick: i32, settings: &S
     };
     series_play(&item_list, filtered_input, head_dict, settings);
   } else if "Episode".to_string().contains(&item_list.get(pick as usize).unwrap().Type) {
-    let item: &Items = item_list.get(pick as usize).unwrap();
+    let item: &Item = item_list.get(pick as usize).unwrap();
     let series_response = puddler_get(format!("{}{}/Users/{}/Items?ParentId={}&Fields=PremiereDate,MediaSources&collapseBoxSetItems=False", &ipaddress, &media_server, &user_id, &item.SeriesId.as_ref().unwrap()), head_dict);
     let series_json: SeriesStruct = match series_response {
       Ok(mut t) => {
@@ -499,7 +499,7 @@ fn item_parse(head_dict: &HeadDict, item_list: &[Items], pick: i32, settings: &S
       }
       Err(e) => panic!("failed to parse series request: {e}")
     };
-    let item_list: Vec<Items> = process_series(&series_json, head_dict, false);
+    let item_list: Vec<Item> = process_series(&series_json, head_dict, false);
     let mut item_pos: i32 = 0;
     let mut amount = item_list.iter().filter(|&i| i.Id == item.Id).count(); // how many times the episode exists in the list
     if item.SeasonName == Some("Specials".to_string()) && amount > 1 {
@@ -526,7 +526,7 @@ fn item_parse(head_dict: &HeadDict, item_list: &[Items], pick: i32, settings: &S
 }
 
 
-fn mark_items(item_list: &[Items], indexes: Vec<u32>, played: bool, head_dict: &HeadDict) {
+fn mark_items(item_list: &[Item], indexes: Vec<u32>, played: bool, head_dict: &HeadDict) {
   println!();
   for index in indexes {
     let item = item_list.get(index as usize).unwrap();
@@ -541,10 +541,10 @@ fn mark_items(item_list: &[Items], indexes: Vec<u32>, played: bool, head_dict: &
 }
 
 
-fn series_play(item_list: &Vec<Items>, mut pick: i32, head_dict: &HeadDict, settings: &Settings) {
+fn series_play(item_list: &Vec<Item>, mut pick: i32, head_dict: &HeadDict, settings: &Settings) {
   let episode_amount: i32 = item_list.len().try_into().unwrap();
   let item = &item_list.get(pick as usize).unwrap();
-  let watched_item: bool = play(settings, head_dict, item);
+  let watched_full_item: bool = play(settings, head_dict, item);
   loop {
     if ( pick + 2 ) > episode_amount { // +1 since episode_amount doesn't start at 0 AND +1 for next ep
       println!("\nYou've reached the end of your episode list. Returning to menu ...");
@@ -553,11 +553,44 @@ fn series_play(item_list: &Vec<Items>, mut pick: i32, head_dict: &HeadDict, sett
       pick += 1;
       if item_list.get(pick as usize).is_some() {
         let next_item = &item_list.get(pick as usize).unwrap();
+        
         if next_item.UserData.Played {
           continue
         };
-        if settings.autoplay && watched_item {
-          println!("\nWelcome back. Continuing in 5 seconds:\n{}",
+
+        if ! watched_full_item {
+          println!("\nWelcome back. Do you want to finish the current episode or play the next one?:\n{}",
+            format!("   {} ({}) - {} - {}",
+              next_item.SeriesName.as_ref().unwrap(),
+              &next_item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4],
+              next_item.SeasonName.as_ref().unwrap(), next_item.Name).cyan()
+          );
+          print!(" (F)inish episode | (M)ark watched | (N)ext episode | (R)eturn to menu | (E)xit");
+          let cont = getch("FfRrNnEeMm");
+          match cont {
+            'F' | 'f' => {
+              if let Some(updated_item) = update_episode_item(item.Id.clone(), head_dict) {
+                pick -= 1;
+                play(settings, head_dict, &updated_item);
+              } else {
+                break;
+              }
+            },
+            'M' | 'm' => {
+              mark_items(item_list, vec![(pick-1) as u32], true, head_dict);
+            },
+            'N' | 'n' => {
+              let item = &item_list.get(pick as usize).unwrap();
+              play(settings, head_dict, item);
+            },
+            'R' | 'r' => break,
+            'E' | 'e' => {
+              process::exit(0x0100);
+            },
+            _ => (),
+          }
+        } else if settings.autoplay {
+          println!("\nWelcome back. Continuing playback in 5 seconds:\n{}",
             format!("   {} ({}) - {} - {}",
               next_item.SeriesName.as_ref().unwrap(),
               &next_item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4],
@@ -573,14 +606,14 @@ fn series_play(item_list: &Vec<Items>, mut pick: i32, head_dict: &HeadDict, sett
               &next_item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4],
               next_item.SeasonName.as_ref().unwrap(), next_item.Name).cyan()
           );
-          print!(" (N)ext | (M)enu | (E)xit");
-          let cont = getch("NnEeMm");
+          print!(" (N)ext | (R)eturn to menu | (E)xit");
+          let cont = getch("RrNnEe");
           match cont {
             'N' | 'n' => {
               let item = &item_list.get(pick as usize).unwrap();
               play(settings, head_dict, item);
             },
-            'M' | 'm' => break,
+            'R' | 'r' => break,
             'E' | 'e' => {
               process::exit(0x0100);
             },
@@ -595,12 +628,28 @@ fn series_play(item_list: &Vec<Items>, mut pick: i32, head_dict: &HeadDict, sett
 }
 
 
-fn process_series(series: &SeriesStruct, head_dict: &HeadDict, printing: bool) -> Vec<Items> {
+fn update_episode_item(item_id: String, head_dict: &HeadDict) -> Option<Item> {
+  let ipaddress: &String = &head_dict.config_file.ipaddress;
+  let media_server: &String = &head_dict.media_server;
+  let user_id: &String = &head_dict.config_file.user_id;
+  let items = puddler_get(format!("{}{}/Users/{}/Items?Ids={}&Fields=PremiereDate,MediaSources&collapseBoxSetItems=False", &ipaddress, &media_server, &user_id, &item_id), head_dict);
+  match items {
+    Ok(mut t) => {
+      let parse_text: &String = &t.text().unwrap().to_string();
+      let items: ItemJson = serde_json::from_str(parse_text).unwrap();
+      return items.Items.first().cloned()
+    }
+    Err(e) => panic!("failed to parse series request: {e}")
+  };
+}
+
+
+fn process_series(series: &SeriesStruct, head_dict: &HeadDict, printing: bool) -> Vec<Item> {
   let ipaddress: &String = &head_dict.config_file.ipaddress;
   let media_server: &String = &head_dict.media_server;
   let user_id: &String = &head_dict.config_file.user_id;
   let mut index_iterator: i32 = 0;
-  let mut episode_list: Vec<Items> = Vec::new();
+  let mut episode_list: Vec<Item> = Vec::new();
 
   for season_numb in 0..series.Items.len() {
     let last_season = series.Items.len() == season_numb + 1;
@@ -622,7 +671,7 @@ fn process_series(series: &SeriesStruct, head_dict: &HeadDict, printing: bool) -
       Err(e) => panic!("failed to parse series request: {e}")
     };
     for episode_numb in 0..season_json.Items.len() { // for the code readers: the "season_json" vector is obviously different to "season" since the latter doesn't include any episodes.
-      let episode: Items = season_json.Items[episode_numb].clone();
+      let episode: Item = season_json.Items[episode_numb].clone();
       let last_episode = season_json.Items.len() == episode_numb + 1;
       let episode_branches = if last_episode && last_season {
         "     └──"
@@ -659,7 +708,7 @@ fn process_series(series: &SeriesStruct, head_dict: &HeadDict, printing: bool) -
 }
 
 
-fn print_menu(items: &ItemJson, recommendation: bool, mut item_list: Vec<Items>) -> Vec<Items> {
+fn print_menu(items: &ItemJson, recommendation: bool, mut item_list: Vec<Item>) -> Vec<Item> {
   let count: usize = if recommendation {
     2
   } else {
@@ -669,7 +718,7 @@ fn print_menu(items: &ItemJson, recommendation: bool, mut item_list: Vec<Items>)
     println!("\nPlease choose from the following results:")
   }
   for h in 0..items.Items.len() {
-    let x: Items = items.Items[h].clone();
+    let x: Item = items.Items[h].clone();
     if ! item_list.contains(&x) {
       item_list.push(items.Items[h].clone());
       if ! x.UserData.Played {

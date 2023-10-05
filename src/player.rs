@@ -10,7 +10,7 @@ use crate::getch;
 use crate::discord;
 use crate::discord::DiscordClient;
 use crate::APPNAME;
-use crate::Items;
+use crate::Item;
 use crate::mediaserver_information::HeadDict;
 use crate::mediaserver_information::post_puddler;
 use crate::progress_report::MediaStream;
@@ -123,7 +123,7 @@ pub fn player_set_options(mut builder: mpv::MpvHandlerBuilder, settings: &Settin
 }
 
 
-fn choose_trackIndexx(item: &Items) -> (usize, usize) {
+fn choose_trackIndexx(item: &Item) -> (usize, usize) {
   fn select_ind(tracks: Vec<MediaStream>, kind: &str) -> usize {
     match tracks.len() {
       n if n > 1 => {
@@ -159,8 +159,8 @@ fn choose_trackIndexx(item: &Items) -> (usize, usize) {
 }
 
 
-pub fn play(settings: &Settings, head_dict: &HeadDict, Item: &Items) -> bool {
-  let item: &mut Items = &mut Item.clone();
+pub fn play(settings: &Settings, head_dict: &HeadDict, Item: &Item) -> bool {
+  let item: &mut Item = &mut Item.clone();
   item.UserData.PlaybackPositionTicks = {
     if item.UserData.PlaybackPositionTicks == 0 && ! settings.transcoding {
       0
@@ -168,14 +168,18 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, Item: &Items) -> bool {
       let time = (item.UserData.PlaybackPositionTicks as f64) / 10000000.0;
       let formated: String = if time > 60.0 {
         if (time / 60.0) > 60.0 {
-          format!("{:02}:{:02}:{:02}", ((time / 60.0) / 60.0).trunc(), ((((time / 60.0) / 60.0) - ((time / 60.0) / 60.).trunc()) * 60.0).trunc(), (((time / 60.0) - (time / 60.0).trunc()) * 60.0).trunc())
+          format!("{:02}:{:02}:{:02}",
+            ((time / 60.0) / 60.0).trunc(),
+            ((((time / 60.0) / 60.0) - ((time / 60.0) / 60.).trunc()) * 60.0).trunc(),
+            (((time / 60.0) - (time / 60.0).trunc()) * 60.0).trunc()
+          )
         } else {
           format!("00:{:02}:{:02}", (time / 60.0).trunc(), (((time / 60.0) - (time / 60.0).trunc()) * 60.0).trunc())
         }
       } else {
         time.to_string()
       };
-      print!("Do you want to continue at time: {formated}?\n  (Y)es | (N)o (start from a different position)");
+      print!("Do you want to continue at: {}?\n  (Y)es | (N)o (start from a different position)", formated.cyan());
       match getch("YyNnOo") {
         'N' | 'n' => {
           print!("Please enter a playback position in minutes: ");
