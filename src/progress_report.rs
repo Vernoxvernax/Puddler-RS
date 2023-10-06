@@ -178,17 +178,17 @@ pub fn no_res_del (url: String, auth_header: &AuthHeader) -> Result<(), isahc::E
 }
 
 
-pub fn finished_playback(settings: &Settings, head_dict: &HeadDict, item: &Item, player_time: f64, playsession_id: &String, mediasource_id: &String, eof: bool) -> bool {
+pub fn finished_playback(settings: &Settings, head_dict: &HeadDict, item: &mut Item, player_time: f64, playsession_id: &String, mediasource_id: &String, eof: bool) -> bool {
   let ipaddress: &String = &head_dict.config_file.ipaddress;
   let item_id: &String = &item.Id;
   let session_id: &String = &head_dict.session_id;
   let media_server: &String = &head_dict.media_server;
   let user_id: &String = &head_dict.config_file.user_id;
-
-  let mut time_position = player_time * 10000000.0;
+  let time_position_f64 = player_time * 10000000.0;
+  let mut time_position = time_position_f64.to_string().split('.').collect::<Vec<&str>>().first().unwrap().parse::<u64>().unwrap();
   
   if settings.transcoding {
-    time_position += item.UserData.PlaybackPositionTicks as f64
+    time_position += item.UserData.PlaybackPositionTicks as u64
   };
 
   if eof {
@@ -203,7 +203,7 @@ pub fn finished_playback(settings: &Settings, head_dict: &HeadDict, item: &Item,
     };
     true
   } else {
-    let difference = ((item.RunTimeTicks.unwrap() as f64) - time_position) / (item.RunTimeTicks.unwrap() as f64);
+    let difference = ((item.RunTimeTicks.unwrap() as f64) - time_position as f64) / (item.RunTimeTicks.unwrap() as f64);
     if difference < 0.20 {
       let result = no_res_post(format!("{ipaddress}{media_server}/Users/{user_id}/PlayedItems/{item_id}"), &head_dict.auth_header, "".to_string());
       match result {
@@ -225,6 +225,7 @@ pub fn finished_playback(settings: &Settings, head_dict: &HeadDict, item: &Item,
         mediasourceid: mediasource_id.to_string(),
         positionticks: time_position.to_string()
       };
+      item.UserData.PlaybackPositionTicks = time_position as i64;
       let response = no_res_post(format!("{ipaddress}{media_server}/Sessions/Playing/Stopped"), &head_dict.auth_header, serde_json::to_string_pretty(&finished_obj).unwrap());
       match response {
         Ok(_) => {

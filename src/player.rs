@@ -159,8 +159,7 @@ fn choose_trackIndexx(item: &Item) -> (usize, usize) {
 }
 
 
-pub fn play(settings: &Settings, head_dict: &HeadDict, Item: &Item) -> bool {
-  let item: &mut Item = &mut Item.clone();
+pub fn play(settings: &Settings, head_dict: &HeadDict, item: &mut Item) -> bool {
   item.UserData.PlaybackPositionTicks = {
     if item.UserData.PlaybackPositionTicks == 0 && ! settings.transcoding {
       0
@@ -371,8 +370,8 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, Item: &Item) -> bool {
           }
         }
         mpv::Event::Shutdown | mpv::Event::EndFile(_) => {
-          let watched: bool = finished_playback(settings, head_dict, item, old_pos, &playback_info.PlaySessionId, &playback_info.MediaSources[0].Id, false);
-          break 'main watched;
+          let watched_till_end = finished_playback(settings, head_dict, item, old_pos, &playback_info.PlaySessionId, &playback_info.MediaSources[0].Id, false);
+          break 'main watched_till_end;
         }
         mpv::Event::Seek | mpv::Event::PlaybackRestart => {
           old_pos -= 16.0

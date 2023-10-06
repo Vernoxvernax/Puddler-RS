@@ -162,7 +162,7 @@ r"     ____            __    ____
           settings = initialize_settings(2);
         },
         'e' | 'E' => {
-          process::exit(0x0100);
+          return ExitCode::SUCCESS;
         },
         _ => (
         )
@@ -181,7 +181,7 @@ r"     ____            __    ____
           settings = initialize_settings(2);
         },
         'e' | 'E' => {
-          process::exit(0x0100);
+          return ExitCode::SUCCESS;
         },
         _ => (
         )
@@ -428,7 +428,7 @@ fn item_parse(head_dict: &HeadDict, item_list: &[Item], pick: i32, settings: &Se
   let user_id: &String = &head_dict.config_file.user_id;
 
   if item_list.get(pick as usize).unwrap().Type == *"Movie" {
-    let item = item_list.get(pick as usize).unwrap();
+    let item = &mut item_list.get(pick as usize).unwrap().clone();
     play(settings, head_dict, item);
   } else if item_list.get(pick as usize).unwrap().Type == *"Series" {
     let series = &item_list.get(pick as usize).unwrap();
@@ -543,7 +543,7 @@ fn mark_items(item_list: &[Item], indexes: Vec<u32>, played: bool, head_dict: &H
 
 fn series_play(item_list: &Vec<Item>, mut pick: i32, head_dict: &HeadDict, settings: &Settings) {
   let episode_amount: i32 = item_list.len().try_into().unwrap();
-  let item = &item_list.get(pick as usize).unwrap();
+  let item = &mut item_list.get(pick as usize).unwrap().clone();
   let watched_full_item: bool = play(settings, head_dict, item);
   loop {
     if ( pick + 2 ) > episode_amount { // +1 since episode_amount doesn't start at 0 AND +1 for next ep
@@ -569,18 +569,13 @@ fn series_play(item_list: &Vec<Item>, mut pick: i32, head_dict: &HeadDict, setti
           let cont = getch("FfRrNnEeMm");
           match cont {
             'F' | 'f' => {
-              if let Some(updated_item) = update_episode_item(item.Id.clone(), head_dict) {
-                pick -= 1;
-                play(settings, head_dict, &updated_item);
-              } else {
-                break;
-              }
+              play(settings, head_dict, item);
             },
             'M' | 'm' => {
               mark_items(item_list, vec![(pick-1) as u32], true, head_dict);
             },
             'N' | 'n' => {
-              let item = &item_list.get(pick as usize).unwrap();
+              let item = &mut item_list.get(pick as usize).unwrap().clone();
               play(settings, head_dict, item);
             },
             'R' | 'r' => break,
@@ -597,7 +592,7 @@ fn series_play(item_list: &Vec<Item>, mut pick: i32, head_dict: &HeadDict, setti
               next_item.SeasonName.as_ref().unwrap(), next_item.Name).cyan()
           );
           thread::sleep(Duration::from_secs(5));
-          let item = &item_list.get(pick as usize).unwrap();
+          let item = &mut item_list.get(pick as usize).unwrap().clone();
           play(settings, head_dict, item);
         } else {
           println!("\nWelcome back. Do you want to continue playback with:\n{}",
@@ -610,7 +605,7 @@ fn series_play(item_list: &Vec<Item>, mut pick: i32, head_dict: &HeadDict, setti
           let cont = getch("RrNnEe");
           match cont {
             'N' | 'n' => {
-              let item = &item_list.get(pick as usize).unwrap();
+              let item = &mut item_list.get(pick as usize).unwrap().clone();
               play(settings, head_dict, item);
             },
             'R' | 'r' => break,
@@ -625,22 +620,6 @@ fn series_play(item_list: &Vec<Item>, mut pick: i32, head_dict: &HeadDict, setti
       }
     }
   }
-}
-
-
-fn update_episode_item(item_id: String, head_dict: &HeadDict) -> Option<Item> {
-  let ipaddress: &String = &head_dict.config_file.ipaddress;
-  let media_server: &String = &head_dict.media_server;
-  let user_id: &String = &head_dict.config_file.user_id;
-  let items = puddler_get(format!("{}{}/Users/{}/Items?Ids={}&Fields=PremiereDate,MediaSources&collapseBoxSetItems=False", &ipaddress, &media_server, &user_id, &item_id), head_dict);
-  match items {
-    Ok(mut t) => {
-      let parse_text: &String = &t.text().unwrap().to_string();
-      let items: ItemJson = serde_json::from_str(parse_text).unwrap();
-      return items.Items.first().cloned()
-    }
-    Err(e) => panic!("failed to parse series request: {e}")
-  };
 }
 
 
