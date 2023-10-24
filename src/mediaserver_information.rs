@@ -559,7 +559,7 @@ fn smol_puddler_get(url: String, auth_header: &AuthHeader) -> Result<Response<Bo
     .header("Authorization", &auth_header.authorization)
     .header("Content-Type", "application/json")
     .body(()).unwrap()
-    .send();
+  .send();
   match response {
     Ok(res) => {
       Ok(res)

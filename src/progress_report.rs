@@ -163,7 +163,7 @@ pub fn finished_playback(settings: &Settings, head_dict: &HeadDict, item: &mut I
   let media_server: &String = &head_dict.media_server;
   let user_id: &String = &head_dict.config_file.user_id;
   let time_position_f64 = player_time * 10000000.0;
-  let mut time_position = time_position_f64.to_string().split('.').collect::<Vec<&str>>().first().unwrap().parse::<u64>().unwrap();
+  let mut time_position = time_position_f64.round() as u64;
   
   if settings.transcoding {
     time_position += item.UserData.PlaybackPositionTicks as u64

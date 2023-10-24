@@ -23,7 +23,6 @@ use crate::progress_report::PlaybackInfo;
 use crate::progress_report::finished_playback;
 use crate::progress_report::update_progress;
 use crate::progress_report::started_playing;
-use std::{thread, time};
 use std::time::SystemTime;
 use dialoguer::{theme::ColorfulTheme, Select};
 
