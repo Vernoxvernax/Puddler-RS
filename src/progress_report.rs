@@ -5,6 +5,8 @@ use colored::Colorize;
 use serde_derive::Deserialize;
 use serde::Serialize;
 
+use crate::MediaSourceInfo;
+use crate::MediaStream;
 use crate::settings::Settings;
 use crate::mediaserver_information::AuthHeader;
 use crate::{HeadDict, Item};
@@ -41,29 +43,6 @@ pub struct PlaybackInfo {
   pub PlaySessionId: String
 }
 
-#[derive(Debug, Deserialize, PartialEq, Clone)]
-pub struct MediaSourceInfo {
-  pub Id: String,
-  pub SupportsTranscoding: bool,
-  pub MediaStreams: Vec<MediaStream>,
-  pub Bitrate: Option<u64>,
-  pub TranscodingUrl: Option<String>
-}
-
-#[derive(Debug, Deserialize, PartialEq, Clone)]
-pub struct MediaStream {
-  pub Index: usize,
-  pub Type: String,
-  pub Language: Option<String>,
-  pub DisplayTitle: Option<String>,
-  pub DisplayLanguage: Option<String>,
-  pub Title: Option<String>,
-  pub Codec: Option<String>,
-  pub Width: Option<u32>,
-  pub Height: Option<u32>,
-  pub IsDefault: bool
-}
-
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 struct FinishedObject {
   itemid: String,
@@ -72,7 +51,6 @@ struct FinishedObject {
   mediasourceid: String,
   positionticks: String
 }
-
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 struct NoProgressObject {

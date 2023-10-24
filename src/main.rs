@@ -5,7 +5,6 @@ use clap::Command;
 use urlencoding::encode;
 use colored::ColoredString;
 use colored::Colorize;
-use progress_report::MediaSourceInfo;
 use std::process::ExitCode;
 use std::thread;
 use std::time::Duration;
@@ -60,6 +59,34 @@ pub struct Item {
   pub SeasonId: Option<String>,
   pub PremiereDate: Option<String>,
   pub MediaSources: Option<Vec<MediaSourceInfo>>
+}
+
+
+#[derive(Debug, Deserialize, PartialEq, Clone)]
+pub struct MediaSourceInfo {
+  pub Id: String,
+  pub SupportsTranscoding: bool,
+  pub MediaStreams: Vec<MediaStream>,
+  pub Bitrate: Option<u64>,
+  pub TranscodingUrl: Option<String>
+}
+
+
+#[derive(Debug, Deserialize, PartialEq, Clone)]
+pub struct MediaStream {
+  pub Index: usize,
+  pub Type: String,
+  pub Language: Option<String>,
+  pub DisplayTitle: Option<String>,
+  pub DisplayLanguage: Option<String>,
+  pub Title: Option<String>,
+  pub Codec: Option<String>,
+  pub Width: Option<u32>,
+  pub Height: Option<u32>,
+  pub IsDefault: bool,
+  pub IsExternal: bool,
+  pub SupportsExternalStream: bool,
+  pub Path: Option<String>
 }
 
 

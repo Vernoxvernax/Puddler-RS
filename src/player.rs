@@ -13,7 +13,7 @@ use crate::APPNAME;
 use crate::Item;
 use crate::mediaserver_information::HeadDict;
 use crate::mediaserver_information::post_puddler;
-use crate::progress_report::MediaStream;
+use crate::MediaStream;
 use crate::puddler_get;
 use crate::is_numeric;
 use crate::settings::Settings;
