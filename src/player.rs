@@ -1,8 +1,10 @@
-extern crate mpv;
 use std::io;
 use std::io::prelude::*;
+use std::thread;
+use std::time::Duration;
 use colored::Colorize;
-use mpv::MpvHandler;
+use libmpv::Mpv;
+use libmpv::events::Event;
 use serde_derive::Deserialize;
 use serde::Serialize;
 use isahc::ReadResponseExt;
@@ -76,17 +78,11 @@ struct SubtitleProfile {
 }
 
 
-pub fn player_new() -> mpv::MpvHandlerBuilder {
-  return mpv::MpvHandlerBuilder::new().expect("Failed to create MPV builder.");
+pub fn player_new() -> libmpv::Mpv {
+  return Mpv::new().expect("Failed to create mpv handle.");
 }
 
-
-pub fn player_build(builder: mpv::MpvHandlerBuilder) -> MpvHandler {
-  return builder.build().expect("Failed to create specified mpv configuration.");
-}
-
-
-pub fn player_set_properties(mut handler: MpvHandler, settings: &Settings, media_title: &str, title: &str) -> MpvHandler {
+pub fn player_set_properties(handler: &libmpv::Mpv, settings: &Settings, media_title: &str, title: &str) {
   if settings.fullscreen {
     handler.set_property("fullscreen", "yes").expect("Failed to configure fullscreen.");
   }
@@ -99,27 +95,25 @@ pub fn player_set_properties(mut handler: MpvHandler, settings: &Settings, media
   
   handler.set_property("force-media-title", media_title).expect("Failed to configure force-media-title.");
   handler.set_property("title", title).expect("Failed to configure title.");
-  handler
 }
 
 
-pub fn player_set_options(mut builder: mpv::MpvHandlerBuilder, settings: &Settings) -> mpv::MpvHandlerBuilder {
+pub fn player_set_options(builder: &libmpv::Mpv, settings: &Settings) {
   if settings.mpv_config_location.is_some() {
-    builder.set_option("config-dir", settings.mpv_config_location.clone().unwrap().as_str()).unwrap();
+    builder.set_property("config-dir", settings.mpv_config_location.clone().unwrap().as_str()).unwrap();
   }
 
   if settings.load_config {
-    builder.set_option("config", true).unwrap();
+    builder.set_property("config", true).unwrap();
   }
   
-  builder.set_option("osc", true).unwrap();
-  builder.set_option("input-default-bindings", true).unwrap();
-  builder.set_option("input-vo-keyboard", true).unwrap();
+  builder.set_property("input-default-bindings", "yes").unwrap();
+  builder.set_property("input-vo-keyboard", "yes").unwrap();
+  builder.set_property("osc", true).unwrap();
 
   if settings.mpv_debug == Some(true) {
-    builder.set_option("log-file", "./mpv.log").unwrap();
+    builder.set_property("log-file", "./mpv.log").unwrap();
   }
-  builder
 }
 
 
@@ -324,11 +318,8 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, item: &mut Item) -> bool 
     item.RunTimeTicks.unwrap() as f64 / 10000000.0
   };
 
-  let builder = player_new();
-
-  let builder = player_set_options(builder, settings);
-
-  let handler = player_build(builder);
+  let mpv = player_new();
+  player_set_options(&mpv, settings);
   
   let stream_url: String = if settings.transcoding {
     format!("{}{}{}", head_dict.config_file.ipaddress, head_dict.media_server, playback_info.MediaSources.get(0).unwrap().TranscodingUrl.as_ref().unwrap())
@@ -347,78 +338,97 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, item: &mut Item) -> bool 
     title = format!("{} - Streaming: {} ({}) - {} - {}", APPNAME, item.SeriesName.as_ref().unwrap(), &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4], item.SeasonName.as_ref().unwrap(), item.Name);
   }
 
-  let mut handler = player_set_properties(handler, settings, media_title.as_str(), title.as_str());
+  player_set_properties(&mpv, settings, media_title.as_str(), title.as_str());
 
-  handler.command(&["loadfile", &stream_url as &str]).expect("Failed to stream the file :/");
+  let mut ctx = mpv.create_event_context();
+  ctx.disable_deprecated_events().expect("Failed to disable deprecated events.");
+
+  mpv.command("loadfile", &[&stream_url]).expect("Failed to load file.");
 
   // Load files provided using the --glsl-shader option.
   if settings.glsl_shader.is_some() {
     for sh in settings.glsl_shader.clone().unwrap() {
-      handler.command(&["change-list", "glsl-shaders", "append", sh.as_str()]).expect("Failed to add glsl-shader file");
+      mpv.command("change-list", &["glsl-shaders", "append", sh.as_str()]).expect("Failed to add glsl-shader file");
     }
   }
 
   let mut discord: DiscordClient = discord::mpv_link(settings.discord_presence);
+  let mut watched_till_end: bool = false;
   let mut old_pos: f64 = -15.0;
   let mut last_time_update: f64 = 0.0;
+
   'main: loop {
-    while let Some(event) = handler.wait_event(0.0) {
+    while let Some(event_res) = ctx.wait_event(0.0) {
+      let event = if let Ok(event) = event_res {
+        event
+      } else {
+        eprintln!("No idea why this would happen. Please create an issue. :)");
+        break 'main;
+      };
       match event {
-        mpv::Event::FileLoaded => {
+        Event::FileLoaded => {
           if resume_progress != 0 && ! settings.transcoding {
-            handler.command(&["seek", format!("{}", &resume_progress).as_str()]).expect("Failed to seek");
+            mpv.command("seek", &[format!("{}", &resume_progress).as_str()]).expect("Failed to seek");
           }
         }
-        mpv::Event::Shutdown | mpv::Event::EndFile(_) => {
-          let watched_till_end = finished_playback(settings, head_dict, item, old_pos, &playback_info.PlaySessionId, &playback_info.MediaSources[0].Id, false);
-          break 'main watched_till_end;
+        Event::Shutdown | Event::EndFile(0) => {
+          watched_till_end = finished_playback(settings, head_dict, item, old_pos, &playback_info.PlaySessionId, &playback_info.MediaSources[0].Id, false);
+          if settings.discord_presence {
+            discord.stop();
+          }
+          break 'main;
         }
-        mpv::Event::Seek | mpv::Event::PlaybackRestart => {
+        Event::Seek | Event::PlaybackRestart => {
           old_pos -= 16.0
         }
         _ => {
           // println!("{:#?}", event); // for debugging
         }
-      };
+      }
     }
-    let result: Result<f64, mpv::Error> = handler.get_property("time-pos");
-    if let Ok(nice) = result {
-      if nice > old_pos + 15.0 { // this was the most retarded solution, I could think of
-        update_progress(settings, head_dict, item, nice * 10000000.0, false, &playback_info.PlaySessionId, &playback_info.MediaSources[0].Id);
+    let result: Result<f64, libmpv::Error> = mpv.get_property("time-pos");
+    if let Ok(current_time) = result {
+      if current_time > old_pos + 15.0 { // this was the most retarded solution, I could think of
+        update_progress(settings, head_dict, item, current_time * 10000000.0, false, &playback_info.PlaySessionId, &playback_info.MediaSources[0].Id);
         if settings.discord_presence {
           if item.Type == "Movie" {
-            DiscordClient::update_presence(&mut discord, head_dict,
+            discord.update_presence(head_dict,
               "".to_string(),
               format!("{} ({})", &item.Name, &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4]),
-              SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs_f64() + total_runtime - nice,
+              SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs_f64() + total_runtime - current_time,
             );
           } else {
-            DiscordClient::update_presence(&mut discord, head_dict,
+            discord.update_presence(head_dict,
               format!("{} ({})", &item.SeriesName.as_ref().unwrap(), &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4]),
               format!("{} ({})", item.Name, item.SeasonName.as_ref().unwrap()),
-              SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs_f64() + total_runtime - nice,
+              SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs_f64() + total_runtime - current_time,
             );
           }
         }
-        old_pos = nice;
-      } else if nice == last_time_update {
-        update_progress(settings, head_dict, item, nice * 10000000.0, true, &playback_info.PlaySessionId, &playback_info.MediaSources[0].Id);
+        old_pos = current_time;
+      } else if current_time == last_time_update {
+        update_progress(settings, head_dict, item, current_time * 10000000.0, true, &playback_info.PlaySessionId, &playback_info.MediaSources[0].Id);
         if settings.discord_presence {
           if item.Type == "Movie" {
-            DiscordClient::pause(&mut discord, head_dict,
+            discord.pause(head_dict,
               "".to_string(),
               format!("{} ({})", &item.Name, &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4]),
             );
           } else {
-            DiscordClient::pause(&mut discord, head_dict,
+            discord.pause(head_dict,
               format!("{} ({})", &item.SeriesName.as_ref().unwrap(), &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4]),
               format!("{} ({})", item.Name, item.SeasonName.as_ref().unwrap()),
             );
           }
         }
       }
-      last_time_update = nice;
+      last_time_update = current_time;
     }
-    thread::sleep(time::Duration::from_millis(500));
+    thread::sleep(Duration::from_millis(500));
+  }
+  drop(ctx);
+  return watched_till_end;
+
+    }
   }
 }
