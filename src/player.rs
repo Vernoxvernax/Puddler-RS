@@ -351,7 +351,7 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, item: &mut Item) -> bool 
     }
   }
 
-  let mut discord: DiscordClient = discord::mpv_link(settings.discord_presence);
+  let mut discord: DiscordClient = discord::mpv_link();
   if settings.discord_presence {
     discord.start();
   }

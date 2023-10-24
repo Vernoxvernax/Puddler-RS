@@ -11,13 +11,8 @@ pub struct DiscordClient {
 }
 
 
-pub fn mpv_link(use_discord: bool) -> DiscordClient {
-  if use_discord {
-    let client = DiscordClient::default();
-    client
-  } else {
-    DiscordClient { discord_client: Arc::new(Mutex::new(Client::new(980093587314343957))) } // not starting it though
-  }
+pub fn mpv_link() -> DiscordClient {
+  DiscordClient::default()
 }
 
 
