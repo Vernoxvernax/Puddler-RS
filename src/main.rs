@@ -596,10 +596,12 @@ fn series_play(item_list: &Vec<Item>, mut pick: i32, head_dict: &HeadDict, setti
           let cont = getch("FfRrNnEeMm");
           match cont {
             'F' | 'f' => {
+              pick -= 1;
               play(settings, head_dict, item);
             },
             'M' | 'm' => {
-              mark_items(item_list, vec![(pick-1) as u32], true, head_dict);
+              pick -= 1;
+              mark_items(item_list, vec![(pick) as u32], true, head_dict);
             },
             'N' | 'n' => {
               let item = &mut item_list.get(pick as usize).unwrap().clone();
