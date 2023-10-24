@@ -352,7 +352,9 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, item: &mut Item) -> bool 
   }
 
   let mut discord: DiscordClient = discord::mpv_link(settings.discord_presence);
-  discord.start();
+  if settings.discord_presence {
+    discord.start();
+  }
   let mut watched_till_end: bool = false;
   let mut old_pos: f64 = -15.0;
   let mut last_time_update: f64 = 0.0;
