@@ -1,3 +1,5 @@
+use std::{thread, sync::{Arc, Mutex}};
+
 use discord_presence::Client;
 
 use crate::mediaserver_information;
@@ -5,80 +7,104 @@ use mediaserver_information::HeadDict;
 
 
 pub struct DiscordClient {
-  pub client: discord_presence::Client
+  pub discord_client: Arc<Mutex<discord_presence::Client>>
 }
 
 
 pub fn mpv_link(use_discord: bool) -> DiscordClient {
   if use_discord {
-    DiscordClient::default()
+    let client = DiscordClient::default();
+    client
   } else {
-    DiscordClient { client: Client::new(980093587314343957) } // not starting it though
+    DiscordClient { discord_client: Arc::new(Mutex::new(Client::new(980093587314343957))) } // not starting it though
   }
 }
 
 
 impl Default for DiscordClient {
   fn default() -> Self {
-    let mut client = Client::new(980093587314343957);
-    client.start().is_finished();
+    let client = Client::new(980093587314343957);
     Self {
-      client
+      discord_client: Arc::new(Mutex::new(client))
     }
   }
 }
 
 
 impl DiscordClient {
+  pub fn start(&mut self) {
+    let discord_clone = Arc::clone(&self.discord_client);
+    thread::spawn(move || {
+      let mut discord_client = discord_clone.lock().unwrap();
+      discord_client.start().is_finished();
+    });
+  }
+
   pub fn stop(&mut self) {
-    self.client.clear_activity().unwrap();
+    let discord_clone = Arc::clone(&self.discord_client);
+    thread::spawn(move || {
+      let mut discord_client = discord_clone.lock().unwrap();
+      discord_client.clear_activity().unwrap();
+    });
   }
 
   pub fn update_presence(&mut self, head_dict: &HeadDict, details: String, state: String, time_left: f64) {
-    if details == *"" {
-      self.client.set_activity(|a| {
-        a.assets(|ass| {
-          ass.small_image(&head_dict.media_server_name.to_lowercase())
-        })
-        .timestamps(|time| {
-          time.end(time_left.round() as u64)
-        })
-        .state(&state)
-      }).unwrap();
-    } else {
-      self.client.set_activity(|a| {
-        a.assets(|ass| {
-          ass.small_image(&head_dict.media_server_name.to_lowercase())
-        })
-        .timestamps(|time| {
-          time.end(time_left.round() as u64)
-        })
-        .details(&details)
-        .state(&state)
-      }).unwrap();
-    }
+    let media_server_name = head_dict.media_server_name.to_lowercase().clone();
+    let discord_clone = Arc::clone(&self.discord_client);
+    thread::spawn(move || {
+      let mut discord_client = discord_clone.lock().unwrap();
+      if details == *"" {
+        discord_client
+          .set_activity(|a| {
+            a.assets(|ass| {
+              ass.small_image(media_server_name)
+            })
+            .timestamps(|time| {
+              time.end(time_left.round() as u64)
+            })
+            .state(&state)
+        }).unwrap();
+      } else {
+        discord_client
+          .set_activity(|a| {
+            a.assets(|ass| {
+              ass.small_image(media_server_name)
+            })
+            .timestamps(|time| {
+              time.end(time_left.round() as u64)
+            })
+            .details(&details)
+            .state(&state)
+        }).unwrap();
+      }
+    });
   }
 
   pub fn pause(&mut self, head_dict: &HeadDict, details: String, state: String) {
-    if details == *"" {
-      self.client
-        .set_activity(|a| {
-          a.assets(|ass| {
-            ass.large_image(&head_dict.media_server_name.to_lowercase())
-            .small_image("pause2")
-          })
-        .details(&state)
-      }).ok();
-    } else {
-      self.client
-        .set_activity(|a| {
-          a.assets(|ass| {
-            ass.large_image(&head_dict.media_server_name.to_lowercase())
-            .small_image("pause2")
-          })
-        .details(&details)
-        .state(&state)
-      }).ok();
-    }
+    let media_server_name = head_dict.media_server_name.to_lowercase().clone();
+    let discord_clone = Arc::clone(&self.discord_client);
+    thread::spawn(move || {
+      let mut discord_client = discord_clone.lock().unwrap();
+      if details == *"" {
+        discord_client
+          .set_activity(|a| {
+            a.assets(|ass| {
+              ass.large_image(media_server_name)
+              .small_image("pause2")
+            })
+          .details(&state)
+        }).ok();
+      } else {
+        discord_client
+          .set_activity(|a| {
+            a.assets(|ass| {
+              ass.large_image(media_server_name)
+              .small_image("pause2")
+            })
+          .details(&details)
+          .state(&state)
+        }).ok();
+      }
+    });
   }
 }
