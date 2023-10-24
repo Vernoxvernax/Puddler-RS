@@ -81,49 +81,49 @@ fn read_settings() -> Settings {
           match &e.to_string()[e.to_string().find('`').unwrap() + 1..e.to_string().len() - 1] {
             "server_config" => {
               let server_config: Option<String> = ask_search_server_configs();
-              write!(settings_file, "server_config = {server_config:?}").unwrap();
+              write!(settings_file, "server_config = {server_config:?}\n").unwrap();
               let settings = read_settings();
               return settings;
             },
             "discord_presence" => {
               let discord_presence: bool = ask_initiate_discord();
-              write!(settings_file, "discord_presence = {discord_presence}").unwrap();
+              write!(settings_file, "discord_presence = {discord_presence}\n").unwrap();
               let settings = read_settings();
               return settings;
             },
             "transcoding" => {
               let transcoding: bool = ask_transcoding();
-              write!(settings_file, "transcoding = {transcoding}").unwrap();
+              write!(settings_file, "transcoding = {transcoding}\n").unwrap();
               let settings = read_settings();
               return settings;
             },
             "fullscreen" => {
               let fullscreen: bool = ask_start_fullscreen();
-              write!(settings_file, "fullscreen = {fullscreen}").unwrap();
+              write!(settings_file, "fullscreen = {fullscreen}\n").unwrap();
               let settings = read_settings();
               return settings;
             },
             "autologin" => {
               let autologin: bool = ask_automatically_login();
-              write!(settings_file, "autologin = {autologin}").unwrap();
+              write!(settings_file, "autologin = {autologin}\n").unwrap();
               let settings = read_settings();
               return settings;
             },
             "autoplay" => {
               let autoplay: bool = ask_autoplay();
-              write!(settings_file, "autoplay = {autoplay}").unwrap();
+              write!(settings_file, "autoplay = {autoplay}\n").unwrap();
               let settings = read_settings();
               return settings;
             },
             "gpu" => {
               let gpu: bool = ask_gpu();
-              write!(settings_file, "gpu = {gpu}").unwrap();
+              write!(settings_file, "gpu = {gpu}\n").unwrap();
               let settings = read_settings();
               return settings;
             }
             "load_config" => {
               let load_config: bool = ask_load_config();
-              write!(settings_file, "load_config = {load_config}").unwrap();
+              write!(settings_file, "load_config = {load_config}\n").unwrap();
               let settings = read_settings();
               return settings;
             }
