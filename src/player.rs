@@ -370,6 +370,7 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, item: &mut Item) -> bool 
           if resume_progress != 0 && ! settings.transcoding {
             mpv.command("seek", &[format!("{}", &resume_progress).as_str()]).expect("Failed to seek");
           }
+          load_external_subtitles(settings, head_dict, &mpv, item);
         }
         Event::Shutdown | Event::EndFile(0) => {
           watched_till_end = finished_playback(settings, head_dict, item, old_pos, &playback_info.PlaySessionId, &playback_info.MediaSources[0].Id, false);
@@ -428,7 +429,29 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, item: &mut Item) -> bool 
   }
   drop(ctx);
   return watched_till_end;
+}
 
+fn load_external_subtitles(settings: &Settings, head_dict: &HeadDict, mpv: &libmpv::Mpv, item: &Item) {
+  let ipaddress: &String = &head_dict.config_file.ipaddress;
+  let item_id: &String = &item.Id;
+  let media_server: &String = &head_dict.media_server;
+  let mediasrc = item.MediaSources.as_ref().unwrap().get(0).unwrap();
+  for (index, stream) in mediasrc.MediaStreams.iter().enumerate() {
+    if stream.IsExternal && stream.SupportsExternalStream {
+      let extension = if let Some(path) = &stream.Path {
+        path.split(".").last().unwrap().to_string()
+      } else {
+        stream.Codec.as_ref().unwrap().to_owned()
+      };
+      let mut media_url = format!("{}{}/Videos/{}/{}/Subtitles/{}/Stream.{}?api_key={}", ipaddress, media_server, item_id, mediasrc.Id, index, extension, head_dict.request_header.token);
+      if item.UserData.PlaybackPositionTicks != 0 && settings.transcoding {
+        media_url += &("&StartPositionTicks=".to_owned() + &item.UserData.PlaybackPositionTicks.to_string());
+      }
+      let undefined_title = &String::from("Undefined");
+      let undefined_lang = &String::from("und");
+      let title = format!(r#""{}""#, stream.DisplayTitle.as_ref().unwrap_or(undefined_title));
+      let command: [&str; 4] = [&media_url, "auto", title.as_str(), stream.Language.as_ref().unwrap_or(undefined_lang)];
+      mpv.command("sub-add", &command).unwrap();
     }
   }
 }
