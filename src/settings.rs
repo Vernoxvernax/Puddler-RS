@@ -7,10 +7,8 @@ use std::io::prelude::*;
 use std::path::Path;
 use crate::mediaserver_information;
 use mediaserver_information::getch;
-use app_dirs::*;
 use serde_derive::{Deserialize,Serialize};
 use crate::APPNAME;
-use crate::APP_INFO;
 
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -30,8 +28,8 @@ pub struct Settings {
 
 
 fn read_settings() -> Settings {
-  let config_path = get_app_root(AppDataType::UserConfig, &APP_INFO).unwrap();
-  let config_path_string = format!("{}/{}.toml", &config_path.display().to_string(), &APPNAME);
+  let config_path = dirs::config_dir().unwrap();
+  let config_path_string = format!("{}/{}/{}.toml", &config_path.display().to_string(), APPNAME.to_lowercase(), APPNAME);
   if ! Path::new(&config_path_string).is_file() {
     println!("No settings file found!\nBuilding default settings ...\n");
     // Default <> server.
@@ -196,7 +194,7 @@ fn ask_initiate_discord() -> bool {
 
 
 fn ask_search_server_configs() -> Option<String> {
-  let config_path = get_app_root(AppDataType::UserConfig, &APP_INFO).unwrap();
+  let config_path = dirs::config_dir().unwrap().join(APPNAME.to_lowercase());
   println!("Searching in \"{}\" for emby or jellyfin configuration files ...", &config_path.display());
   if fs::read_dir(&config_path).is_err() {
     fs::create_dir_all(&config_path).expect("Could not create config directory!")
@@ -275,8 +273,8 @@ fn ask_start_fullscreen() -> bool {
 
 
 fn change_settings(mut settings: Settings) -> Settings {
-  let config_path = get_app_root(AppDataType::UserConfig, &APP_INFO).unwrap();
-  let config_path_string = format!("{}/{}.toml", &config_path.display().to_string(), &APPNAME);
+  let config_path = dirs::config_dir().unwrap();
+  let config_path_string = format!("{}/{}/{}.toml", &config_path.display().to_string(), APPNAME.to_lowercase(), APPNAME);
   loop {
     print!("Which settings do you want to change?
   [1] Default server configuration = {}

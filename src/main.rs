@@ -31,13 +31,6 @@ use progress_report::mark_playstate;
 
 const APPNAME: &str = "Puddler";
 const VERSION: &str = env!("CARGO_PKG_VERSION");
-use app_dirs::AppInfo;
-
-const APP_INFO: AppInfo = AppInfo {
-  name: APPNAME,
-  author: "VernoxVernax"
-};
-
 
 #[derive(Debug, Deserialize)]
 struct ItemJson {
@@ -123,9 +116,9 @@ struct SeasonStruct {
 
 fn main() -> ExitCode {
   let command = Command::new("puddler")
-    .about("Simple command-line client for Emby and Jellyfin.")
+    .display_name("Puddler")
+    .about("A simplistic command-line client for Emby and Jellyfin.")
     .version(VERSION)
-    .author("VernoxVernax")
     .arg(
       Arg::new("glsl-shader")
       .long("glsl-shader")

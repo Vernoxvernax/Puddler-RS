@@ -1,6 +1,7 @@
 #![allow(non_snake_case)]
 extern crate getch;
 use std::char;
+use std::fs;
 use std::io;
 use std::io::prelude::*;
 use std::time::Duration;
@@ -9,7 +10,6 @@ use std::str::from_utf8;
 use std::result::Result;
 use std::fmt::Debug;
 use uuid;
-use app_dirs::*;
 use http::Response;
 use http::StatusCode;
 use colored::Colorize;
@@ -22,7 +22,6 @@ use serde_derive::{Deserialize,Serialize};
 
 use crate::APPNAME;
 use crate::VERSION;
-use crate::APP_INFO;
 use crate::settings::Settings;
 use crate::config::*;
 
@@ -323,7 +322,10 @@ pub fn check_information(settings: &Settings) -> Option<HeadDict> {
       }
     }
   } else {
-    app_root(AppDataType::UserConfig, &APP_INFO).expect("shit");
+    let app_root = dirs::config_dir().unwrap();
+    if fs::read_dir(&app_root).is_err() {
+      fs::create_dir_all(&app_root).expect("Could not create config directory!")
+    };
     let (ipaddress, server_name) = configure_new_server(media_server_name);
     let user_login = configure_new_login(media_server_name);
     let auth = test_auth(media_server_name, media_server, &ipaddress, &auth_header, &user_login, &device_id);

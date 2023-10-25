@@ -1,3 +1,12 @@
+* **BREAKING CHANGE:**
+  * Puddler now has it's dedicated configuration folder on Windows. Additionally, it's folder-name is finally lowercase.
+  * How to use your old config files:
+    * Windows:
+      * go into `%APPDATA%\Roaming\VernoxVernax`, and move `Puddler` up one directory (into `Roaming`).
+      * Rename the `Puddler` folder to `puddler` and delete the empty folder: `VernoxVernax`.
+    * Linux:
+      * `mv ~/.config/Puddler ~/.config/puddler`
+    * **You might also want to check out the first item in Puddler's settings.**
 * Small little change to re-enable "continue-watching" section for Emby-beta instances ([#5](https://github.com/Vernoxvernax/Puddler-RS/issues/5)).
 * Fix bug to allow empty input (sometimes).
 * Load external subtitles automatically.

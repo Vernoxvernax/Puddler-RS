@@ -5,8 +5,7 @@ use std::io::prelude::*;
 use std::path::Path;
 use colored::Colorize;
 use regex::Regex;
-use app_dirs::*;
-use crate::APP_INFO;
+use crate::APPNAME;
 use crate::mediaserver_information::ConfigFileRaw;
 use crate::mediaserver_information::ConfigFile;
 use crate::mediaserver_information::ConfigFileUser;
@@ -20,8 +19,8 @@ pub fn choose_config(server_kind: char, autologin: bool) -> Option<String> {
   } else {
     "jellyfin"
   };
-  let app_root = get_app_root(AppDataType::UserConfig, &APP_INFO).unwrap();
-  let config_path_string = format!("{}/{}", app_root.display(), folder_suffix);
+  let app_root = dirs::config_dir().unwrap();
+  let config_path_string = format!("{}/{}/{}", app_root.display(), APPNAME.to_lowercase(), folder_suffix);
   let config_path = Path::new(config_path_string.as_str());
   if ! config_path.exists() {
     fs::create_dir(config_path).expect("Couldn't create config directory. Check your permissions!");
@@ -217,6 +216,6 @@ pub fn generate_config_path(server_kind: char, server_id: String, server_name: S
   } else {
     "jellyfin"
   };
-  let app_root = get_app_root(AppDataType::UserConfig, &APP_INFO).unwrap();
-  format!("{}/{}/{}.{}.config.json", app_root.display(), folder_suffix, server_name, server_id)
+  let app_root = dirs::config_dir().unwrap();
+  format!("{}/{}/{}/{}.{}.config.json", app_root.display(), APPNAME.to_lowercase(), folder_suffix, server_name, server_id)
 }
