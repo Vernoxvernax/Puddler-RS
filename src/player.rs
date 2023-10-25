@@ -9,7 +9,6 @@ use serde_derive::Deserialize;
 use serde::Serialize;
 use isahc::ReadResponseExt;
 use crate::getch;
-use crate::discord;
 use crate::discord::DiscordClient;
 use crate::APPNAME;
 use crate::Item;
@@ -351,7 +350,7 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, item: &mut Item) -> bool 
     }
   }
 
-  let mut discord: DiscordClient = discord::mpv_link();
+  let mut discord: DiscordClient = DiscordClient::new();
   if settings.discord_presence {
     discord.start();
   }

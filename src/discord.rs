@@ -11,22 +11,14 @@ pub struct DiscordClient {
 }
 
 
-pub fn mpv_link() -> DiscordClient {
-  DiscordClient::default()
-}
-
-
-impl Default for DiscordClient {
-  fn default() -> Self {
+impl DiscordClient {
+  pub fn new() -> Self {
     let client = Client::new(980093587314343957);
     Self {
       discord_client: Arc::new(Mutex::new(client))
     }
   }
-}
 
-
-impl DiscordClient {
   pub fn start(&mut self) {
     let discord_clone = Arc::clone(&self.discord_client);
     thread::spawn(move || {
