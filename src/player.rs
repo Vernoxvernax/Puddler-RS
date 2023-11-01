@@ -8,22 +8,23 @@ use libmpv::events::Event;
 use serde_derive::Deserialize;
 use serde::Serialize;
 use isahc::ReadResponseExt;
+use std::time::SystemTime;
+use dialoguer::{theme::ColorfulTheme, Select};
+
 use crate::getch;
 use crate::discord::DiscordClient;
 use crate::APPNAME;
 use crate::Item;
 use crate::mediaserver_information::HeadDict;
-use crate::mediaserver_information::post_puddler;
+use crate::mediaserver_information::server_post;
 use crate::MediaStream;
-use crate::puddler_get;
+use crate::server_get;
 use crate::is_numeric;
 use crate::settings::Settings;
 use crate::progress_report::PlaybackInfo;
 use crate::progress_report::finished_playback;
 use crate::progress_report::update_progress;
 use crate::progress_report::started_playing;
-use std::time::SystemTime;
-use dialoguer::{theme::ColorfulTheme, Select};
 
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -59,6 +60,7 @@ struct DeviceProfile {
 struct DirectPlayProfile {
   Type: String
 }
+
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct TranscodingProfile {
@@ -285,7 +287,7 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, item: &mut Item) -> bool 
         ].to_vec()
       }
     };
-    let playback_info_res: Result<http::Response<isahc::Body>, String> = post_puddler(format!("{}{}/Items/{}/PlaybackInfo?UserId={}", head_dict.config_file.ipaddress, head_dict.media_server, item.Id, head_dict.config_file.user_id), &head_dict.auth_header, serde_json::to_string_pretty(&sess).unwrap());
+    let playback_info_res: Result<http::Response<isahc::Body>, String> = server_post(format!("{}{}/Items/{}/PlaybackInfo?UserId={}", head_dict.config_file.ipaddress, head_dict.media_server, item.Id, head_dict.config_file.user_id), &head_dict.auth_header, serde_json::to_string_pretty(&sess).unwrap());
     let playback_info: PlaybackInfo = match playback_info_res {
       Ok(mut t) => {
         let search_text: &String = &t.text().unwrap();
@@ -295,7 +297,7 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, item: &mut Item) -> bool 
     };
     playback_info
   } else {
-    let playback_info_res: Result<http::Response<isahc::Body>, isahc::Error> = puddler_get(format!("{}{}/Items/{}/PlaybackInfo?UserId={}", head_dict.config_file.ipaddress, head_dict.media_server, item.Id, head_dict.config_file.user_id), head_dict);
+    let playback_info_res: Result<http::Response<isahc::Body>, String> = server_get(format!("{}{}/Items/{}/PlaybackInfo?UserId={}", head_dict.config_file.ipaddress, head_dict.media_server, item.Id, head_dict.config_file.user_id), head_dict);
     let playback_info: PlaybackInfo = match playback_info_res {
       Ok(mut t) => {
         let search_text: &String = &t.text().unwrap();

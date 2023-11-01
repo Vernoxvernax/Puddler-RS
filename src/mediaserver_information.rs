@@ -112,13 +112,14 @@ pub fn getch(allowed: &str) -> char {
 }
 
 
-pub fn check_information(settings: &Settings) -> Option<HeadDict> {
+pub fn validate_settings(settings: &Settings) -> Option<HeadDict> {
+  let mut auth_header: AuthHeader;
   let media_server: &str;
   let emby: bool;
   let media_server_name: &str;
-  let mut auth_header: AuthHeader;
   let device_id = uuid::Uuid::new_v4().to_string();
-  let server_kind = if settings.server_config.is_none() {
+  
+  let server_type = if settings.server_config.is_none() {
     print!("What kind of server do you want to stream from?\n   [1] Emby\n   [2] Jellyfin");
     getch("12")
   } else {
@@ -136,7 +137,7 @@ pub fn check_information(settings: &Settings) -> Option<HeadDict> {
       }
     }
   };
-  match server_kind {
+  match server_type {
     '1' => {
       emby = true;
       media_server = "/emby";
@@ -157,17 +158,19 @@ pub fn check_information(settings: &Settings) -> Option<HeadDict> {
     }
   };
   let config_path: Option<String> = if settings.server_config.is_none() {
-    choose_config(server_kind, settings.autologin)
+    choose_config(server_type, settings.autologin)
   } else {
     settings.server_config.clone()
   };
+
   let request_header: RequestHeader;
   let session_id: String;
   let user_id: String;
   let access_token: String;
   let server_id: String;
-  let mut device_id = uuid::Uuid::new_v4().to_string();
   let config_file: ConfigFile;
+  let mut device_id = uuid::Uuid::new_v4().to_string();
+
   if let Some(config_path_string) = config_path {
     println!("{}", "Configuration files found!".to_string().green());
     let config_file_raw: Result<(ConfigFile, ConfigFileRaw), (Option<ConfigFileRaw>, &str)> = read_config(&config_path_string, settings.autologin);
@@ -183,7 +186,7 @@ pub fn check_information(settings: &Settings) -> Option<HeadDict> {
         } else {
           println!("Logging in with {}.", file.username.green());
         };
-        let session_id_test = re_auth(media_server_name, media_server, ipaddress, &auth_header, &device_id);
+        let session_id_test = reauthenticate(media_server_name, media_server, ipaddress, &auth_header, &device_id);
         if let Ok(res) = session_id_test {
           if raw_file.user[0].username != file.username {
             let mut i = 0;
@@ -290,7 +293,7 @@ pub fn check_information(settings: &Settings) -> Option<HeadDict> {
             access_token,
             username: user_login.username
           };
-          let config_path_string = generate_config_path(server_kind, server_id, server_name);
+          let config_path_string = generate_config_path(server_type, server_id, server_name);
           write_config(config_path_string, &config_file, None);
           break;
         }
@@ -348,7 +351,7 @@ pub fn check_information(settings: &Settings) -> Option<HeadDict> {
       access_token,
       username: user_login.username
     };
-    let config_path_string = generate_config_path(server_kind, server_id, server_name);
+    let config_path_string = generate_config_path(server_type, server_id, server_name);
     write_config(config_path_string, &config_file, None);
   }
   Some(HeadDict {
@@ -370,7 +373,7 @@ fn configure_new_server(media_server_name: &str) -> (String, String) {
   } else {
     "who is JellyfinServer?"
   };
-  println!("Searching for local media-server...");
+  println!("Searching for local media-server ...");
   let socket:UdpSocket = UdpSocket::bind("0.0.0.0:0").expect("Failed to bind to network socket.");
   socket.set_read_timeout(Some(Duration::new(5, 0))).expect("nothing");
   socket.set_broadcast(true).expect("errrrrrr");
@@ -473,16 +476,16 @@ fn configure_new_login(media_server_name: &str) -> UserLogin {
 }
 
 
-fn test_auth (media_server_name: &str, media_server: &str, ipaddress: &String, auth_header: &AuthHeader, user_login: &UserLogin, device_id: &String) -> Option<(AuthHeader, RequestHeader, String, String, String, String)> {
-  println!("Testing {media_server_name} connection ...");
+fn test_auth(media_server_name: &str, media_server: &str, ipaddress: &String, auth_header: &AuthHeader, user_login: &UserLogin, device_id: &String) -> Option<(AuthHeader, RequestHeader, String, String, String, String)> {
+  print!("Testing {media_server_name} connection ... ");
   let username: String = user_login.username.clone();
   let password: String = user_login.pw.clone();
   let bod = format!("{{\"Username\":\"{username}\",\"pw\":\"{password}\"}}");
   let url = format!("{ipaddress}{media_server}/Users/AuthenticateByName");
-  let json_response = post_puddler(url, auth_header, bod);
+  let json_response = server_post(url, auth_header, bod);
   match json_response {
     Ok(mut t) => {
-      println!("{}", "Connection successfully established!".to_string().green());
+      println!("{}", "successfull!".to_string().green());
       let json_response = t.json::<Value>().unwrap();
       let server_id = json_response.get("ServerId").unwrap();
       let session_obj = json_response.get("SessionInfo").unwrap();
@@ -505,6 +508,7 @@ fn test_auth (media_server_name: &str, media_server: &str, ipaddress: &String, a
       ))
     },
     Err(e) => {
+      println!("{}", "error!".to_string().red());
       println!("{}\n  Error: {}", "Failed to establish a working connection!".to_string().red(), e);
       None
     }
@@ -512,12 +516,12 @@ fn test_auth (media_server_name: &str, media_server: &str, ipaddress: &String, a
 }
 
 
-pub fn post_puddler(url: String, auth_header: &AuthHeader, bod: String) -> Result<Response<Body>, String> {
+pub fn server_post(url: String, auth_header: &AuthHeader, body: String) -> Result<Response<Body>, String> {
   let mut response = Request::post(url)
     .header("Authorization", &auth_header.authorization)
     .header("Content-Type", "application/json")
-    .body(bod).unwrap()
-    .send().unwrap();
+    .body(body).unwrap()
+  .send().unwrap();
   let result = match response.status() {
     StatusCode::OK => {
       response
@@ -530,35 +534,38 @@ pub fn post_puddler(url: String, auth_header: &AuthHeader, bod: String) -> Resul
 }
 
 
-fn re_auth(media_server_name: &str, media_server: &str, ipaddress: &String, auth_header: &AuthHeader, device_id: &String) -> Result<String, String> {
-  println!("Testing {media_server_name} connection ...");
-  let re_auth_res = smol_puddler_get(format!("{}{}/Sessions?DeviceId={}", ipaddress, media_server, &device_id), auth_header);
+fn reauthenticate(media_server_name: &str, media_server: &str, ipaddress: &String, auth_header: &AuthHeader, device_id: &String) -> Result<String, String> {
+  print!("Testing {media_server_name} connection ... ");
+  let re_auth_res = http_get(format!("{}{}/Sessions?DeviceId={}", ipaddress, media_server, &device_id), auth_header);
   match re_auth_res {
     Ok(mut t) => {
       let response_text: &String = &t.text().unwrap();
       if let Ok(re_auth_json) = serde_json::from_str::<Value>(response_text) {
-        println!("{}", "Connection successfully reestablished!".to_string().green());
-        if re_auth_json[0].get("Id").is_some() {
-          Ok(re_auth_json[0].get("Id").unwrap().to_string()[1..re_auth_json[0].get("Id").unwrap().to_string().len() - 1].to_string())
-        }
-        else {
+        println!("{}", "successful!".to_string().green());
+        if let Some(id) = re_auth_json[0].get("Id") {
+          Ok(id.to_string().replace('"', ""))
+        } else {
+          println!("{}", "error!".to_string().red());
           Err("exp".to_string())
         }
       } else {
+        println!("{}", "error!".to_string().red());
         Err("This is not a valid emby/jellyfin webpage!".to_string())
       }
     }
     Err(e) => {
+      println!("{}", "error!".to_string().red());
       Err(e)
     }
   }
 }
 
 
-fn smol_puddler_get(url: String, auth_header: &AuthHeader) -> Result<Response<Body>, String> {
+fn http_get(url: String, auth_header: &AuthHeader) -> Result<Response<Body>, String> {
+  let authorization = &auth_header.authorization;
   let response: Result<Response<Body>, isahc::Error> = Request::get(url)
     .timeout(Duration::from_secs(5))
-    .header("Authorization", &auth_header.authorization)
+    .header("Authorization", authorization)
     .header("Content-Type", "application/json")
     .body(()).unwrap()
   .send();

@@ -345,20 +345,20 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
 }
 
 
-fn puddler_get(url: String, head_dict: &HeadDict) -> Result<Response<Body>, isahc::Error> {
+fn server_get(url: String, head_dict: &HeadDict) -> Result<Response<Body>, String> {
   let request_header = &head_dict.request_header;
   let response: Response<Body> = Request::get(url)
     .timeout(Duration::from_secs(5))
     .header("X-Application", &request_header.application)
     .header("X-Emby-Token", &request_header.token)
     .header("Content-Type", "application/json")
-    .body(())?
-    .send()?;
+    .body(()).unwrap()
+  .send().unwrap();
   let result = match response.status() {
     StatusCode::OK => {
       response
     }
-    _ => panic!("{} your server is missing some api endpoints, i think", response.status())
+    _ => panic!("{}. I can't handle this error. Please report.", response.status())
   };
   Ok(result)
 }
@@ -453,7 +453,7 @@ fn item_parse(head_dict: &HeadDict, item_list: &[Item], pick: i32, settings: &Se
   } else if item_list.get(pick as usize).unwrap().Type == *"Series" {
     let series = &item_list.get(pick as usize).unwrap();
     println!("{}:", series.Name);
-    let series_response = puddler_get(format!("{}{}/Users/{}/Items?ParentId={}&Fields=PremiereDate,MediaSources&collapseBoxSetItems=False", &ipaddress, &media_server, &user_id, &series.Id), head_dict);
+    let series_response = server_get(format!("{}{}/Users/{}/Items?ParentId={}&Fields=PremiereDate,MediaSources&collapseBoxSetItems=False", &ipaddress, &media_server, &user_id, &series.Id), head_dict);
     let series_json: SeriesStruct = match series_response {
       Ok(mut t) => {
         let parse_text: &String = &t.text().unwrap();
@@ -511,7 +511,7 @@ fn item_parse(head_dict: &HeadDict, item_list: &[Item], pick: i32, settings: &Se
     series_play(&item_list, filtered_input, head_dict, settings);
   } else if "Episode".to_string().contains(&item_list.get(pick as usize).unwrap().Type) {
     let item: &Item = item_list.get(pick as usize).unwrap();
-    let series_response = puddler_get(format!("{}{}/Users/{}/Items?ParentId={}&Fields=PremiereDate,MediaSources&collapseBoxSetItems=False", &ipaddress, &media_server, &user_id, &item.SeriesId.as_ref().unwrap()), head_dict);
+    let series_response = server_get(format!("{}{}/Users/{}/Items?ParentId={}&Fields=PremiereDate,MediaSources&collapseBoxSetItems=False", &ipaddress, &media_server, &user_id, &item.SeriesId.as_ref().unwrap()), head_dict);
     let series_json: SeriesStruct = match series_response {
       Ok(mut t) => {
         let parse_text: &String = &t.text().unwrap();
@@ -663,7 +663,7 @@ fn process_series(series: &SeriesStruct, head_dict: &HeadDict, printing: bool) -
     if printing {
       println!("  {} {}", season_branches, season.Name);
     }
-    let season_res = puddler_get(format!("{}{}/Users/{}/Items?ParentId={}&Fields=PremiereDate,MediaSources&collapseBoxSetItems=False", &ipaddress, &media_server, &user_id, &season.Id), head_dict);
+    let season_res = server_get(format!("{}{}/Users/{}/Items?ParentId={}&Fields=PremiereDate,MediaSources&collapseBoxSetItems=False", &ipaddress, &media_server, &user_id, &season.Id), head_dict);
     let season_json: SeasonStruct = match season_res {
       Ok(mut t) => {
         let parse_text: &String = &t.text().unwrap().to_string();
