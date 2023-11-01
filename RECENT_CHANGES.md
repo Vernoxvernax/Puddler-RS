@@ -9,6 +9,7 @@
     * **You might also want to check out the first item in Puddler's settings.**
 * Small little change to re-enable "continue-watching" section for Emby-beta instances ([#5](https://github.com/Vernoxvernax/Puddler-RS/issues/5)).
 * Fix bug to allow empty input (sometimes).
+* Print connection status on only one line.
 * Load external subtitles automatically.
 * Add limit of 15 items to "continue-watching" (this should be a quick-menu).
 * New dev branch to keep a reasonably stable code base on main [#7](https://github.com/Vernoxvernax/Puddler-RS/issues/7)
