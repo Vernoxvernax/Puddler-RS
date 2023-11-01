@@ -1,4 +1,2 @@
 target/
-#!target/mpv-1.ddl
-#mpv
-
+Cargo.lock

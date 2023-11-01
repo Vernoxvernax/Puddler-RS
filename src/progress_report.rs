@@ -5,9 +5,11 @@ use colored::Colorize;
 use serde_derive::Deserialize;
 use serde::Serialize;
 
+use crate::MediaSourceInfo;
+use crate::MediaStream;
 use crate::settings::Settings;
 use crate::mediaserver_information::AuthHeader;
-use crate::{HeadDict, Items};
+use crate::{HeadDict, Item};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 struct PlaybackObject {
@@ -41,29 +43,6 @@ pub struct PlaybackInfo {
   pub PlaySessionId: String
 }
 
-#[derive(Debug, Deserialize, PartialEq, Clone)]
-pub struct MediaSourceInfo {
-  pub Id: String,
-  pub SupportsTranscoding: bool,
-  pub MediaStreams: Vec<MediaStream>,
-  pub Bitrate: Option<u64>,
-  pub TranscodingUrl: Option<String>
-}
-
-#[derive(Debug, Deserialize, PartialEq, Clone)]
-pub struct MediaStream {
-  pub Index: usize,
-  pub Type: String,
-  pub Language: Option<String>,
-  pub DisplayTitle: Option<String>,
-  pub DisplayLanguage: Option<String>,
-  pub Title: Option<String>,
-  pub Codec: Option<String>,
-  pub Width: Option<u32>,
-  pub Height: Option<u32>,
-  pub IsDefault: bool
-}
-
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 struct FinishedObject {
   itemid: String,
@@ -72,7 +51,6 @@ struct FinishedObject {
   mediasourceid: String,
   positionticks: String
 }
-
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 struct NoProgressObject {
@@ -95,7 +73,7 @@ impl fmt::Display for MediaStream {
 }
 
 
-pub fn started_playing(settings: &Settings, head_dict: &HeadDict, item: &Items, playback_info: &PlaybackInfo) {
+pub fn started_playing(settings: &Settings, head_dict: &HeadDict, item: &Item, playback_info: &PlaybackInfo) {
   let ipaddress: &String = &head_dict.config_file.ipaddress;
   let item_id: &String = &item.Id;
   let session_id: &String = &head_dict.session_id;
@@ -124,7 +102,7 @@ pub fn started_playing(settings: &Settings, head_dict: &HeadDict, item: &Items, 
 }
 
 
-pub fn update_progress(settings: &Settings, head_dict: &HeadDict, item: &Items, mut time_pos: f64, paused: bool, playsession_id: &String, mediasource_id: &String) {
+pub fn update_progress(settings: &Settings, head_dict: &HeadDict, item: &Item, mut time_pos: f64, paused: bool, playsession_id: &String, mediasource_id: &String) {
   let ipaddress: &String = &head_dict.config_file.ipaddress;
   let item_id: &String = &item.Id;
   let media_server: &String = &head_dict.media_server;
@@ -178,64 +156,80 @@ pub fn no_res_del (url: String, auth_header: &AuthHeader) -> Result<(), isahc::E
 }
 
 
-pub fn finished_playback(settings: &Settings, head_dict: &HeadDict, item: &Items, mut time_pos: f64, playsession_id: &String, mediasource_id: &String, eof: bool) {
+pub fn finished_playback(settings: &Settings, head_dict: &HeadDict, item: &mut Item, player_time: f64, playsession_id: &String, mediasource_id: &String, eof: bool) -> bool {
   let ipaddress: &String = &head_dict.config_file.ipaddress;
   let item_id: &String = &item.Id;
   let session_id: &String = &head_dict.session_id;
   let media_server: &String = &head_dict.media_server;
   let user_id: &String = &head_dict.config_file.user_id;
+  let time_position_f64 = player_time * 10000000.0;
+  let mut time_position = time_position_f64.round() as u64;
+  
   if settings.transcoding {
-    time_pos += item.UserData.PlaybackPositionTicks as f64
+    time_position += item.UserData.PlaybackPositionTicks as u64
   };
-  if ! eof {
+
+  if eof {
     let result = no_res_post(format!("{ipaddress}{media_server}/Users/{user_id}/PlayedItems/{item_id}"), &head_dict.auth_header, "".to_string());
     match result {
       Ok(_) => {
-        println!("Item has been marked as [PLAYED].")
+        println!("Item has been marked as [PLAYED].");
       }
       Err(_) => {
-        println!("Failed to mark item as [PLAYED].")
+        println!("Failed to mark item as [PLAYED].");
       }
     };
+    true
   } else {
-    let difference = ((item.RunTimeTicks.unwrap() as f64) - time_pos) / (item.RunTimeTicks.unwrap() as f64);
+    let difference = ((item.RunTimeTicks.unwrap() as f64) - time_position as f64) / (item.RunTimeTicks.unwrap() as f64);
     if difference < 0.20 {
       let result = no_res_post(format!("{ipaddress}{media_server}/Users/{user_id}/PlayedItems/{item_id}"), &head_dict.auth_header, "".to_string());
       match result {
         Ok(_) => {
-          println!("Since you've watched more than 80% of the video, it has been marked as [PLAYED].")
+          println!("Since you've watched more than 80% of the video, it has been marked as [PLAYED].");
+          true
         }
         Err(_) => {
-          println!("Failed to mark item as [PLAYED].")
+          println!("Failed to mark item as [PLAYED].");
+          false
         }
       };
-    } else if difference < 0.90 {
+      true
+    } else if difference < 0.80 {
       let finished_obj = FinishedObject {
         itemid: item_id.to_string(),
         playsessionid: playsession_id.to_string(),
         sessionid: session_id.to_string(),
         mediasourceid: mediasource_id.to_string(),
-        positionticks: time_pos.to_string()
+        positionticks: time_position.to_string()
       };
+      item.UserData.PlaybackPositionTicks = time_position as i64;
       let response = no_res_post(format!("{ipaddress}{media_server}/Sessions/Playing/Stopped"), &head_dict.auth_header, serde_json::to_string_pretty(&finished_obj).unwrap());
       match response {
         Ok(_) => {
-          let time = time_pos / 10000000.0;
-          let formated: String = if time > 60.0 {
-            if (time / 60.0) > 60.0 {
-              format!("{:02}:{:02}:{:02}", ((time / 60.0) / 60.0).trunc(), ((((time / 60.0) / 60.0) - ((time / 60.0) / 60.).trunc()) * 60.0).trunc(), (((time / 60.0) - (time / 60.0).trunc()) * 60.0).trunc())
+          let formated: String = if player_time > 60.0 {
+            if (player_time / 60.0) > 60.0 {
+              format!("{:02}:{:02}:{:02}",
+                ((player_time / 60.0) / 60.0).trunc(),
+                ((((player_time / 60.0) / 60.0) - ((player_time / 60.0) / 60.).trunc()) * 60.0).trunc(),
+                (((player_time / 60.0) - (player_time / 60.0).trunc()) * 60.0).trunc()
+              )
             } else {
-              format!("00:{:02}:{:02}", (time / 60.0).trunc(), (((time / 60.0) - (time / 60.0).trunc()) * 60.0).trunc())
+              format!("00:{:02}:{:02}",
+                (player_time / 60.0).trunc(),
+                (((player_time / 60.0) - (player_time / 60.0).trunc()) * 60.0).trunc()
+              )
             }
           } else {
-            time.to_string()
+            player_time.to_string()
           };
-          println!("Playback progress ({formated}) has been sent to your server.")
+          println!("Playback progress ({formated}) has been sent to your server.");
         }
         Err(_) => {
-          println!("Failed to log playback progress to your server.")
+          println!("Failed to log playback progress to your server.");
         }
       }
+      false
     } else {
       let finished_obj = NoProgressObject {
         itemid: item_id.to_string(),
@@ -253,12 +247,13 @@ pub fn finished_playback(settings: &Settings, head_dict: &HeadDict, item: &Items
           println!("Failed to log playback progress to your server.")
         }
       }
+      false
     }
   }
 }
 
 
-pub fn mark_playstate(head_dict: &HeadDict, item: &Items, played: bool) {
+pub fn mark_playstate(head_dict: &HeadDict, item: &Item, played: bool) {
   let ipaddress: &String = &head_dict.config_file.ipaddress;
   let item_id: &String = &item.Id;
   let media_server: &String = &head_dict.media_server;

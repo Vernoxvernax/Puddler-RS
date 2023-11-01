@@ -5,12 +5,11 @@ use toml;
 use std::io;
 use std::io::prelude::*;
 use std::path::Path;
+use serde_derive::{Deserialize,Serialize};
+
+use crate::APPNAME;
 use crate::mediaserver_information;
 use mediaserver_information::getch;
-use app_dirs::*;
-use serde_derive::{Deserialize,Serialize};
-use crate::APPNAME;
-use crate::APP_INFO;
 
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -30,8 +29,8 @@ pub struct Settings {
 
 
 fn read_settings() -> Settings {
-  let config_path = get_app_root(AppDataType::UserConfig, &APP_INFO).unwrap();
-  let config_path_string = format!("{}/{}.toml", &config_path.display().to_string(), &APPNAME);
+  let config_path = dirs::config_dir().unwrap();
+  let config_path_string = format!("{}/{}/{}.toml", &config_path.display().to_string(), APPNAME.to_lowercase(), APPNAME);
   if ! Path::new(&config_path_string).is_file() {
     println!("No settings file found!\nBuilding default settings ...\n");
     // Default <> server.
@@ -81,49 +80,49 @@ fn read_settings() -> Settings {
           match &e.to_string()[e.to_string().find('`').unwrap() + 1..e.to_string().len() - 1] {
             "server_config" => {
               let server_config: Option<String> = ask_search_server_configs();
-              write!(settings_file, "server_config = {server_config:?}").unwrap();
+              write!(settings_file, "server_config = {server_config:?}\n").unwrap();
               let settings = read_settings();
               return settings;
             },
             "discord_presence" => {
               let discord_presence: bool = ask_initiate_discord();
-              write!(settings_file, "discord_presence = {discord_presence}").unwrap();
+              write!(settings_file, "discord_presence = {discord_presence}\n").unwrap();
               let settings = read_settings();
               return settings;
             },
             "transcoding" => {
               let transcoding: bool = ask_transcoding();
-              write!(settings_file, "transcoding = {transcoding}").unwrap();
+              write!(settings_file, "transcoding = {transcoding}\n").unwrap();
               let settings = read_settings();
               return settings;
             },
             "fullscreen" => {
               let fullscreen: bool = ask_start_fullscreen();
-              write!(settings_file, "fullscreen = {fullscreen}").unwrap();
+              write!(settings_file, "fullscreen = {fullscreen}\n").unwrap();
               let settings = read_settings();
               return settings;
             },
             "autologin" => {
               let autologin: bool = ask_automatically_login();
-              write!(settings_file, "autologin = {autologin}").unwrap();
+              write!(settings_file, "autologin = {autologin}\n").unwrap();
               let settings = read_settings();
               return settings;
             },
             "autoplay" => {
               let autoplay: bool = ask_autoplay();
-              write!(settings_file, "autoplay = {autoplay}").unwrap();
+              write!(settings_file, "autoplay = {autoplay}\n").unwrap();
               let settings = read_settings();
               return settings;
             },
             "gpu" => {
               let gpu: bool = ask_gpu();
-              write!(settings_file, "gpu = {gpu}").unwrap();
+              write!(settings_file, "gpu = {gpu}\n").unwrap();
               let settings = read_settings();
               return settings;
             }
             "load_config" => {
               let load_config: bool = ask_load_config();
-              write!(settings_file, "load_config = {load_config}").unwrap();
+              write!(settings_file, "load_config = {load_config}\n").unwrap();
               let settings = read_settings();
               return settings;
             }
@@ -196,7 +195,7 @@ fn ask_initiate_discord() -> bool {
 
 
 fn ask_search_server_configs() -> Option<String> {
-  let config_path = get_app_root(AppDataType::UserConfig, &APP_INFO).unwrap();
+  let config_path = dirs::config_dir().unwrap().join(APPNAME.to_lowercase());
   println!("Searching in \"{}\" for emby or jellyfin configuration files ...", &config_path.display());
   if fs::read_dir(&config_path).is_err() {
     fs::create_dir_all(&config_path).expect("Could not create config directory!")
@@ -275,8 +274,8 @@ fn ask_start_fullscreen() -> bool {
 
 
 fn change_settings(mut settings: Settings) -> Settings {
-  let config_path = get_app_root(AppDataType::UserConfig, &APP_INFO).unwrap();
-  let config_path_string = format!("{}/{}.toml", &config_path.display().to_string(), &APPNAME);
+  let config_path = dirs::config_dir().unwrap();
+  let config_path_string = format!("{}/{}/{}.toml", &config_path.display().to_string(), APPNAME.to_lowercase(), APPNAME);
   loop {
     print!("Which settings do you want to change?
   [1] Default server configuration = {}

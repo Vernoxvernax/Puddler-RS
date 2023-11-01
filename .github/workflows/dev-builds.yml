@@ -1,0 +1,52 @@
+# GitHub Actions workflow to build and create artifacts for the "dev" branch
+
+name: Create dev artifacts
+
+on:
+  push:
+    branches:
+      - dev
+    paths:
+      - ".github/workflows/**.yml"
+      - "src/**.rs"
+      - "./Cargo.toml"
+      - "./mpv/**.lib" # Will hopefully soon be removed when I finally get to create the damn lib file in a CI
+      - ".cargo/**"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  dev-build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Install dependencies
+      run: |
+        sudo apt update
+        sudo apt install libmpv-dev gcc-mingw-w64 -y
+        rustup target add x86_64-pc-windows-gnu
+    
+    - name: Build Linux and Windows bin
+      run: |
+        cargo build --release
+        cargo build --release --target=x86_64-pc-windows-gnu
+    
+    - name: Rename artifacts
+      run: |
+        mv ./target/release/puddler puddler-${GITHUB_SHA::7}-dev
+        mv ./target/x86_64-pc-windows-gnu/release/puddler.exe puddler-${GITHUB_SHA::7}-dev.exe
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: puddler-artifacts
+        path: |
+          puddler-*-dev
+          puddler-*-dev.exe
