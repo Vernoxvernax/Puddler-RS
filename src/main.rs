@@ -208,7 +208,7 @@ r"     ____            __    ____
       };
     }
   }
-  if let Some(head_dict) = check_information(&settings) {
+  if let Some(head_dict) = validate_settings(&settings) {
     loop {
       choose_and_play(&head_dict, &settings);
     }
@@ -226,7 +226,7 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
   // nextup & resume
   let mut item_list: Vec<Item> = vec![];
   let pick: Option<i32>;
-  let nextup = puddler_get(format!("{}{}/Users/{}/Items/Resume?Fields=PremiereDate,MediaSources&MediaTypes=Video&Limit=15", &ipaddress, &media_server, &user_id), head_dict);
+  let nextup = server_get(format!("{}{}/Users/{}/Items/Resume?Fields=PremiereDate,MediaSources&MediaTypes=Video&Limit=15", &ipaddress, &media_server, &user_id), head_dict);
   let response: ItemJson = match nextup {
     Ok(mut t) => {
       let response_text = &t.text().unwrap();
@@ -244,7 +244,7 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
   }
   
   if media_server != "/emby" {
-    let jellyfin_nextup = puddler_get(format!("{}{}/Shows/NextUp?Fields=PremiereDate,MediaSources&UserId={}", &ipaddress, &media_server, &user_id), head_dict);
+    let jellyfin_nextup = server_get(format!("{}{}/Shows/NextUp?Fields=PremiereDate,MediaSources&UserId={}", &ipaddress, &media_server, &user_id), head_dict);
     let jellyfin_response: ItemJson = match jellyfin_nextup {
       Ok(mut t) => {
         let jellyfin_response_text = &t.text().unwrap();
@@ -261,7 +261,7 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
   }
 
   // latest
-  let latest_series = puddler_get(format!("{}{}/Users/{}/Items/Latest?Limit=10&IncludeItemTypes=Episode&Fields=PremiereDate,MediaSources", &ipaddress, &media_server, &user_id), head_dict);
+  let latest_series = server_get(format!("{}{}/Users/{}/Items/Latest?Limit=10&IncludeItemTypes=Episode&Fields=PremiereDate,MediaSources", &ipaddress, &media_server, &user_id), head_dict);
   let latest_series_response: ItemJson = match latest_series {
     Ok(mut t) => {
       let response_text = format!("{{\"Items\":{}}}", t.text().unwrap());
@@ -275,7 +275,7 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
     item_list = print_menu(&latest_series_response, true, item_list);
   }
 
-  let latest = puddler_get(format!("{}{}/Users/{}/Items/Latest?Limit=10&IncludeItemTypes=Movie&Fields=PremiereDate,MediaSources", &ipaddress, &media_server, &user_id), head_dict);
+  let latest = server_get(format!("{}{}/Users/{}/Items/Latest?Limit=10&IncludeItemTypes=Movie&Fields=PremiereDate,MediaSources", &ipaddress, &media_server, &user_id), head_dict);
   let latest_response: ItemJson = match latest {
     Ok(mut t) => {
       let response_text = format!("{{\"Items\":{}}}", t.text().unwrap());
@@ -298,7 +298,7 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
 
   // processing input
   if input.trim() == "ALL" {
-    let all = puddler_get(format!("{}{}/Items?UserId={}&Recursive=true&IncludeItemTypes=Series,Movie&Fields=PremiereDate,MediaSources&collapseBoxSetItems=False", &ipaddress, &media_server, &user_id), head_dict);
+    let all = server_get(format!("{}{}/Items?UserId={}&Recursive=true&IncludeItemTypes=Series,Movie&Fields=PremiereDate,MediaSources&collapseBoxSetItems=False", &ipaddress, &media_server, &user_id), head_dict);
     let all_response: ItemJson = match all {
       Ok(mut t) => {
         let response_text: &String = &t.text().unwrap();
@@ -317,7 +317,7 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
     pick = process_input(&item_list, Some(input.trim().to_string()));
   } else {
     input = encode(input.trim()).into_owned();
-    let search = puddler_get(format!("{}{}/Items?SearchTerm={}&UserId={}&Recursive=true&IncludeItemTypes=Series,Movie&Fields=PremiereDate,MediaSources&collapseBoxSetItems=False", &ipaddress, &media_server, &input, &user_id), head_dict);
+    let search = server_get(format!("{}{}/Items?SearchTerm={}&UserId={}&Recursive=true&IncludeItemTypes=Series,Movie&Fields=PremiereDate,MediaSources&collapseBoxSetItems=False", &ipaddress, &media_server, &input, &user_id), head_dict);
     let search_response: ItemJson = match search {
       Ok(mut t) => {
         let search_text: &String = &t.text().unwrap();
