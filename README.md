@@ -2,7 +2,7 @@
 
 Emby & Jellyfin command line client, powered by MPV. Written in Rust.
 
-[![Rust](https://github.com/Vernoxvernax/Puddler-RS/actions/workflows/tag_release.yml/badge.svg)](https://github.com/Vernoxvernax/Puddler-RS/actions/workflows/tag_release.yml)
+[![Rust](https://github.com/Vernoxvernax/Puddler-RS/actions/workflows/release-builds.yml/badge.svg)](https://github.com/Vernoxvernax/Puddler-RS/actions/workflows/release-builds.yml)
 ![GitHub issues](https://img.shields.io/github/issues/Vernoxvernax/Puddler-RS)
 ![GitHub release (the latest by date)](https://img.shields.io/github/v/release/Vernoxvernax/Puddler-RS)
 ![GitHub](https://img.shields.io/github/license/Vernoxvernax/Puddler-RS)
