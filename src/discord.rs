@@ -22,16 +22,18 @@ impl DiscordClient {
   pub fn start(&mut self) {
     let discord_clone = Arc::clone(&self.discord_client);
     thread::spawn(move || {
-      let mut discord_client = discord_clone.lock().unwrap();
-      discord_client.start().is_finished();
+      if let Ok(mut discord_client) = discord_clone.lock() {
+        discord_client.start();
+      }
     });
   }
 
   pub fn stop(&mut self) {
     let discord_clone = Arc::clone(&self.discord_client);
     thread::spawn(move || {
-      let mut discord_client = discord_clone.lock().unwrap();
-      discord_client.clear_activity().unwrap();
+      if let Ok(mut discord_client) = discord_clone.lock() {
+        discord_client.clear_activity().unwrap();
+      }
     });
   }
 
