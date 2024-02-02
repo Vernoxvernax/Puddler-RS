@@ -10,12 +10,12 @@ use std::str::from_utf8;
 use std::result::Result;
 use std::fmt::Debug;
 use uuid;
-use http::Response;
-use http::StatusCode;
 use colored::Colorize;
 use isahc::Body;
 use isahc::Request;
+use isahc::Response;
 use isahc::prelude::*;
+use isahc::http::StatusCode;
 use rpassword::read_password;
 use serde_json::Value;
 use serde_derive::{Deserialize,Serialize};
@@ -26,7 +26,7 @@ use crate::settings::Settings;
 use crate::config::*;
 
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct HeadDict {
   pub media_server_name: String,
   pub media_server: String,
@@ -73,14 +73,14 @@ pub struct UserLogin {
 }
 
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RequestHeader {
   pub application: String,
   pub token: String
 }
 
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AuthHeader {
   pub authorization: String,
 }
@@ -541,8 +541,8 @@ fn reauthenticate(media_server_name: &str, media_server: &str, ipaddress: &Strin
     Ok(mut t) => {
       let response_text: &String = &t.text().unwrap();
       if let Ok(re_auth_json) = serde_json::from_str::<Value>(response_text) {
-        println!("{}", "successful!".to_string().green());
         if let Some(id) = re_auth_json[0].get("Id") {
+          println!("{}", "successful!".to_string().green());
           Ok(id.to_string().replace('"', ""))
         } else {
           println!("{}", "error!".to_string().red());

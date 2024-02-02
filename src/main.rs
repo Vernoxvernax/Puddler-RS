@@ -9,14 +9,14 @@ use std::process::ExitCode;
 use std::thread;
 use std::time::Duration;
 use std::process;
-use http::Response;
-use http::StatusCode;
 use std::io::prelude::*;
 use std::io;
 use serde_derive::Deserialize;
 use isahc::Body;
 use isahc::Request;
+use isahc::Response;
 use isahc::prelude::*;
+use isahc::http::StatusCode;
 
 pub mod progress_report;
 pub mod mediaserver_information;

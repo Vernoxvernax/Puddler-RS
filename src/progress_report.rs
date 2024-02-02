@@ -193,8 +193,7 @@ pub fn finished_playback(settings: &Settings, head_dict: &HeadDict, item: &mut I
           println!("Failed to mark item as [PLAYED].");
           false
         }
-      };
-      true
+      }
     } else if difference < 0.80 {
       let finished_obj = FinishedObject {
         itemid: item_id.to_string(),

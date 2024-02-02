@@ -7,8 +7,9 @@ use libmpv::Mpv;
 use libmpv::events::Event;
 use serde_derive::Deserialize;
 use serde::Serialize;
-use isahc::ReadResponseExt;
 use std::time::SystemTime;
+use isahc::ReadResponseExt;
+use isahc::Response;
 use dialoguer::{theme::ColorfulTheme, Select};
 
 use crate::getch;
@@ -287,7 +288,7 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, item: &mut Item) -> bool 
         ].to_vec()
       }
     };
-    let playback_info_res: Result<http::Response<isahc::Body>, String> = server_post(format!("{}{}/Items/{}/PlaybackInfo?UserId={}", head_dict.config_file.ipaddress, head_dict.media_server, item.Id, head_dict.config_file.user_id), &head_dict.auth_header, serde_json::to_string_pretty(&sess).unwrap());
+    let playback_info_res: Result<Response<isahc::Body>, String> = server_post(format!("{}{}/Items/{}/PlaybackInfo?UserId={}", head_dict.config_file.ipaddress, head_dict.media_server, item.Id, head_dict.config_file.user_id), &head_dict.auth_header, serde_json::to_string_pretty(&sess).unwrap());
     let playback_info: PlaybackInfo = match playback_info_res {
       Ok(mut t) => {
         let search_text: &String = &t.text().unwrap();
@@ -297,7 +298,7 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, item: &mut Item) -> bool 
     };
     playback_info
   } else {
-    let playback_info_res: Result<http::Response<isahc::Body>, String> = server_get(format!("{}{}/Items/{}/PlaybackInfo?UserId={}", head_dict.config_file.ipaddress, head_dict.media_server, item.Id, head_dict.config_file.user_id), head_dict);
+    let playback_info_res: Result<Response<isahc::Body>, String> = server_get(format!("{}{}/Items/{}/PlaybackInfo?UserId={}", head_dict.config_file.ipaddress, head_dict.media_server, item.Id, head_dict.config_file.user_id), head_dict);
     let playback_info: PlaybackInfo = match playback_info_res {
       Ok(mut t) => {
         let search_text: &String = &t.text().unwrap();
@@ -319,7 +320,7 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, item: &mut Item) -> bool 
   };
 
   let mpv = player_new();
-  player_set_options(&mpv, settings);
+  player_set_options(&mpv, &settings);
   
   let stream_url: String = if settings.transcoding {
     format!("{}{}{}", head_dict.config_file.ipaddress, head_dict.media_server, playback_info.MediaSources.get(0).unwrap().TranscodingUrl.as_ref().unwrap())
@@ -338,12 +339,14 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, item: &mut Item) -> bool 
     title = format!("{} - Streaming: {} ({}) - {} - {}", APPNAME, item.SeriesName.as_ref().unwrap(), &item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4], item.SeasonName.as_ref().unwrap(), item.Name);
   }
 
-  player_set_properties(&mpv, settings, media_title.as_str(), title.as_str());
+  player_set_properties(&mpv, &settings, media_title.as_str(), title.as_str());
 
   let mut ctx = mpv.create_event_context();
   ctx.disable_deprecated_events().expect("Failed to disable deprecated events.");
 
+  
   mpv.command("loadfile", &[&stream_url]).expect("Failed to load file.");
+
 
   // Load files provided using the --glsl-shader option.
   if settings.glsl_shader.is_some() {
@@ -375,7 +378,7 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, item: &mut Item) -> bool 
           }
           load_external_subtitles(settings, head_dict, &mpv, item);
         }
-        Event::Shutdown | Event::EndFile(0) => {
+        Event::Shutdown | Event::EndFile(_) => {
           watched_till_end = finished_playback(settings, head_dict, item, old_pos, &playback_info.PlaySessionId, &playback_info.MediaSources[0].Id, false);
           if settings.discord_presence {
             discord.stop();
@@ -392,7 +395,7 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, item: &mut Item) -> bool 
     }
     let result: Result<f64, libmpv::Error> = mpv.get_property("time-pos");
     if let Ok(current_time) = result {
-      if current_time > old_pos + 15.0 { // this was the most retarded solution, I could think of
+      if current_time > old_pos + 15.0 {
         update_progress(settings, head_dict, item, current_time * 10000000.0, false, &playback_info.PlaySessionId, &playback_info.MediaSources[0].Id);
         if settings.discord_presence {
           if item.Type == "Movie" {

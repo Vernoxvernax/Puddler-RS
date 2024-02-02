@@ -12,7 +12,7 @@ use crate::mediaserver_information;
 use mediaserver_information::getch;
 
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Settings {
   pub server_config: Option<String>,
   pub discord_presence: bool,

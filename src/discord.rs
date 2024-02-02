@@ -41,30 +41,31 @@ impl DiscordClient {
     let media_server_name = head_dict.media_server_name.to_lowercase().clone();
     let discord_clone = Arc::clone(&self.discord_client);
     thread::spawn(move || {
-      let mut discord_client = discord_clone.lock().unwrap();
-      if details == *"" {
-        discord_client
-          .set_activity(|a| {
-            a.assets(|ass| {
-              ass.small_image(media_server_name)
-            })
-            .timestamps(|time| {
-              time.end(time_left.round() as u64)
-            })
-            .state(&state)
-        }).unwrap();
-      } else {
-        discord_client
-          .set_activity(|a| {
-            a.assets(|ass| {
-              ass.small_image(media_server_name)
-            })
-            .timestamps(|time| {
-              time.end(time_left.round() as u64)
-            })
-            .details(&details)
-            .state(&state)
-        }).unwrap();
+      if let Ok(mut discord_client) = discord_clone.lock() {
+        if details == *"" {
+          let _ = discord_client
+            .set_activity(|a| {
+              a.assets(|ass| {
+                ass.small_image(media_server_name)
+              })
+              .timestamps(|time| {
+                time.end(time_left.round() as u64)
+              })
+              .state(&state)
+          });
+        } else {
+          let _ = discord_client
+            .set_activity(|a| {
+              a.assets(|ass| {
+                ass.small_image(media_server_name)
+              })
+              .timestamps(|time| {
+                time.end(time_left.round() as u64)
+              })
+              .details(&details)
+              .state(&state)
+          });
+        }
       }
     });
   }
@@ -73,26 +74,27 @@ impl DiscordClient {
     let media_server_name = head_dict.media_server_name.to_lowercase().clone();
     let discord_clone = Arc::clone(&self.discord_client);
     thread::spawn(move || {
-      let mut discord_client = discord_clone.lock().unwrap();
-      if details == *"" {
-        discord_client
-          .set_activity(|a| {
-            a.assets(|ass| {
-              ass.large_image(media_server_name)
-              .small_image("pause2")
-            })
-          .details(&state)
-        }).ok();
-      } else {
-        discord_client
-          .set_activity(|a| {
-            a.assets(|ass| {
-              ass.large_image(media_server_name)
-              .small_image("pause2")
-            })
-          .details(&details)
-          .state(&state)
-        }).ok();
+      if let Ok(mut discord_client) = discord_clone.lock() {
+        if details == *"" {
+          discord_client
+            .set_activity(|a| {
+              a.assets(|ass| {
+                ass.large_image(media_server_name)
+                .small_image("pause2")
+              })
+            .details(&state)
+          }).ok();
+        } else {
+          discord_client
+            .set_activity(|a| {
+              a.assets(|ass| {
+                ass.large_image(media_server_name)
+                .small_image("pause2")
+              })
+            .details(&details)
+            .state(&state)
+          }).ok();
+        }
       }
     });
   }
