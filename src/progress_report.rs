@@ -1,15 +1,20 @@
 use std::fmt;
-use isahc::Request;
-use isahc::prelude::*;
-use colored::Colorize;
 use serde_derive::Deserialize;
 use serde::Serialize;
+use isahc::{
+  Request,
+  prelude::*
+};
+use colored::Colorize;
 
-use crate::MediaSourceInfo;
-use crate::MediaStream;
-use crate::settings::Settings;
-use crate::mediaserver_information::AuthHeader;
-use crate::{HeadDict, Item};
+use crate::{
+  MediaSourceInfo,
+  MediaStream,
+  settings::Settings,
+  mediaserver_information::AuthHeader,
+  HeadDict,
+  Item
+};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 struct PlaybackObject {

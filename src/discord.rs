@@ -1,8 +1,7 @@
 use std::{thread, sync::{Arc, Mutex}};
 
-use discord_presence::Client;
-
 use crate::mediaserver_information;
+use discord_presence::Client;
 use mediaserver_information::HeadDict;
 
 

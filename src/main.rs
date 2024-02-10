@@ -1,22 +1,34 @@
 #![allow(non_snake_case)]
-use clap::Arg;
-use clap::ArgAction;
-use clap::Command;
+use clap::{
+  Arg,
+  ArgAction,
+  Command
+};
+use colored::{
+  ColoredString,
+  Colorize
+};
+use std::{
+  io::{
+    stdout,
+    stdin,
+    prelude::*
+  },
+  time::Duration,
+  process::{
+    exit,
+    ExitCode
+  }
+};
+use isahc::{
+  Body,
+  Response,
+  Request,
+  prelude::*,
+  http::StatusCode
+};
 use urlencoding::encode;
-use colored::ColoredString;
-use colored::Colorize;
-use std::process::ExitCode;
-use std::thread;
-use std::time::Duration;
-use std::process;
-use std::io::prelude::*;
-use std::io;
 use serde_derive::Deserialize;
-use isahc::Body;
-use isahc::Request;
-use isahc::Response;
-use isahc::prelude::*;
-use isahc::http::StatusCode;
 
 pub mod progress_report;
 pub mod mediaserver_information;
@@ -24,9 +36,9 @@ pub mod player;
 pub mod settings;
 pub mod config;
 pub mod discord;
-use player::play;
 use settings::*;
 use mediaserver_information::*;
+use player::play;
 use progress_report::mark_playstate;
 
 const APPNAME: &str = "Puddler";
@@ -234,7 +246,7 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
     }
     Err(e) => {
       println!("Your network connection seems to be limited. Error: {e}\nUnable to continue.");
-      process::exit(0x0100);
+      exit(0);
     }
   };
 
@@ -292,9 +304,9 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
   }
 
   print!("Please choose from above, enter a search term, or type \"ALL\" to display literally everything.\n: ");
-  io::stdout().flush().expect("Failed to flush stdout");
+  stdout().flush().expect("Failed to flush stdout");
   let mut input = String::new();
-  io::stdin().read_line(&mut input).unwrap();
+  stdin().read_line(&mut input).unwrap();
 
   // processing input
   if input.trim() == "ALL" {
@@ -310,7 +322,7 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
 
     if all_response.Items.len() > 1 {
       print!(": ");
-      io::stdout().flush().expect("Failed to flush stdout");
+      stdout().flush().expect("Failed to flush stdout");
     }
     pick = process_input(&item_list, None);
   } else if is_numeric(&input) {
@@ -330,7 +342,7 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
       item_list = print_menu(&search_response, false, vec![]);
       if search_response.Items.len() > 1 {
         print!(": ");
-        io::stdout().flush().expect("Failed to flush stdout");
+        stdout().flush().expect("Failed to flush stdout");
       }
       pick = process_input(&item_list, None);
     } else {
@@ -386,7 +398,7 @@ fn process_input(item_list: &Vec<Item>, number: Option<String>) -> Option<i32> {
         raw_input = res.to_string();
       } else {
         raw_input = String::new();
-        io::stdin().read_line(&mut raw_input).unwrap();
+        stdin().read_line(&mut raw_input).unwrap();
         raw_input = raw_input.trim().to_string();
       }
       
@@ -427,13 +439,13 @@ fn process_input(item_list: &Vec<Item>, number: Option<String>) -> Option<i32> {
         }
       } else {
         println!("{}", "Are you ok?!".red());
-        process::exit(0x0100);
+        exit(0);
       }
       Some(pick)
     },
     1 => {
       let mut raw_input = String::new();
-      io::stdin().read_line(&mut raw_input).unwrap();
+      stdin().read_line(&mut raw_input).unwrap();
       let pick: i32 = 0;
       Some(pick)
     },
@@ -468,9 +480,9 @@ fn item_parse(head_dict: &HeadDict, item_list: &[Item], pick: i32, settings: &Se
     let filtered_input: i32 = if items_in_list > 1 {
       loop {
         print!("Enter which episode you want to play, or use the \"mark\" command to mark something as played. (\"2\", \"2-6\", \"2,3,6\")\n: ");
-        io::stdout().flush().expect("Failed to flush stdout");
+        stdout().flush().expect("Failed to flush stdout");
         let mut input = String::new();
-        io::stdin().read_line(&mut input).unwrap();
+        stdin().read_line(&mut input).unwrap();
         if input.contains("mark") {
           let played: bool;
           let parameters: String;
@@ -547,7 +559,6 @@ fn item_parse(head_dict: &HeadDict, item_list: &[Item], pick: i32, settings: &Se
 
 
 fn mark_items(item_list: &[Item], indexes: Vec<u32>, played: bool, head_dict: &HeadDict) {
-  println!();
   for index in indexes {
     let item = item_list.get(index as usize).unwrap();
     if played {
@@ -557,84 +568,90 @@ fn mark_items(item_list: &[Item], indexes: Vec<u32>, played: bool, head_dict: &H
     }
     mark_playstate(head_dict, item, played);
   }
-  println!();
 }
 
 
 fn series_play(item_list: &Vec<Item>, mut pick: i32, head_dict: &HeadDict, settings: &Settings) {
   let episode_amount: i32 = item_list.len().try_into().unwrap();
-  let item = &mut item_list.get(pick as usize).unwrap().clone();
-  let watched_full_item: bool = play(settings, head_dict, item);
-  loop {
+  'episode: loop {
+    let item = &mut item_list.get(pick as usize).unwrap().clone();
+    let watched_full_item: bool = play(settings, head_dict, item);
     if ( pick + 2 ) > episode_amount { // +1 since episode_amount doesn't start at 0 AND +1 for next ep
       println!("\nYou've reached the end of your episode list. Returning to menu ...");
       break
     } else {
       pick += 1;
-      if item_list.get(pick as usize).is_some() {
-        let next_item = &item_list.get(pick as usize).unwrap();
-        
-        if next_item.UserData.Played {
-          continue
+      if let Some(next_item) = item_list.get(pick as usize) {
+        let next_item_played_str = if next_item.UserData.Played {
+          " [PLAYED]"
+        } else {
+          ""
         };
 
         if ! watched_full_item {
-          println!("\nWelcome back. Do you want to finish the current episode or play the next one?:\n{}",
-            format!("   {} ({}) - {} - {}",
-              next_item.SeriesName.as_ref().unwrap(),
-              &next_item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4],
-              next_item.SeasonName.as_ref().unwrap(), next_item.Name).cyan()
-          );
-          print!(" (F)inish episode | (M)ark watched | (N)ext episode | (R)eturn to menu | (E)xit");
-          let cont = getch("FfRrNnEeMm");
-          match cont {
-            'F' | 'f' => {
-              pick -= 1;
-              play(settings, head_dict, item);
-            },
-            'M' | 'm' => {
-              pick -= 1;
-              mark_items(item_list, vec![(pick) as u32], true, head_dict);
-            },
-            'N' | 'n' => {
-              let item = &mut item_list.get(pick as usize).unwrap().clone();
-              play(settings, head_dict, item);
-            },
-            'R' | 'r' => break,
-            'E' | 'e' => {
-              process::exit(0x0100);
-            },
-            _ => (),
+          'question: loop {
+            println!("\nWelcome back. Do you want to finish the current episode or play the next one?:\n{}",
+              format!("   {} ({}) - {} - {}",
+                next_item.SeriesName.as_ref().unwrap(),
+                &next_item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4],
+                next_item.SeasonName.as_ref().unwrap(), next_item.Name).cyan()
+            );
+            print!(" (F)inish episode | (M)ark watched | (N)ext episode | (R)eturn to menu | (E)xit");
+            let cont = getch("FfRrNnEeMm");
+            match cont {
+              'F' | 'f' => {
+                pick -= 1;
+                continue 'episode;
+              },
+              'M' | 'm' => {
+                mark_items(item_list, vec![(pick-1) as u32], true, head_dict);
+                continue 'question;
+              },
+              'N' | 'n' => {
+                continue 'episode;
+              },
+              'R' | 'r' => {
+                break 'episode;
+              }
+              'E' | 'e' => {
+                exit(0);
+              },
+              _ => ()
+            }
           }
-        } else if settings.autoplay {
-          println!("\nWelcome back. Continuing playback in 5 seconds:\n{}",
+        } else if settings.autoplay && ! next_item.UserData.Played {
+          print!("\nWelcome back. Continue with:\n{}",
             format!("   {} ({}) - {} - {}",
               next_item.SeriesName.as_ref().unwrap(),
               &next_item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4],
               next_item.SeasonName.as_ref().unwrap(), next_item.Name).cyan()
           );
-          thread::sleep(Duration::from_secs(5));
-          let item = &mut item_list.get(pick as usize).unwrap().clone();
-          play(settings, head_dict, item);
+
+          if let Some('_') = adv_getch("", true, Some(5), "Press any key to stop the playlist.") {
+            break;
+          }
+          continue 'episode;
         } else {
-          println!("\nWelcome back. Do you want to continue playback with:\n{}",
+          println!("\nWelcome back. Do you want to continue playback with:\n{}{}",
             format!("   {} ({}) - {} - {}",
               next_item.SeriesName.as_ref().unwrap(),
               &next_item.PremiereDate.as_ref().unwrap_or(&"????".to_string())[0..4],
-              next_item.SeasonName.as_ref().unwrap(), next_item.Name).cyan()
+              next_item.SeasonName.as_ref().unwrap(), next_item.Name).cyan(),
+              next_item_played_str.green()
           );
           print!(" (N)ext | (R)eturn to menu | (E)xit");
           let cont = getch("RrNnEe");
           match cont {
             'N' | 'n' => {
-              let item = &mut item_list.get(pick as usize).unwrap().clone();
-              play(settings, head_dict, item);
+              continue 'episode;
             },
-            'R' | 'r' => break,
+            'R' | 'r' => {
+              break 'episode;
+            },
             'E' | 'e' => {
-              process::exit(0x0100);
+              exit(0);
             },
-            _ => (),
+            _ => ()
           }
         }
       } else {
