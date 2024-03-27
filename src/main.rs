@@ -360,7 +360,7 @@ fn choose_and_play(head_dict: &HeadDict, settings: &Settings) {
 fn server_get(url: String, head_dict: &HeadDict) -> Result<Response<Body>, String> {
   let request_header = &head_dict.request_header;
   let response: Response<Body> = Request::get(url)
-    .timeout(Duration::from_secs(5))
+    .timeout(Duration::from_secs(10))
     .header("X-Application", &request_header.application)
     .header("X-Emby-Token", &request_header.token)
     .header("Content-Type", "application/json")
