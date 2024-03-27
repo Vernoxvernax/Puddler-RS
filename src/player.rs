@@ -1,31 +1,41 @@
-use std::io;
-use std::io::prelude::*;
-use std::thread;
-use std::time::Duration;
+use dialoguer::{
+  theme::ColorfulTheme,
+  Select
+};
+use std::{
+  io::{
+    stdout,
+    stdin,
+    prelude::*
+  },
+  time::{
+    Duration,
+    SystemTime
+  },
+  thread
+};
+use libmpv::{
+  Mpv,
+  events::Event
+};
+use isahc::{
+  ReadResponseExt,
+  Response
+};
 use colored::Colorize;
-use libmpv::Mpv;
-use libmpv::events::Event;
 use serde_derive::Deserialize;
 use serde::Serialize;
-use isahc::ReadResponseExt;
-use std::time::SystemTime;
-use dialoguer::{theme::ColorfulTheme, Select};
 
-use crate::getch;
-use crate::discord::DiscordClient;
-use crate::APPNAME;
-use crate::Item;
-use crate::mediaserver_information::HeadDict;
-use crate::mediaserver_information::server_post;
-use crate::MediaStream;
-use crate::server_get;
-use crate::is_numeric;
-use crate::settings::Settings;
-use crate::progress_report::PlaybackInfo;
-use crate::progress_report::finished_playback;
-use crate::progress_report::update_progress;
-use crate::progress_report::started_playing;
-
+use crate::{
+  clear_stdin, getch, is_numeric, discord::DiscordClient,
+  server_get, settings::Settings, Item, MediaStream, APPNAME,
+  mediaserver_information::{
+    server_post, HeadDict
+  },
+  progress_report::{
+    finished_playback, started_playing, update_progress, PlaybackInfo
+  },
+};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct SessionCapabilities {
@@ -79,7 +89,7 @@ struct SubtitleProfile {
 
 
 pub fn player_new() -> libmpv::Mpv {
-  return Mpv::new().expect("Failed to create mpv handle.");
+  Mpv::new().expect("Failed to create mpv handle.")
 }
 
 pub fn player_set_properties(handler: &libmpv::Mpv, settings: &Settings, media_title: &str, title: &str) {
@@ -179,8 +189,8 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, item: &mut Item) -> bool 
           let mut input: String;
           loop {
             input = String::new();
-            io::stdout().flush().expect("Failed to flush stdout");
-            io::stdin().read_line(&mut input).unwrap();
+            stdout().flush().expect("Failed to flush stdout");
+            stdin().read_line(&mut input).unwrap();
             if input.trim().parse::<f64>().is_err() {
               print!("\nInvalid input, please try again.\n: ");
             } else if input.contains('.') {
@@ -209,8 +219,8 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, item: &mut Item) -> bool 
     print!("\nPlease enter your connection speed in mbps: ");
     let mut mbps: String = String::new();
     loop {
-      io::stdout().flush().expect("Failed to flush stdout");
-      io::stdin().read_line(&mut mbps).unwrap();
+      stdout().flush().expect("Failed to flush stdout");
+      stdin().read_line(&mut mbps).unwrap();
       if ! is_numeric(mbps.trim()) {
         print!("\nInvalid input! Enter something like \"25\" equal to ~3MB/s.\n: ")
       } else {
@@ -287,7 +297,7 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, item: &mut Item) -> bool 
         ].to_vec()
       }
     };
-    let playback_info_res: Result<http::Response<isahc::Body>, String> = server_post(format!("{}{}/Items/{}/PlaybackInfo?UserId={}", head_dict.config_file.ipaddress, head_dict.media_server, item.Id, head_dict.config_file.user_id), &head_dict.auth_header, serde_json::to_string_pretty(&sess).unwrap());
+    let playback_info_res: Result<Response<isahc::Body>, String> = server_post(format!("{}{}/Items/{}/PlaybackInfo?UserId={}", head_dict.config_file.ipaddress, head_dict.media_server, item.Id, head_dict.config_file.user_id), &head_dict.auth_header, serde_json::to_string_pretty(&sess).unwrap());
     let playback_info: PlaybackInfo = match playback_info_res {
       Ok(mut t) => {
         let search_text: &String = &t.text().unwrap();
@@ -297,7 +307,7 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, item: &mut Item) -> bool 
     };
     playback_info
   } else {
-    let playback_info_res: Result<http::Response<isahc::Body>, String> = server_get(format!("{}{}/Items/{}/PlaybackInfo?UserId={}", head_dict.config_file.ipaddress, head_dict.media_server, item.Id, head_dict.config_file.user_id), head_dict);
+    let playback_info_res: Result<Response<isahc::Body>, String> = server_get(format!("{}{}/Items/{}/PlaybackInfo?UserId={}", head_dict.config_file.ipaddress, head_dict.media_server, item.Id, head_dict.config_file.user_id), head_dict);
     let playback_info: PlaybackInfo = match playback_info_res {
       Ok(mut t) => {
         let search_text: &String = &t.text().unwrap();
@@ -307,8 +317,6 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, item: &mut Item) -> bool 
     };
     playback_info
   };
-
-  started_playing(settings, head_dict, item, &playback_info);
 
   let resume_progress = item.UserData.PlaybackPositionTicks / 10000000;
 
@@ -322,7 +330,7 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, item: &mut Item) -> bool 
   player_set_options(&mpv, settings);
   
   let stream_url: String = if settings.transcoding {
-    format!("{}{}{}", head_dict.config_file.ipaddress, head_dict.media_server, playback_info.MediaSources.get(0).unwrap().TranscodingUrl.as_ref().unwrap())
+    format!("{}{}{}", head_dict.config_file.ipaddress, head_dict.media_server, playback_info.MediaSources.first().unwrap().TranscodingUrl.as_ref().unwrap())
   } else {
     format!("{}{}/Videos/{}/stream?Container=mkv&Static=true&api_key={}",
     head_dict.config_file.ipaddress, head_dict.media_server, item.Id, head_dict.request_header.token)
@@ -343,7 +351,10 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, item: &mut Item) -> bool 
   let mut ctx = mpv.create_event_context();
   ctx.disable_deprecated_events().expect("Failed to disable deprecated events.");
 
+  
   mpv.command("loadfile", &[&stream_url]).expect("Failed to load file.");
+
+  started_playing(settings, head_dict, item, &playback_info);
 
   // Load files provided using the --glsl-shader option.
   if settings.glsl_shader.is_some() {
@@ -375,7 +386,7 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, item: &mut Item) -> bool 
           }
           load_external_subtitles(settings, head_dict, &mpv, item);
         }
-        Event::Shutdown | Event::EndFile(0) => {
+        Event::Shutdown | Event::EndFile(_) => {
           watched_till_end = finished_playback(settings, head_dict, item, old_pos, &playback_info.PlaySessionId, &playback_info.MediaSources[0].Id, false);
           if settings.discord_presence {
             discord.stop();
@@ -386,13 +397,13 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, item: &mut Item) -> bool 
           old_pos -= 16.0
         }
         _ => {
-          // println!("{:#?}", event); // for debugging
+        //   println!("{:#?}", event); // for debugging
         }
       }
     }
     let result: Result<f64, libmpv::Error> = mpv.get_property("time-pos");
     if let Ok(current_time) = result {
-      if current_time > old_pos + 15.0 { // this was the most retarded solution, I could think of
+      if current_time > old_pos + 15.0 {
         update_progress(settings, head_dict, item, current_time * 10000000.0, false, &playback_info.PlaySessionId, &playback_info.MediaSources[0].Id);
         if settings.discord_presence {
           if item.Type == "Movie" {
@@ -411,6 +422,9 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, item: &mut Item) -> bool 
         }
         old_pos = current_time;
       } else if current_time == last_time_update {
+        if current_time == old_pos {
+          continue;
+        }
         update_progress(settings, head_dict, item, current_time * 10000000.0, true, &playback_info.PlaySessionId, &playback_info.MediaSources[0].Id);
         if settings.discord_presence {
           if item.Type == "Movie" {
@@ -425,24 +439,25 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, item: &mut Item) -> bool 
             );
           }
         }
+        old_pos = current_time;
       }
       last_time_update = current_time;
     }
     thread::sleep(Duration::from_millis(500));
   }
-  drop(ctx);
-  return watched_till_end;
+  clear_stdin();
+  watched_till_end
 }
 
 fn load_external_subtitles(settings: &Settings, head_dict: &HeadDict, mpv: &libmpv::Mpv, item: &Item) {
   let ipaddress: &String = &head_dict.config_file.ipaddress;
   let item_id: &String = &item.Id;
   let media_server: &String = &head_dict.media_server;
-  let mediasrc = item.MediaSources.as_ref().unwrap().get(0).unwrap();
+  let mediasrc = item.MediaSources.as_ref().unwrap().first().unwrap();
   for (index, stream) in mediasrc.MediaStreams.iter().enumerate() {
     if stream.IsExternal && stream.SupportsExternalStream {
       let extension = if let Some(path) = &stream.Path {
-        path.split(".").last().unwrap().to_string()
+        path.split('.').last().unwrap().to_string()
       } else {
         stream.Codec.as_ref().unwrap().to_owned()
       };

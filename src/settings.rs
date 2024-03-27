@@ -1,10 +1,15 @@
+use toml;
 use colored::Colorize;
 use config::{Config, File};
-use std::fs;
-use toml;
-use std::io;
-use std::io::prelude::*;
-use std::path::Path;
+use std::{
+  fs,
+  io::{
+    stdin,
+    stdout,
+    prelude::*
+  },
+  path::Path
+};
 use serde_derive::{Deserialize,Serialize};
 
 use crate::APPNAME;
@@ -12,7 +17,7 @@ use crate::mediaserver_information;
 use mediaserver_information::getch;
 
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Settings {
   pub server_config: Option<String>,
   pub discord_presence: bool,
@@ -64,7 +69,7 @@ fn read_settings() -> Settings {
       mpv_config_location: None
     };
     let settings_file = toml::to_string_pretty(&settings).unwrap();
-    std::fs::write(config_path_string, settings_file).expect("Saving settings.");
+    fs::write(config_path_string, settings_file).expect("Saving settings.");
     settings
   } else {
     let settings_file_raw = Config::builder().add_source(File::from(Path::new(&config_path_string))).build().unwrap();
@@ -80,49 +85,49 @@ fn read_settings() -> Settings {
           match &e.to_string()[e.to_string().find('`').unwrap() + 1..e.to_string().len() - 1] {
             "server_config" => {
               let server_config: Option<String> = ask_search_server_configs();
-              write!(settings_file, "server_config = {server_config:?}\n").unwrap();
+              writeln!(settings_file, "server_config = {server_config:?}").unwrap();
               let settings = read_settings();
               return settings;
             },
             "discord_presence" => {
               let discord_presence: bool = ask_initiate_discord();
-              write!(settings_file, "discord_presence = {discord_presence}\n").unwrap();
+              writeln!(settings_file, "discord_presence = {discord_presence}").unwrap();
               let settings = read_settings();
               return settings;
             },
             "transcoding" => {
               let transcoding: bool = ask_transcoding();
-              write!(settings_file, "transcoding = {transcoding}\n").unwrap();
+              writeln!(settings_file, "transcoding = {transcoding}").unwrap();
               let settings = read_settings();
               return settings;
             },
             "fullscreen" => {
               let fullscreen: bool = ask_start_fullscreen();
-              write!(settings_file, "fullscreen = {fullscreen}\n").unwrap();
+              writeln!(settings_file, "fullscreen = {fullscreen}").unwrap();
               let settings = read_settings();
               return settings;
             },
             "autologin" => {
               let autologin: bool = ask_automatically_login();
-              write!(settings_file, "autologin = {autologin}\n").unwrap();
+              writeln!(settings_file, "autologin = {autologin}").unwrap();
               let settings = read_settings();
               return settings;
             },
             "autoplay" => {
               let autoplay: bool = ask_autoplay();
-              write!(settings_file, "autoplay = {autoplay}\n").unwrap();
+              writeln!(settings_file, "autoplay = {autoplay}").unwrap();
               let settings = read_settings();
               return settings;
             },
             "gpu" => {
               let gpu: bool = ask_gpu();
-              write!(settings_file, "gpu = {gpu}\n").unwrap();
+              writeln!(settings_file, "gpu = {gpu}").unwrap();
               let settings = read_settings();
               return settings;
             }
             "load_config" => {
               let load_config: bool = ask_load_config();
-              write!(settings_file, "load_config = {load_config}\n").unwrap();
+              writeln!(settings_file, "load_config = {load_config}").unwrap();
               let settings = read_settings();
               return settings;
             }
@@ -155,7 +160,7 @@ fn read_settings() -> Settings {
           mpv_config_location: None
         };
         let settings_file = toml::to_string_pretty(&settings).unwrap();
-        std::fs::write(config_path_string, settings_file).expect("Saving settings.");
+        fs::write(config_path_string, settings_file).expect("Saving settings.");
         settings
       }
     }
@@ -230,9 +235,9 @@ fn ask_search_server_configs() -> Option<String> {
     }
   }
   print!("Select which one of the above server configs should be used by default, or skip with \"None\".\n: ");
-  io::stdout().flush().expect("Failed to flush stdout");
+  stdout().flush().expect("Failed to flush stdout");
   let mut selection = String::new();
-  io::stdin().read_line(&mut selection).unwrap();
+  stdin().read_line(&mut selection).unwrap();
   if selection.trim() == "None" {
     println!("Skipped default-server option.\n");
     return None
@@ -330,7 +335,7 @@ settings.load_config.to_string().green()
     };
   }
   let settings_file = toml::to_string_pretty(&settings).unwrap();
-  std::fs::write(config_path_string, settings_file).expect("Saving settings failed.");
+  fs::write(config_path_string, settings_file).expect("Saving settings failed.");
   settings
 }
 

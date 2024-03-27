@@ -1,17 +1,26 @@
 // This part of puddler parses and writes the emby and jellyfin config files
-use std::fs;
-use std::io;
-use std::io::prelude::*;
-use std::path::Path;
+use std::{
+  fs,
+  path::Path,
+  io::{
+    stdout,
+    stdin,
+    prelude::*
+  }
+};
 use colored::Colorize;
 use regex::Regex;
 
-use crate::APPNAME;
-use crate::mediaserver_information::ConfigFileRaw;
-use crate::mediaserver_information::ConfigFile;
-use crate::mediaserver_information::ConfigFileUser;
-use crate::mediaserver_information::getch;
-use crate::is_numeric;
+use crate::{
+  APPNAME,
+  is_numeric,
+  mediaserver_information::{
+    ConfigFileRaw,
+    ConfigFile,
+    ConfigFileUser,
+    getch
+  }
+};
 
 
 pub fn choose_config(server_kind: char, autologin: bool) -> Option<String> {
@@ -46,7 +55,7 @@ pub fn choose_config(server_kind: char, autologin: bool) -> Option<String> {
       }
     };
     if autologin {
-      return Some(file_list.get(0).unwrap().to_string())
+      return Some(file_list.first().unwrap().to_string())
     };
     let copy = file_list.clone();
     println!("Please choose which configuration file you want to use.");
@@ -56,9 +65,9 @@ pub fn choose_config(server_kind: char, autologin: bool) -> Option<String> {
     print!(": ");
     let index: usize;
     loop {
-      io::stdout().flush().expect("Failed to flush stdout");
+      stdout().flush().expect("Failed to flush stdout");
       let mut index_raw: String = String::new();
-      io::stdin().read_line(  &mut index_raw).unwrap();
+      stdin().read_line(  &mut index_raw).unwrap();
       index_raw.trim().parse::<String>().unwrap();
       if ! is_numeric(&index_raw) {
         print!("Invalid input, please try again.\n: ")
@@ -74,7 +83,7 @@ pub fn choose_config(server_kind: char, autologin: bool) -> Option<String> {
 
 
 pub fn read_config(config_path_string: &String, autologin: bool) -> Result<(ConfigFile, ConfigFileRaw), (Option<ConfigFileRaw>, &str)> {
-  let file = std::fs::read_to_string(config_path_string).unwrap();
+  let file = fs::read_to_string(config_path_string).unwrap();
   let local_config_file: Result<ConfigFileRaw, serde_json::Error> = serde_json::from_str::<ConfigFileRaw>(&file);
   match local_config_file {
     Ok(a) => {
@@ -106,7 +115,7 @@ pub fn read_config(config_path_string: &String, autologin: bool) -> Result<(Conf
       } else {
         print!("Do you want to use this config?\n   {} ({}): {}\n   Username: {}\n (Y)es / (N)o", server_name.green(), media_server_name, a.ipaddress, a.user.first().unwrap().username);
         let input = getch("YyNn");
-        io::stdout().flush().expect("Failed to flush stdout");
+        stdout().flush().expect("Failed to flush stdout");
         if "yY".contains(input) {
           user = a.user.first().unwrap();
           Ok((ConfigFile {
@@ -131,18 +140,18 @@ pub fn read_config(config_path_string: &String, autologin: bool) -> Result<(Conf
                 println!("  [{}] {}", &index, thing.username);
               }
               print!(": ");
-              io::stdout().flush().expect("Failed to flush stdout");
+              stdout().flush().expect("Failed to flush stdout");
               let index: usize;
               loop {
                 let mut index_raw: String = String::new();
-                io::stdin().read_line(  &mut index_raw).unwrap();
+                stdin().read_line(  &mut index_raw).unwrap();
                 index_raw.trim().parse::<String>().unwrap();
                 if ! is_numeric(&index_raw) {
                   if index_raw.trim() == "Add" {
                     return Err((Some(a), "add user"))
                   } else {
                     print!("Invalid input, please try again.\n: ");
-                    io::stdout().flush().expect("Failed to flush stdout");
+                    stdout().flush().expect("Failed to flush stdout");
                   }
                 } else {
                   index = index_raw.trim().parse().unwrap();
@@ -203,7 +212,7 @@ pub fn write_config(config_path_string: String, config_file: &ConfigFile, other_
       user: [config_file_user].to_vec()
     }
   };
-  let result = std::fs::write(config_path_string, serde_json::to_string_pretty(&config_file_raw).unwrap());
+  let result = fs::write(config_path_string, serde_json::to_string_pretty(&config_file_raw).unwrap());
   match result {
     Ok(()) => println!("Saved to config file ..."),
     Err(_e) => panic!("write access??")

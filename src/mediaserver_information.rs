@@ -1,24 +1,55 @@
 #![allow(non_snake_case)]
-extern crate getch;
-use std::char;
-use std::fs;
-use std::io;
-use std::io::prelude::*;
-use std::time::Duration;
-use std::net::UdpSocket;
-use std::str::from_utf8;
-use std::result::Result;
-use std::fmt::Debug;
+use std::{
+  char,
+  fmt::Debug,
+  fs,
+  io::{
+    stdout,
+    stdin
+  },
+  io::prelude::*,
+  net::UdpSocket,
+  result::Result,
+  time::Duration,
+  str::from_utf8,
+  process::exit,
+};
+use crossterm::{
+  event::{
+    KeyCode,
+    KeyEventKind,
+    Event,
+    KeyEvent,
+    KeyModifiers,
+    poll,
+    read
+  },
+  terminal::{
+    ClearType,
+    Clear,
+    disable_raw_mode,
+    enable_raw_mode
+  },
+  cursor::{
+    MoveToNextLine,
+    MoveToColumn,
+    EnableBlinking,
+    Show
+  },
+  execute
+};
+use isahc::{
+  Body,
+  Request,
+  Response,
+  prelude::*,
+  http::StatusCode
+};
 use uuid;
-use http::Response;
-use http::StatusCode;
 use colored::Colorize;
-use isahc::Body;
-use isahc::Request;
-use isahc::prelude::*;
-use rpassword::read_password;
 use serde_json::Value;
 use serde_derive::{Deserialize,Serialize};
+use rpassword::read_password;
 
 use crate::APPNAME;
 use crate::VERSION;
@@ -26,7 +57,7 @@ use crate::settings::Settings;
 use crate::config::*;
 
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct HeadDict {
   pub media_server_name: String,
   pub media_server: String,
@@ -73,42 +104,99 @@ pub struct UserLogin {
 }
 
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RequestHeader {
   pub application: String,
   pub token: String
 }
 
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AuthHeader {
   pub authorization: String,
 }
 
 
 pub fn getch(allowed: &str) -> char {
-  let output: char;
+  adv_getch(allowed, false, None, "").unwrap()
+}
+
+
+pub fn clear_stdin() {
+  enable_raw_mode().unwrap();
   loop {
-    print!("\n: ");
-    io::stdout().flush().expect("Failed to flush stdout");
-    let ch: char = getch::Getch::new().getch().unwrap() as char;
-    if allowed.contains(ch) {
-      if ch == '\n' {
-        println!("\n");
-      } else {
-        println!("{ch}\n");
+    if poll(Duration::from_millis(100)).unwrap() {
+      if let Ok(_) = read() {
+        continue;
       }
-      output = ch;
-      break
-    } else if ch == '\r' {
-      println!("\n");
-      output = '\n';
-      break
     } else {
-      print!("\nInvalid input, please try again.")
+      disable_raw_mode().unwrap();
+      return;
     }
   }
-  output
+}
+
+
+pub fn adv_getch(allowed: &str, any_key: bool, timeout_secs: Option<u64>, message: &str) -> Option<char> {
+  let mut stdout = stdout();
+  let mut timer = timeout_secs.map(|seconds| seconds * 2);
+
+  if let Some(time) = timer {
+    print!("\n{} [{}]: ", message, time / 2);
+  } else {
+    print!("\n{}: ", message);
+  }
+  stdout.flush().expect("Failed to flush stdout");
+
+  enable_raw_mode().unwrap();
+  execute!(stdout, EnableBlinking, Show).unwrap();
+
+  loop {
+    if poll(Duration::from_millis(500)).unwrap() {
+      if let Ok(event) = read() {
+        if let Event::Key(KeyEvent { code, modifiers, state: _, kind }) = event {
+          if modifiers == KeyModifiers::NONE && kind == KeyEventKind::Press && ! any_key {
+            for ch in allowed.chars() {
+              if code == KeyCode::Char(ch) {
+                disable_raw_mode().unwrap();
+                println!("{}\n", ch);
+                return Some(ch);
+              }
+            }
+            writeln!(stdout).unwrap();
+            execute!(stdout, MoveToNextLine(1)).unwrap();
+            writeln!(stdout, "Invalid input, please try again.").unwrap();
+            execute!(stdout, MoveToNextLine(1)).unwrap();
+            if let Some(time) = timer {
+              write!(stdout, "{} [{}]: ", message, time / 2).unwrap();
+            } else {
+              write!(stdout, "{}: ", message).unwrap();
+            }
+            stdout.flush().expect("Failed to flush stdout");
+          } else if modifiers == KeyModifiers::CONTROL && code == KeyCode::Char('c') {
+            write!(stdout, "^C").unwrap();
+            disable_raw_mode().unwrap();
+            exit(1);
+          } else if any_key && kind == KeyEventKind::Press {
+            disable_raw_mode().unwrap();
+            println!("\n");
+            return Some('_'); // this is a smiley
+          }
+        }
+      }
+    } else if let Some(time) = timer {
+      timer = Some(time - 1);
+      execute!(stdout, MoveToColumn(0)).unwrap();
+      execute!(stdout, Clear(ClearType::CurrentLine)).unwrap();
+      if timer == Some(0) {
+        disable_raw_mode().unwrap();
+        return None;
+      } else {
+        write!(stdout, "{} [{}]: ", message, time / 2).unwrap();
+        stdout.flush().expect("Failed to flush stdout");
+      }
+    }
+  }
 }
 
 
@@ -202,7 +290,7 @@ pub fn validate_settings(settings: &Settings) -> Option<HeadDict> {
           request_header = get_request_header(&file.access_token);
           session_id = res;
         } else if session_id_test == Err("exp".to_string()) {
-          println!("\nYour {media_server_name} session expired! Please re-login.");
+          println!("\nYour {media_server_name} session has expired! Please re-login.");
           let user_login = configure_new_login(media_server_name);
           let auth = test_auth(media_server_name, media_server, ipaddress, &auth_header, &user_login, &device_id);
           if let Some(pyld) = auth {
@@ -374,7 +462,7 @@ fn configure_new_server(media_server_name: &str) -> (String, String) {
     "who is JellyfinServer?"
   };
   println!("Searching for local media-server ...");
-  let socket:UdpSocket = UdpSocket::bind("0.0.0.0:0").expect("Failed to bind to network socket.");
+  let socket: UdpSocket = UdpSocket::bind("0.0.0.0:0").expect("Failed to bind to network socket.");
   socket.set_read_timeout(Some(Duration::new(5, 0))).expect("nothing");
   socket.set_broadcast(true).expect("errrrrrr");
   socket.send_to(&String::from(who_is).into_bytes(), "255.255.255.255:7359").expect("fdsfds");
@@ -394,14 +482,14 @@ fn configure_new_server(media_server_name: &str) -> (String, String) {
         },
         'N'|'n' => {
           print!("Please specify the IP-Address manually\n(don't forget to add ports if not running on 80/443!)\n: ");
-          io::stdout().flush().expect("Failed to flush stdout");
+          stdout().flush().expect("Failed to flush stdout");
           let mut ipaddress2 = String::new();
-          io::stdin().read_line(  &mut ipaddress2).unwrap();
+          stdin().read_line(  &mut ipaddress2).unwrap();
           ipaddress = ipaddress2.trim().parse().unwrap();
           print!("\nPlease enter a nickname for your media-server.\n(It's recommended to use a unique one)\n: ");
-          io::stdout().flush().expect("Failed to flush stdout");
+          stdout().flush().expect("Failed to flush stdout");
           server_name = String::new();
-          io::stdin().read_line(  &mut server_name).unwrap();
+          stdin().read_line(  &mut server_name).unwrap();
           server_name = server_name.trim().parse().unwrap();
         }
         _ => (),
@@ -409,14 +497,14 @@ fn configure_new_server(media_server_name: &str) -> (String, String) {
     },
     Err(_e) => {
       print!("Couldn't find any local media-server.\nIf your instance is running under a docker environment, configure the host network-option.\nOr just specify the IP-Address manually. (don't forget to add ports)\n: ");
-      io::stdout().flush().expect("Failed to flush stdout");
+      stdout().flush().expect("Failed to flush stdout");
       let mut ipaddress2 = String::new();
-      io::stdin().read_line(  &mut ipaddress2).unwrap();
+      stdin().read_line(  &mut ipaddress2).unwrap();
       ipaddress = ipaddress2.trim().parse().unwrap();
       print!("\nPlease enter a nickname for your media-server.\n(It's recommended to use a unique one)\n: ");
-      io::stdout().flush().expect("Failed to flush stdout");
+      stdout().flush().expect("Failed to flush stdout");
       server_name = String::new();
-      io::stdin().read_line(  &mut server_name).unwrap();
+      stdin().read_line(  &mut server_name).unwrap();
       server_name = server_name.trim().parse().unwrap();
     },
   }
@@ -448,10 +536,10 @@ fn configure_new_login(media_server_name: &str) -> UserLogin {
   fn take_input(media_server_name: &str) -> (String, String) {
     let mut username = String::new();
     print!("\nPlease enter your {media_server_name} username: ");
-    io::stdout().flush().expect("Failed to flush stdout");
-    io::stdin().read_line(  &mut username).unwrap();
+    stdout().flush().expect("Failed to flush stdout");
+    stdin().read_line(  &mut username).unwrap();
     print!("Please enter your {media_server_name} password (hidden): ");
-    io::stdout().flush().expect("Failed to flush stdout");
+    stdout().flush().expect("Failed to flush stdout");
     let password = read_password().unwrap();
     println!();
     (password.trim().parse().unwrap(), username.trim().parse().unwrap())
@@ -541,8 +629,8 @@ fn reauthenticate(media_server_name: &str, media_server: &str, ipaddress: &Strin
     Ok(mut t) => {
       let response_text: &String = &t.text().unwrap();
       if let Ok(re_auth_json) = serde_json::from_str::<Value>(response_text) {
-        println!("{}", "successful!".to_string().green());
         if let Some(id) = re_auth_json[0].get("Id") {
+          println!("{}", "successful!".to_string().green());
           Ok(id.to_string().replace('"', ""))
         } else {
           println!("{}", "error!".to_string().red());

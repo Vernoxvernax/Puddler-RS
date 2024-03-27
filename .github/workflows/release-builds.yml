@@ -1,6 +1,6 @@
 # GitHub Actions workflow to build artifacts and create releases on the "main" branch
 
-name: Create release
+name: Rust build
 
 on:
   push:
@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Install dependencies
       run: |
@@ -37,34 +37,15 @@ jobs:
         mv ./target/release/puddler puddler
         mv ./target/x86_64-pc-windows-gnu/release/puddler.exe puddler.exe
     
-    - name: Create release
-      uses: actions/create-release@v1
+    - name: Release
+      uses: softprops/action-gh-release@v1
       id: create_release
       env:
         GITHUB_TOKEN: ${{ github.token }}
       with:
         draft: false
         prerelease: false
-        release_name: ${{ steps.version.outputs.version }}
+        name: ${{ github.ref }}
         tag_name: ${{ github.ref }}
         body_path: RECENT_CHANGES.md
-
-    - name: Upload Linux build artifact
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ github.token }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: puddler
-        asset_name: puddler
-        asset_content_type: application/octet-stream
-    
-    - name: Upload Windows build artifact
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ github.token }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: puddler.exe
-        asset_name: puddler.exe
-        asset_content_type: application/octet-stream
+        files: puddler, puddler.exe
