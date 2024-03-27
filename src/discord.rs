@@ -31,7 +31,9 @@ impl DiscordClient {
     let discord_clone = Arc::clone(&self.discord_client);
     thread::spawn(move || {
       if let Ok(mut discord_client) = discord_clone.lock() {
-        discord_client.clear_activity().unwrap();
+        if let Ok(_) = discord_client.clear_activity() {
+          return;
+        }
       }
     });
   }
