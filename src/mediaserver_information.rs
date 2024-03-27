@@ -290,7 +290,7 @@ pub fn validate_settings(settings: &Settings) -> Option<HeadDict> {
           request_header = get_request_header(&file.access_token);
           session_id = res;
         } else if session_id_test == Err("exp".to_string()) {
-          println!("\nYour {media_server_name} session expired! Please re-login.");
+          println!("\nYour {media_server_name} session has expired! Please re-login.");
           let user_login = configure_new_login(media_server_name);
           let auth = test_auth(media_server_name, media_server, ipaddress, &auth_header, &user_login, &device_id);
           if let Some(pyld) = auth {
