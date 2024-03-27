@@ -1,6 +1,6 @@
 # GitHub Actions workflow to build artifacts and create releases on the "main" branch
 
-name: Create release
+name: Rust build
 
 on:
   push:
