@@ -573,8 +573,9 @@ fn mark_items(item_list: &[Item], indexes: Vec<u32>, played: bool, head_dict: &H
 
 fn series_play(item_list: &Vec<Item>, mut pick: i32, head_dict: &HeadDict, settings: &Settings) {
   let episode_amount: i32 = item_list.len().try_into().unwrap();
+  let mut item_list_copy = item_list.clone();
   'episode: loop {
-    let item = &mut item_list.get(pick as usize).unwrap().clone();
+    let item = &mut item_list_copy.get(pick as usize).unwrap().clone();
     let watched_full_item: bool = play(settings, head_dict, item);
     if ( pick + 2 ) > episode_amount { // +1 since episode_amount doesn't start at 0 AND +1 for next ep
       println!("\nYou've reached the end of your episode list. Returning to menu ...");
@@ -601,6 +602,7 @@ fn series_play(item_list: &Vec<Item>, mut pick: i32, head_dict: &HeadDict, setti
             match cont {
               'F' | 'f' => {
                 pick -= 1;
+                item_list_copy[pick as usize] = item.clone();
                 continue 'episode;
               },
               'M' | 'm' => {
