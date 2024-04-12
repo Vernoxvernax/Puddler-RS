@@ -83,12 +83,16 @@ pub fn choose_config(server_kind: char, autologin: bool) -> Option<String> {
 
 
 pub fn read_config(config_path_string: &String, autologin: bool) -> Result<(ConfigFile, ConfigFileRaw), (Option<ConfigFileRaw>, &str)> {
-  let file = fs::read_to_string(config_path_string).unwrap();
+  let file = if let Ok(file) = fs::read_to_string(config_path_string) {
+    file
+  } else {
+    return Err((None, "missing"));
+  };
   let local_config_file: Result<ConfigFileRaw, serde_json::Error> = serde_json::from_str::<ConfigFileRaw>(&file);
   match local_config_file {
     Ok(a) => {
       let user: &ConfigFileUser;
-      let media_server_name: &str = if a.emby {
+      let media_server_name: &str = if a.emby.unwrap() {
         "Emby"
       } else {
         "Jellyfin"
@@ -104,7 +108,7 @@ pub fn read_config(config_path_string: &String, autologin: bool) -> Result<(Conf
       };
       if autologin {
         Ok((ConfigFile {
-          emby: a.emby,
+          emby: a.emby.unwrap(),
           server_name: server_name.to_string(),
           ipaddress: a.ipaddress.clone(),
           device_id: a.device_id.clone(),
@@ -119,7 +123,7 @@ pub fn read_config(config_path_string: &String, autologin: bool) -> Result<(Conf
         if "yY".contains(input) {
           user = a.user.first().unwrap();
           Ok((ConfigFile {
-            emby: a.emby,
+            emby: a.emby.unwrap(),
             server_name: server_name.to_string(),
             ipaddress: a.ipaddress.clone(),
             device_id: a.device_id.clone(),
@@ -161,7 +165,7 @@ pub fn read_config(config_path_string: &String, autologin: bool) -> Result<(Conf
               println!();
               user = a.user.get(index).unwrap();
               Ok((ConfigFile {
-                emby: a.emby,
+                emby: a.emby.unwrap(),
                 server_name: server_name.to_string(),
                 ipaddress: a.ipaddress.clone(),
                 device_id: a.device_id.clone(),
@@ -199,14 +203,14 @@ pub fn write_config(config_path_string: String, config_file: &ConfigFile, other_
     let mut user_vec: Vec<ConfigFileUser> = [config_file_user].to_vec();
     user_vec.append(&mut other_users);
     ConfigFileRaw {
-      emby: config_file.emby,
+      emby: Some(config_file.emby),
       ipaddress: config_file.ipaddress.clone(),
       device_id: config_file.device_id.clone(),
       user: user_vec
     }
   } else {
     ConfigFileRaw {
-      emby: config_file.emby,
+      emby: Some(config_file.emby),
       ipaddress: config_file.ipaddress.clone(),
       device_id: config_file.device_id.clone(),
       user: [config_file_user].to_vec()

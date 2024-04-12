@@ -196,8 +196,7 @@ r"     ____            __    ____
         'e' | 'E' => {
           return ExitCode::SUCCESS;
         },
-        _ => (
-        )
+        _ => ()
       };
     } else {
       print!("  [1] Stream from either Emby or Jellyfin\n  [2] Change puddlers default settings\n  [3] Display current settings\n  [E] Exit puddler");
@@ -215,8 +214,7 @@ r"     ____            __    ____
         'e' | 'E' => {
           return ExitCode::SUCCESS;
         },
-        _ => (
-        )
+        _ => ()
       };
     }
   }

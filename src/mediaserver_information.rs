@@ -82,7 +82,7 @@ pub struct ConfigFile {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ConfigFileRaw {
-  pub emby: bool,
+  pub emby: Option<bool>,
   pub ipaddress: String,
   pub device_id: String,
   pub user: Vec<ConfigFileUser>
@@ -161,6 +161,10 @@ pub fn adv_getch(allowed: &str, any_key: bool, timeout_secs: Option<u64>, messag
                 disable_raw_mode().unwrap();
                 println!("{}\n", ch);
                 return Some(ch);
+              } else if ch == '\n' && code == KeyCode::Enter {
+                disable_raw_mode().unwrap();
+                println!("\n");
+                return Some(ch);
               }
             }
             writeln!(stdout).unwrap();
@@ -219,9 +223,13 @@ pub fn validate_settings(settings: &Settings) -> Option<HeadDict> {
           '2'
         }
       },
-      Err(_no) => {
-        print!("What kind of server do you want to stream from?\n   [1] Emby\n   [2] Jellyfin");
-        getch("12")
+      Err((_no, "missing")) => {
+        eprintln!("{}: The default config specified in \"Puddler.toml\" doesn't exist.", "Error".to_string().red());
+        return None;
+      },
+      _ => {
+        eprintln!("{}: Unkown error.", "Error".to_string().red());
+        return None;
       }
     }
   };
@@ -484,7 +492,7 @@ fn configure_new_server(media_server_name: &str) -> (String, String) {
           print!("Please specify the IP-Address manually\n(don't forget to add ports if not running on 80/443!)\n: ");
           stdout().flush().expect("Failed to flush stdout");
           let mut ipaddress2 = String::new();
-          stdin().read_line(  &mut ipaddress2).unwrap();
+          stdin().read_line(&mut ipaddress2).unwrap();
           ipaddress = ipaddress2.trim().parse().unwrap();
           print!("\nPlease enter a nickname for your media-server.\n(It's recommended to use a unique one)\n: ");
           stdout().flush().expect("Failed to flush stdout");
@@ -638,7 +646,7 @@ fn reauthenticate(media_server_name: &str, media_server: &str, ipaddress: &Strin
         }
       } else {
         println!("{}", "error!".to_string().red());
-        Err("This is not a valid emby/jellyfin webpage!".to_string())
+        Err("exp".to_string())
       }
     }
     Err(e) => {

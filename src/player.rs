@@ -323,6 +323,10 @@ pub fn play(settings: &Settings, head_dict: &HeadDict, item: &mut Item) -> bool 
   let total_runtime: f64 = if settings.transcoding {
     (item.RunTimeTicks.unwrap() as f64 - item.UserData.PlaybackPositionTicks as f64) / 10000000.0
   } else {
+    if item.RunTimeTicks.is_none() {
+      eprintln!("Item doesn't have a runtime?");
+      return false;
+    }
     item.RunTimeTicks.unwrap() as f64 / 10000000.0
   };
 
