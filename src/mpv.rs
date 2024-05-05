@@ -98,7 +98,7 @@ impl Player {
       }
     }
     self.video = Some(Video {
-      title: if item.r#type == "movie" { item.to_string_split() } else { item.to_string_split() },
+      title: item.to_string_split(),
       stream_url,
       id: item.ratingKey,
       video_type: if item.r#type == "movie" { VideoType::Movie } else { VideoType::Episode },
@@ -155,7 +155,7 @@ impl Player {
     }
     
     self.video = Some(Video {
-      title: if item.Type == "Movie" { vec![item.to_string()] } else { item.to_string_split() },
+      title: item.to_string_split(),
       stream_url,
       id: item.Id,
       video_type: if item.Type == "Movie" { VideoType::Movie } else { VideoType::Episode },
