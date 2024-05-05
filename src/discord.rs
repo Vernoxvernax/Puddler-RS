@@ -1,14 +1,11 @@
 use std::{thread, sync::{Arc, Mutex}};
 
-use crate::mediaserver_information;
 use discord_presence::Client;
-use mediaserver_information::HeadDict;
-
+use crate::media_config::MediaCenterType;
 
 pub struct DiscordClient {
   pub discord_client: Arc<Mutex<discord_presence::Client>>
 }
-
 
 impl DiscordClient {
   pub fn new() -> Self {
@@ -31,15 +28,13 @@ impl DiscordClient {
     let discord_clone = Arc::clone(&self.discord_client);
     thread::spawn(move || {
       if let Ok(mut discord_client) = discord_clone.lock() {
-        if let Ok(_) = discord_client.clear_activity() {
-          return;
-        }
+        if discord_client.clear_activity().is_ok() {}
       }
     });
   }
 
-  pub fn update_presence(&mut self, head_dict: &HeadDict, details: String, state: String, time_left: f64) {
-    let media_server_name = head_dict.media_server_name.to_lowercase().clone();
+  pub fn update_presence(&mut self, media_center_type: MediaCenterType, details: String, state: String, time_left: f64) {
+    let media_server_name = media_center_type.to_string().to_lowercase();
     let discord_clone = Arc::clone(&self.discord_client);
     thread::spawn(move || {
       if let Ok(mut discord_client) = discord_clone.lock() {
@@ -71,8 +66,8 @@ impl DiscordClient {
     });
   }
 
-  pub fn pause(&mut self, head_dict: &HeadDict, details: String, state: String) {
-    let media_server_name = head_dict.media_server_name.to_lowercase().clone();
+  pub fn pause(&mut self, media_center_type: MediaCenterType, details: String, state: String) {
+    let media_server_name = media_center_type.to_string().to_lowercase();
     let discord_clone = Arc::clone(&self.discord_client);
     thread::spawn(move || {
       if let Ok(mut discord_client) = discord_clone.lock() {
