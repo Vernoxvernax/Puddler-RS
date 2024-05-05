@@ -720,78 +720,82 @@ pub trait MediaCenter {
     while index < playlist.len() {
       let mut item = playlist[index].clone();
       let mut next_index = index + 1;
-      let mut options: Vec<InteractiveOption> = vec![];
       let mut streamable_item = item.clone();
       if let Ok(playback_info) = self.post_playbackinfo(&mut streamable_item, &mut transcoding_settings) {
         self.insert_value(MediaCenterValues::PlaybackInfo, serde_json::to_string(&playback_info).unwrap());
         self.update_player(&mut player);
         player.set_jellyfin_video(item.clone(), playback_info, server_address.clone(), auth_token.to_string(), player_settings);
         let ret = player.play();
-        execute!(stdout, DisableLineWrap).unwrap();
-        player_settings.0 = ret.preferred_audio_track;
-        player_settings.1 = ret.preferred_subtitle_track;
-        if !ret.played {
-          let url = format!("Users/{}/Items/{}", self.get_config_handle().get_active_user().unwrap().user_id, item.Id);
-          if let Ok(updated_item) = self.get_item(url) {
-            item = updated_item;
-          } else {
-            print_message(PrintMessageType::Error, format!("Failed to get updated information for {}.", item.to_string()).as_str())
+        'playback_done: loop {
+          let mut options: Vec<InteractiveOption> = vec![];
+          execute!(stdout, DisableLineWrap).unwrap();
+          player_settings.0 = ret.preferred_audio_track;
+          player_settings.1 = ret.preferred_subtitle_track;
+          if !ret.played {
+            let url = format!("Users/{}/Items/{}", self.get_config_handle().get_active_user().unwrap().user_id, item.Id);
+            if let Ok(updated_item) = self.get_item(url) {
+              item = updated_item;
+            } else {
+              print_message(PrintMessageType::Error, format!("Failed to get updated information for {}.", item.to_string()).as_str())
+            }
+            options.append(&mut vec![
+              InteractiveOption {
+                text: format!("Finish: {}", item.to_string_full()),
+                option_type: InteractiveOptionType::Button
+              },
+              InteractiveOption {
+                text: format!("Mark as played: {}", item.to_string_full()),
+                option_type: InteractiveOptionType::Button
+              }
+            ]);
+          }
+          while let Some(next_item) = playlist.get(index+1) {
+                 // skip every item that has been played already
+                 // (might want to use unmark in the menu before watching a series again)
+            if !next_item.UserData.Played {
+              options.push(InteractiveOption {
+                text: format!("Continue with: {}", next_item.to_string()),
+                option_type: InteractiveOptionType::Button5s
+              });
+              break;
+            }
+            next_index += 1;
           }
           options.append(&mut vec![
             InteractiveOption {
-              text: format!("Finish: {}", item.to_string_full()),
-              option_type: InteractiveOptionType::Button
+              text: "Back to Menu".to_string(),
+              option_type: InteractiveOptionType::Special
             },
             InteractiveOption {
-              text: format!("Mark as played: {}", item.to_string_full()),
-              option_type: InteractiveOptionType::Button
-            }
+              text: "Exit Application".to_string(),
+              option_type: InteractiveOptionType::Special
+            },
           ]);
-        }
-        while let Some(next_item) = playlist.get(index+1) {
-               // skip every item that has been played already
-               // (might want to use unmark in the menu before watching a series again)
-          if !next_item.UserData.Played {
-            options.push(InteractiveOption {
-              text: format!("Continue with: {}", next_item.to_string()),
-              option_type: InteractiveOptionType::Button5s
-            });
-            break;
+          match interactive_select(options) {
+            ((_, _), Some(text), InteractiveOptionType::Button) => {
+              if text.starts_with("Finish") {
+                transcoding_settings.as_mut().unwrap().0 = true;
+                break 'playback_done;
+              } else if text.starts_with("Mark") {
+                self.item_set_playstate(item.Id.clone(), true);
+                continue 'playback_done;
+              } else if text.starts_with("Continue") {
+                index = next_index;
+                break 'playback_done;
+              }
+            },
+            ((_, _), Some(text), InteractiveOptionType::Special) => {
+              match text.as_str() {
+                "Back to Menu" => {
+                  return;
+                },
+                _ => exit(0)
+              }
+            },
+            _ => ()
           }
-          next_index += 1;
+          execute!(stdout, EnableLineWrap).unwrap();
         }
-        options.append(&mut vec![
-          InteractiveOption {
-            text: "Back to Menu".to_string(),
-            option_type: InteractiveOptionType::Special
-          },
-          InteractiveOption {
-            text: "Exit Application".to_string(),
-            option_type: InteractiveOptionType::Special
-          },
-        ]);
-        match interactive_select(options) {
-          ((_, _), Some(text), InteractiveOptionType::Button) => {
-            if text.starts_with("Finish") {
-              transcoding_settings.as_mut().unwrap().0 = true;
-              continue;
-            } else if text.starts_with("Mark") {
-              self.item_set_playstate(item.Id.clone(), true);
-            } else if text.starts_with("Continue") {
-              index = next_index;
-            }
-          },
-          ((_, _), Some(text), InteractiveOptionType::Special) => {
-            match text.as_str() {
-              "Back to Menu" => {
-                return;
-              },
-              _ => exit(0)
-            }
-          },
-          _ => ()
-        }
-        execute!(stdout, EnableLineWrap).unwrap();
       }
     }
   }
