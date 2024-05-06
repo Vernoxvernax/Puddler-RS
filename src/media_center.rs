@@ -788,9 +788,13 @@ pub trait MediaCenter {
             ((_, _), Some(text), InteractiveOptionType::Special) => {
               match text.as_str() {
                 "Back to Menu" => {
+                  execute!(stdout, EnableLineWrap).unwrap();
                   return;
                 },
-                _ => exit(0)
+                _ => {
+                  execute!(stdout, EnableLineWrap).unwrap();
+                  exit(0)
+                }
               }
             },
             _ => ()
