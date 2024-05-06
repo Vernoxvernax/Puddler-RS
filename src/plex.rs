@@ -542,10 +542,11 @@ impl MediaCenter for PlexServer {
   ) -> bool {
     let playback_info = self.get_plex_playback_info();
     let mut time_position = (time_pos * 1000.0).round() as u64;
-    let time_as_secs = time_pos / 1000.0;
+    let mut time_as_secs = time_pos / 1000.0;
 
     if self.get_config_handle().config.transcoding {
-      time_position += playbackpositionticks;
+      time_position += playbackpositionticks * 1000;
+      time_as_secs += playbackpositionticks as f64;
     };
 
     let mut url = ":/timeline".to_string();
@@ -685,7 +686,7 @@ impl PlexServer {
         if self.create_transcoding_info(&mut streamable_item, &mut transcoding_settings).is_ok() {
           self.insert_value(MediaCenterValues::PlaybackInfo, serde_json::to_string(&streamable_item).unwrap());
           self.update_player(&mut player);
-          player.set_plex_video(item.clone(), server_address.clone(), auth.clone(), player_settings);
+          player.set_plex_video(streamable_item, server_address.clone(), auth.clone(), player_settings);
           let ret = player.play();
           'playback_done: loop {
             let mut options: Vec<InteractiveOption> = vec![];

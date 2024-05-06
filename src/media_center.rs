@@ -725,7 +725,7 @@ pub trait MediaCenter {
       if let Ok(playback_info) = self.post_playbackinfo(&mut streamable_item, &mut transcoding_settings) {
         self.insert_value(MediaCenterValues::PlaybackInfo, serde_json::to_string(&playback_info).unwrap());
         self.update_player(&mut player);
-        player.set_jellyfin_video(item.clone(), playback_info, server_address.clone(), auth_token.to_string(), player_settings);
+        player.set_jellyfin_video(streamable_item, playback_info, server_address.clone(), auth_token.to_string(), player_settings);
         let ret = player.play();
         'playback_done: loop {
           let mut options: Vec<InteractiveOption> = vec![];
@@ -1358,17 +1358,18 @@ pub trait MediaCenter {
   ) -> bool {
     let playback_info = self.get_playback_info();
     let mut time_position = (time_pos * 10000000.0).round() as u64;
-    let time_as_secs = time_pos / 10000000.0;
+    let mut time_as_secs = time_pos;
     let session_id = self.get_session_id().expect("This shouldn't be a None!");
     let user = self.get_config_handle().get_active_user().unwrap();
 
     if self.get_config_handle().config.transcoding {
-      time_position += playbackpositionticks;
+      time_position += playbackpositionticks * 10000000;
+      time_as_secs += playbackpositionticks as f64
     };
 
     let finished_obj: PlaybackStopInfo;
     let success_message: String;
-    let difference = (((total_runtime  * 10000000) as f64) - time_position as f64) / ((total_runtime * 10000000) as f64);
+    let difference = (((total_runtime * 10000000) as f64) - time_position as f64) / ((total_runtime * 10000000) as f64);
     if difference < 0.15 { // watched more than 75%
       let url = format!("Users/{}/PlayedItems/{}", user.user_id, item_id);
       match self.post(url, String::new()) {
