@@ -882,98 +882,6 @@ pub trait MediaCenter {
       execute!(stdout, RestorePosition, Clear(ClearType::FromCursorDown)).unwrap();
       disable_raw_mode().unwrap();
 
-      let mut audio_track_index: u32 = 0;
-      let mut subtitle_track_index: u32 = 0;
-      let mut media_source_id: String = String::new();
-      if let Some(media_sources) = item.clone().MediaSources {
-        println!();
-        for media_source in media_sources {
-          if !media_source.SupportsTranscoding {
-            print_message(PrintMessageType::Error, format!("MediaSource \"{}\" does not support transcoding. Trying next ...", media_source.Id).as_str());
-            continue;
-          }
-          let mut audio_tracks: Vec<MediaStream> = vec![];
-          let mut subtitle_tracks: Vec<MediaStream> = vec![];
-          for media_stream in media_source.MediaStreams {
-            match media_stream.Type.as_str() {
-              "Audio" => audio_tracks.push(media_stream),
-              "Subtitle" => subtitle_tracks.push(media_stream),
-              _ => ()
-            }
-          }
-          if audio_tracks.len() > 1 {
-            let mut skip = false;
-            if let Some((_, selection, _, _)) = previous_settings {
-              for track in audio_tracks.clone() {
-                if track.Index == *selection {
-                  skip = true;
-                  audio_track_index = *selection;
-                  break;
-                }
-              }
-            }
-            if !skip {
-              let mut options: Vec<InteractiveOption> = vec![
-                InteractiveOption {
-                  text: "Please choose which audio track to use:".to_string(),
-                  option_type: InteractiveOptionType::Header
-                }
-              ];
-              for track in audio_tracks.clone() {
-                options.push(InteractiveOption {
-                  text: track.to_string(),
-                  option_type: InteractiveOptionType::Button
-                });
-              }
-              if let ((ind, _), _, InteractiveOptionType::Button) = interactive_select(options) {
-                audio_track_index = audio_tracks[ind].Index;
-              }
-            }
-          }
-          if subtitle_tracks.len() > 1 {
-            let mut skip = false;
-            if let Some((_, _, selection, _)) = previous_settings {
-              for track in subtitle_tracks.clone() {
-                if track.Index == *selection {
-                  skip = true;
-                  subtitle_track_index = *selection;
-                  break;
-                }
-              }
-            }
-            if !skip {
-              let mut options: Vec<InteractiveOption> = vec![
-                InteractiveOption {
-                  text: "Please choose which subtitle track to use:".to_string(),
-                  option_type: InteractiveOptionType::Header
-                }
-              ];
-              for track in subtitle_tracks.clone() {
-                options.push(InteractiveOption {
-                  text: track.to_string(),
-                  option_type: InteractiveOptionType::Button
-                });
-              }
-              if let ((ind, _), _, InteractiveOptionType::Button) = interactive_select(options) {
-                subtitle_track_index = subtitle_tracks[ind].Index;
-              }
-            }
-          }
-          media_source_id = media_source.Id;
-          break;
-        }
-      } else {
-        panic!("This item has not media information. Forgot the \"MediaSources\" field?");
-      }
-
-      if media_source_id.is_empty() {
-        panic!("This item doesn't have any media information??");
-      }
-
-      enable_raw_mode().unwrap();
-      execute!(stdout, RestorePosition, Clear(ClearType::FromCursorDown)).unwrap();
-      disable_raw_mode().unwrap();
-
       let mut mbps: String = String::new();
       if let Some((_, _, _, speed)) = previous_settings {
         mbps = (*speed.clone()).to_string();
@@ -994,6 +902,81 @@ pub trait MediaCenter {
       execute!(stdout, RestorePosition, MoveToColumn(0), Clear(ClearType::FromCursorDown), EnterAlternateScreen).unwrap();
       disable_raw_mode().unwrap();
 
+      let mut audio_track_index: u32 = 0;
+      let mut subtitle_track_index: u32 = 0;
+      println!();
+      let media_source = &mediasource_list[mediasource_index];
+      if !media_source.SupportsTranscoding {
+        print_message(PrintMessageType::Error, format!("MediaSource \"{}\" does not support transcoding. Trying next ...", media_source.Id).as_str());
+        exit(1);
+      }
+      let mut audio_tracks: Vec<MediaStream> = vec![];
+      let mut subtitle_tracks: Vec<MediaStream> = vec![];
+      for media_stream in media_source.MediaStreams.clone() {
+        match media_stream.Type.as_str() {
+          "Audio" => audio_tracks.push(media_stream),
+          "Subtitle" => subtitle_tracks.push(media_stream),
+          _ => ()
+        }
+      }
+      if audio_tracks.len() > 1 {
+        let mut skip = false;
+        if let Some((_, selection, _, _)) = previous_settings {
+          for track in audio_tracks.clone() {
+            if track.Index == *selection {
+              skip = true;
+              audio_track_index = *selection;
+              break;
+            }
+          }
+        }
+        if !skip {
+          let mut options: Vec<InteractiveOption> = vec![
+            InteractiveOption {
+              text: "Please choose which audio track to use:".to_string(),
+              option_type: InteractiveOptionType::Header
+            }
+          ];
+          for track in audio_tracks.clone() {
+            options.push(InteractiveOption {
+              text: track.to_string(),
+              option_type: InteractiveOptionType::Button
+            });
+          }
+          if let ((ind, _), _, InteractiveOptionType::Button) = interactive_select(options) {
+            audio_track_index = audio_tracks[ind].Index;
+          }
+        }
+      }
+      if subtitle_tracks.len() > 1 {
+        let mut skip = false;
+        if let Some((_, _, selection, _)) = previous_settings {
+          for track in subtitle_tracks.clone() {
+            if track.Index == *selection {
+              skip = true;
+              subtitle_track_index = *selection;
+              break;
+            }
+          }
+        }
+        if !skip {
+          let mut options: Vec<InteractiveOption> = vec![
+            InteractiveOption {
+              text: "Please choose which subtitle track to use:".to_string(),
+              option_type: InteractiveOptionType::Header
+            }
+          ];
+          for track in subtitle_tracks.clone() {
+            options.push(InteractiveOption {
+              text: track.to_string(),
+              option_type: InteractiveOptionType::Button
+            });
+          }
+          if let ((ind, _), _, InteractiveOptionType::Button) = interactive_select(options) {
+            subtitle_track_index = subtitle_tracks[ind].Index;
+          }
+        }
+      }
 
       *previous_settings = Some((false, audio_track_index, subtitle_track_index, mbps.clone()));
 
@@ -1019,7 +1002,7 @@ pub trait MediaCenter {
         DeviceProfile: DeviceProfile {
           Name: APPNAME.to_string(),
           Id: handle.get_device_id().clone(),
-          MaxStaticMusicBitrate: 9999999999999,
+          MaxStaticMusicBitrate: 999999999,
           MaxStreamingBitrate: bitrate,
           SupportedMediaTypes: "Video".to_string(),
           TranscodingProfiles: [

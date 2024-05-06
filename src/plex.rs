@@ -869,81 +869,76 @@ impl PlexServer {
       
       let mut audio_tracks: Vec<PlexStream> = vec![];
       let mut subtitle_tracks: Vec<PlexStream> = vec![];
-
-      if let Some(mediaFiles) = item.clone().Media {
-        println!();
-        let media = &mediaFiles[media_file_index];
-        if let Some(stream) = &media.Part[0].Stream {
-          for media_stream in stream {
-            match media_stream.streamType {
-              2 => audio_tracks.push(media_stream.clone()),
-              3 => subtitle_tracks.push(media_stream.clone()),
-              _ => ()
-            }
-          }
-        } else {
-          panic!("Did item doesn't have any streams?? That's weird.");
-        }
-        if audio_tracks.len() > 1 {
-          let mut skip = false;
-          if let Some((_, selection, _, _)) = previous_settings {
-            for track in audio_tracks.clone() {
-              if track.index == Some(*selection) {
-                skip = true;
-                audio_track_index = *selection;
-                break;
-              }
-            }
-          }
-          if !skip {
-            let mut options: Vec<InteractiveOption> = vec![
-              InteractiveOption {
-                text: "Please choose which audio track to use:".to_string(),
-                option_type: InteractiveOptionType::Header
-              }
-            ];
-            for track in audio_tracks.clone() {
-              options.push(InteractiveOption {
-                text: track.to_string(),
-                option_type: InteractiveOptionType::Button
-              });
-            }
-            if let ((ind, _), _, InteractiveOptionType::Button) = interactive_select(options) {
-              audio_track_index = ind as u32;
-            }
-          }
-        }
-        if subtitle_tracks.len() > 1 {
-          let mut skip = false;
-          if let Some((_, _, selection, _)) = previous_settings {
-            for track in subtitle_tracks.clone() {
-              if track.index == Some(*selection) {
-                skip = true;
-                subtitle_track_index = *selection;
-                break;
-              }
-            }
-          }
-          if !skip {
-            let mut options: Vec<InteractiveOption> = vec![
-              InteractiveOption {
-                text: "Please choose which subtitle track to use:".to_string(),
-                option_type: InteractiveOptionType::Header
-              }
-            ];
-            for track in subtitle_tracks.clone() {
-              options.push(InteractiveOption {
-                text: track.to_string(),
-                option_type: InteractiveOptionType::Button
-              });
-            }
-            if let ((ind, _), _, InteractiveOptionType::Button) = interactive_select(options) {
-              subtitle_track_index = ind as u32;
-            }
+      println!();
+      let media = &media_file_list[media_file_index];
+      if let Some(stream) = &media.Part[0].Stream {
+        for media_stream in stream {
+          match media_stream.streamType {
+            2 => audio_tracks.push(media_stream.clone()),
+            3 => subtitle_tracks.push(media_stream.clone()),
+            _ => ()
           }
         }
       } else {
-        panic!("This item has not media information. Forgot the \"MediaSources\" field?");
+        panic!("Did item doesn't have any streams?? That's weird.");
+      }
+      if audio_tracks.len() > 1 {
+        let mut skip = false;
+        if let Some((_, selection, _, _)) = previous_settings {
+          for track in audio_tracks.clone() {
+            if track.index == Some(*selection) {
+              skip = true;
+              audio_track_index = *selection;
+              break;
+            }
+          }
+        }
+        if !skip {
+          let mut options: Vec<InteractiveOption> = vec![
+            InteractiveOption {
+              text: "Please choose which audio track to use:".to_string(),
+              option_type: InteractiveOptionType::Header
+            }
+          ];
+          for track in audio_tracks.clone() {
+            options.push(InteractiveOption {
+              text: track.to_string(),
+              option_type: InteractiveOptionType::Button
+            });
+          }
+          if let ((ind, _), _, InteractiveOptionType::Button) = interactive_select(options) {
+            audio_track_index = ind as u32;
+          }
+        }
+      }
+      if subtitle_tracks.len() > 1 {
+        let mut skip = false;
+        if let Some((_, _, selection, _)) = previous_settings {
+          for track in subtitle_tracks.clone() {
+            if track.index == Some(*selection) {
+              skip = true;
+              subtitle_track_index = *selection;
+              break;
+            }
+          }
+        }
+        if !skip {
+          let mut options: Vec<InteractiveOption> = vec![
+            InteractiveOption {
+              text: "Please choose which subtitle track to use:".to_string(),
+              option_type: InteractiveOptionType::Header
+            }
+          ];
+          for track in subtitle_tracks.clone() {
+            options.push(InteractiveOption {
+              text: track.to_string(),
+              option_type: InteractiveOptionType::Button
+            });
+          }
+          if let ((ind, _), _, InteractiveOptionType::Button) = interactive_select(options) {
+            subtitle_track_index = ind as u32;
+          }
+        }
       }
   
       let mut selected_tracks = format!("library/parts/{}?allParts=1", media_part_id);
@@ -963,7 +958,6 @@ impl PlexServer {
       execute!(stdout, RestorePosition, MoveToColumn(0), Clear(ClearType::FromCursorDown), LeaveAlternateScreen).unwrap();
       disable_raw_mode().unwrap();
     }
-
 
     *previous_settings = Some((false, audio_track_index, subtitle_track_index, mbps.clone()));
 
