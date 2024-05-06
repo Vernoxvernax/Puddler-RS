@@ -166,7 +166,7 @@ impl IsNumeric for str {
       return false;
     }
     for ch in self.chars() {
-      if ch.is_ascii_digit() {
+      if !ch.is_ascii_digit() {
         return false;
       }
     }
