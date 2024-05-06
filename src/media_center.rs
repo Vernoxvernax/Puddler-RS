@@ -51,6 +51,7 @@ pub struct Item {
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct MediaSourceInfo {
   pub Id: String,
+  pub Path: String,
   pub SupportsTranscoding: bool,
   pub MediaStreams: Vec<MediaStream>,
   pub Bitrate: Option<u64>,
@@ -805,9 +806,36 @@ pub trait MediaCenter {
   fn post_playbackinfo(&mut self, item: &mut Item, previous_settings: &mut Option<(bool, u32, u32, String)>) -> Result<PlaybackInfo, ()> {
     let handle = self.get_config_handle();
     let user_id = handle.get_active_user().unwrap().user_id;
+    let mut stdout = stdout();
+    execute!(stdout, SavePosition).unwrap();
+
+    let mut mediasource_index = 0;
+    let mediasource_list: Vec<MediaSourceInfo> = if let Some(mediasources) = &item.MediaSources {
+      mediasources.to_vec()
+    } else {
+      return Err(());
+    };
+
+    // This is the only setting which isn't saved across the playlist. Don't really see the point in that tbh.
+    if mediasource_list.len() > 1 {
+      let mut options: Vec<InteractiveOption> = vec![InteractiveOption {
+        text: "\nPlease select from the following files:".to_string(),
+        option_type: InteractiveOptionType::Header
+      }];
+      for mediasource in mediasource_list.clone() {
+        options.push(InteractiveOption {
+          text: mediasource.Path.split_terminator('/').last().unwrap().to_string(),
+          option_type: InteractiveOptionType::Button
+        });
+      }
+      let ((index, _), ..) = interactive_select(options);
+      mediasource_index = index;
+      enable_raw_mode().unwrap();
+      execute!(stdout, RestorePosition, MoveToColumn(0), Clear(ClearType::FromCursorDown)).unwrap();
+      disable_raw_mode().unwrap();
+    }
+
     if handle.config.transcoding {
-      let mut stdout = stdout();
-      execute!(stdout, SavePosition).unwrap();
       let time = (item.UserData.PlaybackPositionTicks as f64) / 10000000.0;
       let formated: String = if time > 60.0 {
         if (time / 60.0) > 60.0 {
@@ -978,7 +1006,7 @@ pub trait MediaCenter {
       let session_capabilities: SessionCapabilities = SessionCapabilities {
         UserId: user_id.clone(),
         StartTimeTicks: item.UserData.PlaybackPositionTicks,
-        MediaSourceId: media_source_id,
+        MediaSourceId: mediasource_list[mediasource_index].Id.clone(),
         AudioStreamIndex: audio_track_index,
         SubtitleStreamIndex: subtitle_track_index,
         MaxStaticBitrate: bitrate,
