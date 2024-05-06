@@ -816,8 +816,8 @@ impl PlexServer {
       } else {
         time.to_string()
       };
-      if time != 0.0 && !previous_settings.clone().unwrap_or((false, 0, 0, String::new())).0 {
-        print!("\nDo you want to continue at: {}?\n  (Y)es | (N)o", formated.cyan().bold());
+      if !previous_settings.clone().unwrap_or((false, 0, 0, String::new())).0 {
+        print!("\nDo you want to start at: {}?\n  (Y)es | (N)o", formated.cyan().bold());
         match getch("YyNn") {
           'N' | 'n' => {
             print!("Please enter a playback position in minutes: ");
