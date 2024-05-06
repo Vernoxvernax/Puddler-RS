@@ -1,5 +1,5 @@
 use crate::{emby::EmbyServer, input::{hidden_string_input, interactive_select, jelly_series_select, take_string_input, InteractiveOption, InteractiveOptionType, SeriesOptions}, jellyfin::JellyfinServer, media_config::{Config, MediaCenterType, Objective, UserConfig}, mpv::Player, plex::PlexServer, printing::{print_message, PrintMessageType}, puddler_settings::PuddlerSettings, APPNAME, VERSION};
-use crossterm::{cursor::{EnableBlinking, Hide, MoveToColumn, RestorePosition, SavePosition, Show}, event::{poll, read, Event, KeyCode, KeyEvent, KeyModifiers}, execute, style::Stylize, terminal::{self, disable_raw_mode, enable_raw_mode, Clear, ClearType, DisableLineWrap, EnableLineWrap}};
+use crossterm::{cursor::{EnableBlinking, Hide, MoveToColumn, RestorePosition, SavePosition, Show}, event::{poll, read, Event, KeyCode, KeyEvent, KeyModifiers}, execute, style::Stylize, terminal::{self, disable_raw_mode, enable_raw_mode, Clear, ClearType, DisableLineWrap, EnableLineWrap, EnterAlternateScreen, LeaveAlternateScreen}};
 use isahc::{config::Configurable, http::StatusCode, Body, ReadResponseExt, Request, RequestExt, Response};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -961,11 +961,16 @@ pub trait MediaCenter {
           }
         };
       }
+      
+      enable_raw_mode().unwrap();
+      execute!(stdout, RestorePosition, MoveToColumn(0), Clear(ClearType::FromCursorDown), EnterAlternateScreen).unwrap();
+      disable_raw_mode().unwrap();
+
 
       *previous_settings = Some((false, audio_track_index, subtitle_track_index, mbps.clone()));
 
       enable_raw_mode().unwrap();
-      execute!(stdout, RestorePosition, Clear(ClearType::FromCursorDown)).unwrap();
+      execute!(stdout, RestorePosition, MoveToColumn(0), Clear(ClearType::FromCursorDown), LeaveAlternateScreen).unwrap();
       disable_raw_mode().unwrap();
 
       let bitrate = mbps.trim().parse::<u64>().unwrap() * 1000000;
