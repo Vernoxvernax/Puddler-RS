@@ -1653,10 +1653,20 @@ pub trait MediaCenter {
           let session_id = session_obj["Id"].as_str().unwrap().to_string();
           self.insert_value(MediaCenterValues::SessionID, session_id);
           break;
-        },
-        Err(_) => {
+        }
+        Err(e) => {
           println!("{}", "𐄂".red());
-          print_message(PrintMessageType::Error, "Login failed! Please try again.");
+          match e.as_str() {
+            "Failed to send request" => {
+              print_message(PrintMessageType::Error, "Failed to send login request.");
+              let config = self.get_config_handle();
+              config.ask_for_setting(Objective::ServerName);
+              config.ask_for_setting(Objective::Address);
+            },
+            _ => {
+              print_message(PrintMessageType::Error, "Login failed! Please try again.");
+            }
+          }
         }
       }
     }
@@ -1792,9 +1802,13 @@ pub trait MediaCenter {
       builder = builder.header(String::from("X-Application"), request_headers.clone().0);
       builder = builder.header(String::from("X-Emby-Token"), request_headers.clone().1);
     }
-    let mut request = builder.header("Content-Type", "application/json")
+    let mut request = if let Ok(request_) = builder.header("Content-Type", "application/json")
       .body(body).unwrap()
-    .send().unwrap();
+    .send() {
+      request_
+    } else {
+      return Err("Failed to send request".to_string());
+    };
     match request.status() {
       StatusCode::OK | StatusCode::NO_CONTENT => {
         Ok(request)
