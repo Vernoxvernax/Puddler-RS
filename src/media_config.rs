@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 use std::{
-  fmt::Debug, fs, path::Path, result::Result
+  fmt::Debug, fs, path::{Path, PathBuf}, result::Result
 };
 use serde_json::Value;
 use serde_derive::{Deserialize,Serialize};
@@ -75,6 +75,18 @@ pub enum Objective {
   User
 }
 
+pub fn get_mediacenter_folder() -> PathBuf {
+  let config_path = dirs::config_dir().unwrap();
+  let mut media_center_path = format!("{}/{}/media-center", &config_path.display().to_string(), APPNAME.to_lowercase());
+  if cfg!(windows) {
+    media_center_path = media_center_path.replace('/', "\\");
+  }
+  if !Path::new(&media_center_path).exists() {
+    fs::create_dir_all(media_center_path.clone()).unwrap();
+  }
+  PathBuf::from(media_center_path)
+}
+
 impl Config {
   pub fn default() -> Self {
     Config {
@@ -90,12 +102,8 @@ impl Config {
 
   pub fn new(&mut self) -> Result<Vec<Config>, MediaCenterConfigError> {
     let mut files: Vec<Config> = vec![];
-    let config_path = dirs::config_dir().unwrap();
-    let settings_path_string = format!("{}/{}/media-center", &config_path.display().to_string(), APPNAME.to_lowercase());
-    if !Path::new(&settings_path_string).exists() || fs::read_dir(settings_path_string.clone()).unwrap().count() == 0 {
-      if !Path::new(&settings_path_string).exists() {
-        fs::create_dir(settings_path_string).unwrap();
-      }
+    let media_center_folder = get_mediacenter_folder();
+    if fs::read_dir(media_center_folder.clone()).unwrap().count() == 0 {
       print_message(PrintMessageType::Warning, "No media center configuration found. Creating new config...");
       self.ask_for_setting(Objective::MediaCenterType);
       match self.config.media_center_type {
@@ -104,7 +112,7 @@ impl Config {
       }
       self.save();
     } else {
-      for file in fs::read_dir(settings_path_string).unwrap() {
+      for file in fs::read_dir(media_center_folder).unwrap() {
         let file_path = file.unwrap().path().display().to_string();
         if !file_path.ends_with(".json") {
           continue;

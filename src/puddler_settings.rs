@@ -5,11 +5,11 @@ use config::{Config, File};
 use std::{
   fs,
   io::prelude::*,
-  path::Path
+  path::{Path, PathBuf}
 };
 use serde_derive::{Deserialize,Serialize};
 
-use crate::{error::PuddlerSettingsError, input::{getch, take_string_input}, printing::print_message, APPNAME};
+use crate::{error::PuddlerSettingsError, input::{getch, take_string_input}, media_config::get_mediacenter_folder, printing::print_message, APPNAME};
 use crate::printing::PrintMessageType;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,73 +62,69 @@ impl PuddlerSettingType {
   }
 }
 
+pub fn get_config_path() -> PathBuf {
+  let config_path = dirs::config_dir().unwrap();
+  let mut config_file_path = format!("{}/{}/{}.toml", &config_path.display().to_string(), APPNAME.to_lowercase(), APPNAME);
+  if cfg!(windows) {
+    config_file_path = config_file_path.replace('/', "\\");
+  }
+  if !Path::new(&config_path).exists() {
+    fs::create_dir(config_path.clone()).unwrap();
+  }
+  PathBuf::from(config_file_path)
+}
+
 impl PuddlerSettings {
   pub fn new() -> Result<Self, PuddlerSettingsError> {
-    let config_path = dirs::config_dir().unwrap();
-    let settings_path_string = format!("{}/{}/{}.toml", &config_path.display().to_string(), APPNAME.to_lowercase(), APPNAME);
-    let config_files_dir_str = &(config_path.to_str().unwrap().to_owned()+"/media-center");
-    let config_files_dir = Path::new(config_files_dir_str);
-    if Path::new(&format!("{}/{}", &config_path.display().to_string(), APPNAME.to_lowercase())).exists() {
-      if !config_files_dir.exists() {
-        fs::create_dir_all(config_files_dir).unwrap();
-      }
-      if Path::new(&settings_path_string).is_file() {
-        loop {
-          let settings_file_raw = Config::builder().add_source(File::from(Path::new(&settings_path_string))).build().unwrap();
-          let serialized = settings_file_raw.try_deserialize::<PuddlerSettings>();
-          match serialized {
-            Ok(settings) => {
-              return Ok(settings);
-            },
-            Err(e) => {
-              if e.to_string().contains("missing field") {
-                print_message(PrintMessageType::Warning, "Settings file is corrupt. Attempting to fix it ...");
-                let mut settings_file = fs::OpenOptions::new().append(true).open(&settings_path_string).unwrap();
-                match &e.to_string()[e.to_string().find('`').unwrap() + 1..e.to_string().len() - 1] {
-                  "discord_presence" => {
-                    let discord_presence = Self::ask_for_setting(PuddlerSettingType::DiscordPresence).discord_presence;
-                    writeln!(settings_file, "discord_presence = {discord_presence}").unwrap();
-                    continue;
-                  },
-                  "fullscreen" => {
-                    let fullscreen = Self::ask_for_setting(PuddlerSettingType::Fullscreen).fullscreen;
-                    writeln!(settings_file, "fullscreen = {fullscreen}").unwrap();
-                    continue;
-                  },
-                  "gpu" => {
-                    let gpu = Self::ask_for_setting(PuddlerSettingType::GPU).gpu;
-                    writeln!(settings_file, "gpu = {gpu}").unwrap();
-                    continue;
-                  },
-                  "glsl_shaders" => {
-                    let glsl_shaders = Self::ask_for_setting(PuddlerSettingType::GLSL_Shaders).glsl_shaders;
-                    writeln!(settings_file, "glsl_shaders = {glsl_shaders:?}").unwrap();
-                    continue;
-                  },
-                  "mpv_debug_log" => {
-                    let mpv_debug_log = Self::ask_for_setting(PuddlerSettingType::MPV_Debug).mpv_debug_log;
-                    writeln!(settings_file, "mpv_debug_log = {mpv_debug_log}").unwrap();
-                    continue;
-                  },
-                  something => {
-                    print_message(PrintMessageType::Error, format!("Failed to fix because of {}.", something).as_str());
-                    return Err(PuddlerSettingsError::Corrupt);
-                  }
+    let config_file_path = get_config_path();
+    if config_file_path.exists() {
+      loop {
+        let settings_file_raw = Config::builder().add_source(File::from(config_file_path.clone())).build().unwrap();
+        let serialized = settings_file_raw.try_deserialize::<PuddlerSettings>();
+        match serialized {
+          Ok(settings) => {
+            return Ok(settings);
+          },
+          Err(e) => {
+            if e.to_string().contains("missing field") {
+              print_message(PrintMessageType::Warning, "Settings file is corrupt. Attempting to fix it ...");
+              let mut settings_file = fs::OpenOptions::new().append(true).open(&config_file_path).unwrap();
+              match &e.to_string()[e.to_string().find('`').unwrap() + 1..e.to_string().len() - 1] {
+                "discord_presence" => {
+                  let discord_presence = Self::ask_for_setting(PuddlerSettingType::DiscordPresence).discord_presence;
+                  writeln!(settings_file, "discord_presence = {discord_presence}").unwrap();
+                  continue;
+                },
+                "fullscreen" => {
+                  let fullscreen = Self::ask_for_setting(PuddlerSettingType::Fullscreen).fullscreen;
+                  writeln!(settings_file, "fullscreen = {fullscreen}").unwrap();
+                  continue;
+                },
+                "gpu" => {
+                  let gpu = Self::ask_for_setting(PuddlerSettingType::GPU).gpu;
+                  writeln!(settings_file, "gpu = {gpu}").unwrap();
+                  continue;
+                },
+                "glsl_shaders" => {
+                  let glsl_shaders = Self::ask_for_setting(PuddlerSettingType::GLSL_Shaders).glsl_shaders;
+                  writeln!(settings_file, "glsl_shaders = {glsl_shaders:?}").unwrap();
+                  continue;
+                },
+                "mpv_debug_log" => {
+                  let mpv_debug_log = Self::ask_for_setting(PuddlerSettingType::MPV_Debug).mpv_debug_log;
+                  writeln!(settings_file, "mpv_debug_log = {mpv_debug_log}").unwrap();
+                  continue;
+                },
+                something => {
+                  print_message(PrintMessageType::Error, format!("Failed to fix because of {}.", something).as_str());
+                  return Err(PuddlerSettingsError::Corrupt);
                 }
               }
             }
           }
         }
-      } else {
-        print_message(PrintMessageType::Warning, "No settings file found!\nBuilding default settings ...\n");
-        let mut config = Self::ask_for_everything();
-        config.write();
-        Ok(config)
       }
     } else {
-      if !config_files_dir.exists() {
-        fs::create_dir_all(config_files_dir).unwrap();
-      }
       print_message(PrintMessageType::Warning, "No settings file found!\nBuilding default settings ...\n");
       let mut config = Self::ask_for_everything();
       config.write();
@@ -195,8 +191,7 @@ impl PuddlerSettings {
   }
 
   fn ask_for_setting(setting: PuddlerSettingType) -> Self {
-    let config_path = dirs::config_dir().unwrap().join(APPNAME.to_lowercase());
-    let config_files_dir = &(config_path.to_str().unwrap().to_owned()+"/media-center");
+    let media_center_path = get_mediacenter_folder();
     let mut temp = PuddlerSettings {
       default_media_server: None,
       discord_presence: false,
@@ -208,8 +203,8 @@ impl PuddlerSettings {
     };
     match setting {
       PuddlerSettingType::DefaultMediaServer => {
-        println!("Searching in \"{}\" for configuration files ...", &config_files_dir);
-        let path: Vec<_> = fs::read_dir(config_files_dir).unwrap().map(|r| r.unwrap()).collect();
+        println!("Searching in \"{}\" for configuration files ...", &media_center_path.to_str().unwrap());
+        let path: Vec<_> = fs::read_dir(media_center_path).unwrap().map(|r| r.unwrap()).collect();
         let mut files: Vec<String> = vec![];
         for file in &path {
           if file.path().is_dir() {
@@ -316,10 +311,8 @@ impl PuddlerSettings {
   }
 
   fn write(&mut self) {
-    let config_path = dirs::config_dir().unwrap().join(APPNAME.to_lowercase());
-    let settings_path_string = format!("{}/{}.toml", &config_path.display().to_string(), APPNAME);
     let pretty_string = toml::to_string_pretty(&self).unwrap();
-    fs::write(settings_path_string, pretty_string).expect("Saving settings failed.");
+    fs::write(get_config_path(), pretty_string).expect("Saving settings failed.");
     print_message(PrintMessageType::Success, "Saved changes to \"Puddler.toml\".");
   } 
 }
