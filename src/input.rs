@@ -142,7 +142,7 @@ fn series_select(text: Vec<String>, episodes: Vec<Episode>) -> (SeriesOptions, O
   let mut index_selection: Vec<usize> = vec![];
   loop {
     if poll(Duration::from_millis(100)).unwrap() {
-      if let Ok(Event::Key(KeyEvent { code, modifiers, state: _, kind: _ })) = read() {
+      if let Ok(Event::Key(KeyEvent { code, modifiers, state: _, kind: KeyEventKind::Press })) = read() {
         if let KeyCode::Char(ch) = code {
           if ch.is_ascii_digit() {
             input.push(ch);
@@ -469,128 +469,132 @@ pub fn interactive_select(options: Vec<InteractiveOption>) -> ((usize, usize), O
   let mut corrected_selection = display_options(&options, selection, inputs.clone());
   loop {
     if crossterm::event::poll(Duration::from_millis(250)).unwrap() {
-      match crossterm::event::read().unwrap() {
-        Event::Key(KeyEvent { code: KeyCode::Up, .. }) => {
-          if selection.0 >= 1 {
-            selection.0 -= 1;
-          } else {
-            selection.0 = options.len() - 1;
-          }
-          loop {
-            match options[selection.0].option_type {
-              InteractiveOptionType::Header => {
-                if selection.0 == 0 {
-                  selection.0 = options.len() - 1;
-                } else {
-                  selection.0 -= 1;
-                }
-              },
-              InteractiveOptionType::ListButtons => {
-                selection.1 = 1;
-                break;
-              },
-              InteractiveOptionType::TextInput | InteractiveOptionType::Button5s => {
-                selection.1 = 0;
-                break;
-              },
-              _ => break
-            }
-          }
-        },
-        Event::Key(KeyEvent { code: KeyCode::Down, .. }) => {
-          if selection.0 < options.len() - 1 {
-            selection.0 += 1;
-          } else {
-            selection.0 = 0;
-          }
-          loop {
-            match options[selection.0].option_type {
-              InteractiveOptionType::Header => {
-                selection.0 += 1;
-              },
-              InteractiveOptionType::ListButtons => {
-                selection.1 = 1;
-                break;
-              },
-              InteractiveOptionType::TextInput | InteractiveOptionType::Button5s => {
-                selection.1 = 0;
-                break;
-              },
-              _ => break
-            }
-          }
-        },
-        Event::Key(KeyEvent { code: KeyCode::Left, .. }) => {
-          if options[selection.0].option_type == InteractiveOptionType::MultiButton {
-            if selection.1 >= 1 {
-              selection.1 -= 1;
+      if let Event::Key(KeyEvent { code, modifiers, kind: KeyEventKind::Press, .. }) = crossterm::event::read().unwrap() {
+        match code {
+          KeyCode::Up => {
+            if selection.0 >= 1 {
+              selection.0 -= 1;
             } else {
-              selection.1 = options[selection.0].text.split_terminator(':').count() - 1;
+              selection.0 = options.len() - 1;
             }
-          } else if options[selection.0].option_type == InteractiveOptionType::ListButtons {
-            if selection.1 >= 2 {
-              selection.1 -= 1;
-            } else {
-              selection.1 = options[selection.0].text.split_terminator(':').count() - 1;
-            }
-          } else if options[selection.0].option_type == InteractiveOptionType::TextInput && !inputs[selection.0].is_empty() {
-            if selection.1 > 1 {
-              selection.1 -= 1;
-            } else {
-              selection.1 = inputs[selection.0].len() + 1;
-            }
-          }
-        },
-        Event::Key(KeyEvent { code: KeyCode::Right, .. }) => {
-          if options[selection.0].option_type == InteractiveOptionType::TextInput {
-            if !inputs[selection.0].is_empty() {
-              if selection.1 < inputs[selection.0].len() + 1 {
-                selection.1 += 1;
-              } else {
-                selection.1 = 1;
+            loop {
+              match options[selection.0].option_type {
+                InteractiveOptionType::Header => {
+                  if selection.0 == 0 {
+                    selection.0 = options.len() - 1;
+                  } else {
+                    selection.0 -= 1;
+                  }
+                },
+                InteractiveOptionType::ListButtons => {
+                  selection.1 = 1;
+                  break;
+                },
+                InteractiveOptionType::TextInput | InteractiveOptionType::Button5s => {
+                  selection.1 = 0;
+                  break;
+                },
+                _ => break
               }
             }
-          } else if selection.1 < options[selection.0].text.split_terminator(':').count() - 1 {
-            selection.1 += 1;
-          } else if options[selection.0].option_type == InteractiveOptionType::MultiButton {
-            selection.1 = 0;
-          } else if options[selection.0].option_type == InteractiveOptionType::ListButtons {
-            selection.1 = 1;
-          }
-        },
-        Event::Key(KeyEvent { code: KeyCode::Enter, .. }) => break,
-        Event::Key(KeyEvent { code, modifiers, kind: _, state: _ }) => {
-          if KeyCode::Char('c') == code && modifiers == KeyModifiers::CONTROL {
-            execute!(stdout, Show).unwrap();
-            disable_raw_mode().unwrap();
-            exit(1);
-          } else if let KeyCode::Char(ch) = code {
-            if ch.is_ascii() &&
-              terminal::size().unwrap().0 as usize > inputs[selection.0].len() + options[selection.0].text.len() + 11 {
+          },
+          KeyCode::Down => {
+            if selection.0 < options.len() - 1 {
+              selection.0 += 1;
+            } else {
+              selection.0 = 0;
+            }
+            loop {
+              match options[selection.0].option_type {
+                InteractiveOptionType::Header => {
+                  selection.0 += 1;
+                },
+                InteractiveOptionType::ListButtons => {
+                  selection.1 = 1;
+                  break;
+                },
+                InteractiveOptionType::TextInput | InteractiveOptionType::Button5s => {
+                  selection.1 = 0;
+                  break;
+                },
+                _ => break
+              }
+            }
+          },
+          KeyCode::Left => {
+            if options[selection.0].option_type == InteractiveOptionType::MultiButton {
+              if selection.1 >= 1 {
+                selection.1 -= 1;
+              } else {
+                selection.1 = options[selection.0].text.split_terminator(':').count() - 1;
+              }
+            } else if options[selection.0].option_type == InteractiveOptionType::ListButtons {
+              if selection.1 >= 2 {
+                selection.1 -= 1;
+              } else {
+                selection.1 = options[selection.0].text.split_terminator(':').count() - 1;
+              }
+            } else if options[selection.0].option_type == InteractiveOptionType::TextInput && !inputs[selection.0].is_empty() {
+              if selection.1 > 1 {
+                selection.1 -= 1;
+              } else {
+                selection.1 = inputs[selection.0].len() + 1;
+              }
+            }
+          },
+          KeyCode::Right => {
+            if options[selection.0].option_type == InteractiveOptionType::TextInput {
               if !inputs[selection.0].is_empty() {
-                inputs[selection.0].insert(selection.1-1, ch);
-                selection.1 += 1;
-              } else {
-                inputs[selection.0].insert(selection.1, ch);
-                selection.1 += 2;
+                if selection.1 < inputs[selection.0].len() + 1 {
+                  selection.1 += 1;
+                } else {
+                  selection.1 = 1;
+                }
               }
-            }
-          } else if code == KeyCode::Backspace {
-            if !inputs[selection.0].is_empty() && selection.1 != 1 {
-              inputs[selection.0].remove(selection.1-2);
-              selection.1 -= 1;
-            }
-            if !inputs[selection.0].is_empty() {
-              if selection.1 == 0 {
-                selection.1 += 1;
-              }
-            } else {
+            } else if selection.1 < options[selection.0].text.split_terminator(':').count() - 1 {
+              selection.1 += 1;
+            } else if options[selection.0].option_type == InteractiveOptionType::MultiButton {
               selection.1 = 0;
+            } else if options[selection.0].option_type == InteractiveOptionType::ListButtons {
+              selection.1 = 1;
+            }
+          },
+          KeyCode::Enter => break,
+          _ => {
+            if KeyCode::Char('c') == code && modifiers == KeyModifiers::CONTROL {
+              execute!(stdout, Show).unwrap();
+              disable_raw_mode().unwrap();
+              exit(1);
+            } 
+            else if let KeyCode::Char(ch) = code {
+              if ch.is_ascii() &&
+                terminal::size().unwrap().0 as usize > inputs[selection.0].len() + options[selection.0].text.len() + 11 {
+                if !inputs[selection.0].is_empty() {
+                  inputs[selection.0].insert(selection.1-1, ch);
+                  selection.1 += 1;
+                } else {
+                  inputs[selection.0].insert(selection.1, ch);
+                  selection.1 += 2;
+                }
+              }
+            } else if code == KeyCode::Backspace {
+              if !inputs[selection.0].is_empty() && selection.1 != 1 {
+                inputs[selection.0].remove(selection.1-2);
+                selection.1 -= 1;
+              }
+              if !inputs[selection.0].is_empty() {
+                if selection.1 == 0 {
+                  selection.1 += 1;
+                }
+              } else {
+                selection.1 = 0;
+              }
             }
           }
-        }
-        _ => ()
-      };
+        };
+      } else {
+        continue;
+      }
     }
     if options[selection.0].option_type == InteractiveOptionType::Button5s {
       selection.1 += (options[selection.0].text.len() as f64 / 5.0 / 2.0_f64.powi(2)).round() as usize;
@@ -657,8 +661,8 @@ pub fn adv_getch(allowed: &str, any_key: bool, timeout_secs: Option<u64>, messag
 
   loop {
     if poll(Duration::from_millis(500)).unwrap() {
-      if let Ok(Event::Key(KeyEvent { code, modifiers, state: _, kind })) = read() {
-        if modifiers == KeyModifiers::NONE && kind == KeyEventKind::Press && ! any_key {
+      if let Ok(Event::Key(KeyEvent { code, modifiers, state: _, kind: KeyEventKind::Press })) = read() {
+        if modifiers == KeyModifiers::NONE && ! any_key {
           for ch in allowed.chars() {
             if code == KeyCode::Char(ch) {
               disable_raw_mode().unwrap();
@@ -687,7 +691,7 @@ pub fn adv_getch(allowed: &str, any_key: bool, timeout_secs: Option<u64>, messag
           write!(stdout, "^C").unwrap();
           disable_raw_mode().unwrap();
           exit(1);
-        } else if any_key && kind == KeyEventKind::Press {
+        } else if any_key {
           disable_raw_mode().unwrap();
           println!();
           return Some('_'); // this is a smiley
@@ -737,7 +741,7 @@ pub fn hidden_string_input(mask: Option<char>) -> String {
   let mut input = String::new();
   loop {
     if poll(Duration::from_millis(500)).unwrap() {
-      if let Ok(Event::Key(KeyEvent { code, modifiers, state: _, kind })) = read() {
+      if let Ok(Event::Key(KeyEvent { code, modifiers, state: _, kind: KeyEventKind::Press })) = read() {
         if modifiers == KeyModifiers::CONTROL && code == KeyCode::Char('c') {
           write!(stdout, "^C").unwrap();
           disable_raw_mode().unwrap();
@@ -753,7 +757,7 @@ pub fn hidden_string_input(mask: Option<char>) -> String {
             execute!(std::io::stdout(), MoveLeft(1)).unwrap();
             execute!(std::io::stdout(), Print(" "), MoveLeft(1)).unwrap();
           }
-        } else if kind == KeyEventKind::Press {
+        } else {
           if let KeyCode::Char(ch) = code {
             if let Some(masking_char) = mask {
               write!(stdout, "{}", masking_char).unwrap();
