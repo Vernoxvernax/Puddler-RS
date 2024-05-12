@@ -7,7 +7,7 @@ edition = "2021"
 chrono = { version = "0.4.38", features = ["serde"] }
 clap = "4.5.4"
 colored = "2.1.0"
-config = { version = "0.14.0" }
+config = "0.14.0"
 crossterm = "0.27.0"
 dirs = "5.0.1"
 discord-presence = "1.2.0"
@@ -17,9 +17,9 @@ isolanguage-1 = { version = "0.2.3", git = "https://github.com/Vernoxvernax/isol
 libmpv-sirno = "2.0.2-fork.1"
 tokio-tungstenite = { version = "0.21.0", features = ["native-tls"] }
 regex = "1.10.4"
-serde = "1.0.200"
-serde_derive = "1.0.200"
-serde_json = "1.0.116"
+serde = "1.0.201"
+serde_derive = "1.0.201"
+serde_json = "1.0.117"
 tokio = { version = "1.37.0", features = ["full"] }
 toml = "0.8.12"
 urlencoding = "2.1.3"
