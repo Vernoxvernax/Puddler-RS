@@ -1,6 +1,7 @@
-use std::{fmt, io::{stdin, stdout, Write}, process::exit, sync::mpsc, thread::{self, sleep}, time::Duration};
+use std::{fmt, io::{stdin, stdout, Write}, process::exit, str::FromStr, sync::mpsc, thread::{self, sleep}, time::Duration};
 use chrono::{DateTime, Utc};
 use isahc::{config::Configurable, http::StatusCode, Body, ReadResponseExt, Request, RequestExt, Response};
+use isolanguage_1::LanguageCode;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -134,7 +135,14 @@ impl fmt::Display for PlexStream {
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 struct PlexTVUser {
   id: u64,
-  username: String
+  username: String,
+  profile: PlexUserProfile
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+struct PlexUserProfile {
+  defaultAudioLanguage: String,
+  defaultSubtitleLanguage: String
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
@@ -686,8 +694,12 @@ impl PlexServer {
         if self.create_transcoding_info(&mut streamable_item, &mut transcoding_settings).is_ok() {
           self.insert_value(MediaCenterValues::PlaybackInfo, serde_json::to_string(&streamable_item).unwrap());
           self.update_player(&mut player);
-          player.set_plex_video(streamable_item, server_address.clone(), auth.clone(), player_settings);
+          player.set_plex_video(streamable_item, server_address.clone(), auth.clone(), &mut transcoding_settings);
           let ret = player.play();
+          if let Some((_, ref mut audio, ref mut subtitle, ..)) = transcoding_settings.as_mut() {
+            *audio = ret.preferred_audio_track;
+            *subtitle = ret.preferred_subtitle_track
+          }
           'playback_done: loop {
             let mut options: Vec<InteractiveOption> = vec![];
             execute!(stdout, DisableLineWrap).unwrap();
@@ -766,8 +778,27 @@ impl PlexServer {
     }
   }
 
-  fn create_transcoding_info(&mut self, item: &mut PlexItem, previous_settings: &mut Option<(bool, u32, u32, String)>) -> Result<(), ()> {
+  fn get_user(&mut self, access_token: String) -> Result<PlexTVUser, StatusCode> {
+    let device_id = self.get_config_handle().get_device_id();
+    let url = format!("api/v2/user?X-Plex-Token={}", access_token);
+    match plex_tv(RequestType::Get, None, device_id, url) {
+      Ok(mut req) => {
+        if let Ok(json) = serde_json::from_str::<PlexTVUser>(&req.text().unwrap()) {
+          Ok(json)
+        } else {
+          exit(1);
+        }
+      },
+      Err(err) => {
+        print_message(PrintMessageType::Error, format!("Failed to get user information: {}", err.status()).as_str());
+        Err(err.status())
+      }
+    }
+  }
+
+  fn create_transcoding_info(&mut self, item: &mut PlexItem, previous_settings: &mut Option<(bool, Option<u32>, Option<u32>, String)>) -> Result<(), ()> {
     let handle = self.get_config_handle();
+    let user = handle.get_active_user().unwrap();
     let mut stdout = stdout();
     execute!(stdout, SavePosition).unwrap();
     let mut mbps = String::new();
@@ -805,6 +836,59 @@ impl PlexServer {
       media_part_id = media_file_list[0].Part[0].id;
     }
 
+    if previous_settings.is_none() && !handle.config.transcoding {
+      match self.get_user(user.access_token) {
+        Ok(plex_user) => {
+          let mut audio_streams: Vec<PlexStream> = vec![];
+          let mut subtitle_streams: Vec<PlexStream> = vec![];
+          let audio_language = if !plex_user.profile.defaultAudioLanguage.is_empty() {
+            Some(LanguageCode::from_str(&plex_user.profile.defaultAudioLanguage).unwrap())
+          } else {
+            None
+          };
+          let subtitle_language = if !plex_user.profile.defaultSubtitleLanguage.is_empty() {
+            Some(LanguageCode::from_str(&plex_user.profile.defaultSubtitleLanguage).unwrap())
+          } else {
+            None
+          };
+          let mut audio_track = None;
+          let mut subtitle_track = None;
+          for stream in media_file_list[media_file_index].Part[0].Stream.clone().unwrap() {
+            if stream.streamType == 2 {
+              audio_streams.push(stream.clone());
+            } else if stream.streamType == 3 {
+              subtitle_streams.push(stream.clone());
+            }
+          }
+          if audio_language.is_some() {
+            for (index, stream) in audio_streams.iter().enumerate() {
+              if let Some(lang) = &stream.languageCode {
+                if audio_language == Some(LanguageCode::from_str(lang).unwrap()) {
+                  audio_track = Some(index as u32 + 1);
+                  break;
+                }
+              }
+            }
+          }
+          if subtitle_language.is_some() {
+            for (index, stream) in subtitle_streams.iter().enumerate() {
+              if let Some(lang) = &stream.languageCode {
+                if subtitle_language == Some(LanguageCode::from_str(lang).unwrap()) {
+                  subtitle_track = Some(index as u32 + 1);
+                  break;
+                }
+              }
+            }
+          }
+          *previous_settings = Some((false, audio_track, subtitle_track, String::new()));
+        },
+        Err(err) => {
+          print_message(PrintMessageType::Error, format!("Failed to get user prefences: {}", err).as_str());
+        }
+      }
+    }
+
+    let handle = self.get_config_handle();
     if handle.config.transcoding {
       let time = (item.viewOffset.unwrap_or(0) as f64) / 1000.0;
       let formated: String = if time > 60.0 {
@@ -820,7 +904,7 @@ impl PlexServer {
       } else {
         time.to_string()
       };
-      if !previous_settings.clone().unwrap_or((false, 0, 0, String::new())).0 {
+      if !previous_settings.clone().unwrap_or((false, Some(0), Some(0), String::new())).0 {
         print!("\nDo you want to start at: {}?\n  (Y)es | (N)o", formated.cyan().bold());
         match getch("YyNn") {
           'N' | 'n' => {
@@ -888,7 +972,7 @@ impl PlexServer {
       }
       if audio_tracks.len() > 1 {
         let mut skip = false;
-        if let Some((_, selection, _, _)) = previous_settings {
+        if let Some((_, Some(selection), _, _)) = previous_settings {
           for track in audio_tracks.clone() {
             if track.index == Some(*selection) {
               skip = true;
@@ -917,7 +1001,7 @@ impl PlexServer {
       }
       if subtitle_tracks.len() > 1 {
         let mut skip = false;
-        if let Some((_, _, selection, _)) = previous_settings {
+        if let Some((_, _, Some(selection), _)) = previous_settings {
           for track in subtitle_tracks.clone() {
             if track.index == Some(*selection) {
               skip = true;
@@ -961,9 +1045,10 @@ impl PlexServer {
       enable_raw_mode().unwrap();
       execute!(stdout, RestorePosition, MoveToColumn(0), Clear(ClearType::FromCursorDown), LeaveAlternateScreen).unwrap();
       disable_raw_mode().unwrap();
+
+      *previous_settings = Some((false, Some(audio_track_index), Some(subtitle_track_index), mbps.clone()));
     }
 
-    *previous_settings = Some((false, audio_track_index, subtitle_track_index, mbps.clone()));
 
     let id_to_keep = media_file_list[media_file_index].id;
     media_file_list.retain(|file| file.id == id_to_keep);
@@ -1135,7 +1220,6 @@ impl PlexServer {
       "show" => item.ratingKey,
       _ => panic!("This object cannot be part of a series.")
     };
-    // let user = self.get_config_handle().get_active_user().unwrap();
 
     let mut series = Series {
       item_id: series_id,
@@ -1155,11 +1239,6 @@ impl PlexServer {
     } else {
       exit(1);
     };
-
-    // if series.seasons[0].item.Name == String::from("Specials") {
-    //   let specials = series.seasons.remove(0);
-    //   series.seasons.push(specials);
-    // }
 
     let mut episode_ids: Vec<String> = vec![];
     for (season_index, season) in series.seasons.clone().iter().enumerate() {
@@ -1377,39 +1456,33 @@ impl PlexServer {
   }
 
   fn get_username(&mut self, access_token: String) {
-    let device_id = self.get_config_handle().get_device_id();
-    let url = format!("api/v2/user?X-Plex-Token={}", access_token);
-    match plex_tv(RequestType::Get, None, device_id, url) {
-      Ok(mut req) => {
-        if let Ok(json) = serde_json::from_str::<PlexTVUser>(&req.text().unwrap()) {
-          let user = UserConfig {
-            access_token,
-            username: json.username,
-            user_id: json.id.to_string()
-          };
-          let config = self.get_config_handle();
-          config.insert_specific_value(Objective::User, serde_json::to_string(&user).unwrap());
-          config.set_active_user(user.access_token);
-          if config.check_existing_config() {
-            loop {
-              print_message(PrintMessageType::Error, "A media-center configuration with that file name already exists.\nPlease choose a different file name.");
-              let file_name = take_string_input(vec![]);
-              config.config.server_name = config.config.server_name.replace(' ', "_");
-              let config_path = dirs::config_dir().unwrap();
-              let config_file_path = format!("{}/{}/media-center/{}.json", &config_path.display().to_string(), APPNAME.to_lowercase(), file_name);
-              config.path = config_file_path;
-              if !config.check_existing_config() {
-                break;
-              }
+    match self.get_user(access_token.clone()) {
+      Ok(json) => {
+        let user = UserConfig {
+          access_token,
+          username: json.username,
+          user_id: json.id.to_string()
+        };
+        let config = self.get_config_handle();
+        config.insert_specific_value(Objective::User, serde_json::to_string(&user).unwrap());
+        config.set_active_user(user.access_token);
+        if config.check_existing_config() {
+          loop {
+            print_message(PrintMessageType::Error, "A media-center configuration with that file name already exists.\nPlease choose a different file name.");
+            let file_name = take_string_input(vec![]);
+            config.config.server_name = config.config.server_name.replace(' ', "_");
+            let config_path = dirs::config_dir().unwrap();
+            let config_file_path = format!("{}/{}/media-center/{}.json", &config_path.display().to_string(), APPNAME.to_lowercase(), file_name);
+            config.path = config_file_path;
+            if !config.check_existing_config() {
+              break;
             }
           }
-          config.save();
-        } else {
-          exit(1);
         }
+        config.save();
       },
       Err(err) => {
-        print_message(PrintMessageType::Error, format!("Failed to get user information: {}", err.status()).as_str());
+        print_message(PrintMessageType::Error, format!("Failed to get user information: {}", err).as_str());
       }
     }
   }

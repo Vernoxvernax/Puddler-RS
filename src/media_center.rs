@@ -1,13 +1,14 @@
 use crate::{emby::EmbyServer, input::{hidden_string_input, interactive_select, jelly_series_select, take_string_input, InteractiveOption, InteractiveOptionType, SeriesOptions}, jellyfin::JellyfinServer, media_config::{Config, MediaCenterType, Objective, UserConfig}, mpv::Player, plex::PlexServer, printing::{print_message, PrintMessageType}, puddler_settings::PuddlerSettings, APPNAME, VERSION};
 use crossterm::{cursor::{EnableBlinking, Hide, MoveToColumn, RestorePosition, SavePosition, Show}, event::{poll, read, Event, KeyCode, KeyEvent, KeyModifiers}, execute, style::Stylize, terminal::{self, disable_raw_mode, enable_raw_mode, Clear, ClearType, DisableLineWrap, EnableLineWrap, EnterAlternateScreen, LeaveAlternateScreen}};
 use isahc::{config::Configurable, http::StatusCode, Body, ReadResponseExt, Request, RequestExt, Response};
+use isolanguage_1::LanguageCode;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::input::getch;
-use std::{fmt, io::{stdin, stdout, Write}, net::UdpSocket, process::exit, str::from_utf8, sync::{Arc, Mutex}, thread, time::Duration};
+use std::{fmt, io::{stdin, stdout, Write}, net::UdpSocket, process::exit, str::{from_utf8, FromStr}, sync::{Arc, Mutex}, thread, time::Duration};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct UDPAnswer {
@@ -234,6 +235,18 @@ struct SubtitleProfile {
 pub struct PlaybackInfo {
   pub MediaSources: Vec<MediaSourceInfo>,
   pub PlaySessionId: String
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+pub struct UserDto {
+  Configuration: UserConfiguration
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+pub struct UserConfiguration {
+  PlayDefaultAudioTrack: bool,
+  AudioLanguagePreference: String,
+  SubtitleLanguagePreference: String
 }
 
 #[derive(Debug, Deserialize, PartialEq, Clone)]
@@ -690,16 +703,10 @@ pub trait MediaCenter {
             }
           }
         }
-        // for item in playlist {
-        //   println!("{}", item.to_string());
-        // }
       },
       "Series" | "Season" => {
         let series = self.resolve_series(item);
         playlist = self.choose_from_series(series);
-        // for item in playlist {
-          //   println!("{}", item.to_string());
-          // }
       },
       _ => ()
     }
@@ -715,7 +722,6 @@ pub trait MediaCenter {
     let mut player = Player::new(self.get_config_handle().clone(), settings.clone());
 
     let mut transcoding_settings = None;
-    let mut player_settings: (Option<u32>, Option<u32>) = (None, None);
     let mut index = 0;
     let mut stdout = stdout();
     while index < playlist.len() {
@@ -725,13 +731,15 @@ pub trait MediaCenter {
       if let Ok(playback_info) = self.post_playbackinfo(&mut streamable_item, &mut transcoding_settings) {
         self.insert_value(MediaCenterValues::PlaybackInfo, serde_json::to_string(&playback_info).unwrap());
         self.update_player(&mut player);
-        player.set_jellyfin_video(streamable_item, playback_info, server_address.clone(), auth_token.to_string(), player_settings);
+        player.set_jellyfin_video(streamable_item, playback_info, server_address.clone(), auth_token.to_string(), &mut transcoding_settings);
         let ret = player.play();
+        if let Some((_, ref mut audio, ref mut subtitle, ..)) = transcoding_settings.as_mut() {
+          *audio = ret.preferred_audio_track;
+          *subtitle = ret.preferred_subtitle_track
+        }
         'playback_done: loop {
           let mut options: Vec<InteractiveOption> = vec![];
           execute!(stdout, DisableLineWrap).unwrap();
-          player_settings.0 = ret.preferred_audio_track;
-          player_settings.1 = ret.preferred_subtitle_track;
           if !ret.played {
             let url = format!("Users/{}/Items/{}", self.get_config_handle().get_active_user().unwrap().user_id, item.Id);
             if let Ok(updated_item) = self.get_item(url) {
@@ -807,8 +815,8 @@ pub trait MediaCenter {
 
   fn update_player(&mut self, player: &mut Player);
 
-  fn post_playbackinfo(&mut self, item: &mut Item, previous_settings: &mut Option<(bool, u32, u32, String)>) -> Result<PlaybackInfo, ()> {
-    let handle = self.get_config_handle();
+  fn post_playbackinfo(&mut self, item: &mut Item, previous_settings: &mut Option<(bool, Option<u32>, Option<u32>, String)>) -> Result<PlaybackInfo, ()> {
+    let mut handle = self.get_config_handle().clone();
     let user_id = handle.get_active_user().unwrap().user_id;
     let mut stdout = stdout();
     execute!(stdout, SavePosition).unwrap();
@@ -819,7 +827,7 @@ pub trait MediaCenter {
     } else {
       return Err(());
     };
-
+    
     // This is the only setting which isn't saved across the playlist. Don't really see the point in that tbh.
     if mediasource_list.len() > 1 {
       let mut options: Vec<InteractiveOption> = vec![InteractiveOption {
@@ -839,6 +847,60 @@ pub trait MediaCenter {
       disable_raw_mode().unwrap();
     }
 
+    if previous_settings.is_none() && !handle.config.transcoding {
+      let url = format!("Users/{}", user_id);
+      match self.get(url) {
+        Ok(mut res) => {
+          let user = serde_json::from_str::<UserDto>(&res.text().unwrap()).unwrap();
+          let mut audio_streams: Vec<MediaStream> = vec![];
+          let mut subtitle_streams: Vec<MediaStream> = vec![];
+          let audio_language = if !user.Configuration.AudioLanguagePreference.is_empty() {
+            Some(LanguageCode::from_str(&user.Configuration.AudioLanguagePreference).unwrap())
+          } else {
+            None
+          };
+          let subtitle_language = if !user.Configuration.SubtitleLanguagePreference.is_empty() {
+            Some(LanguageCode::from_str(&user.Configuration.SubtitleLanguagePreference).unwrap())
+          } else {
+            None
+          };
+          let mut audio_track = None;
+          let mut subtitle_track = None;
+          for stream in mediasource_list[mediasource_index].MediaStreams.clone() {
+            if stream.Type == *"Audio" {
+              audio_streams.push(stream.clone());
+            } else if stream.Type == *"Subtitle" {
+              subtitle_streams.push(stream.clone());
+            }
+          }
+          if audio_language.is_some() {
+            for (index, stream) in audio_streams.iter().enumerate() {
+              if let Some(lang) = &stream.Language {
+                if audio_language == Some(LanguageCode::from_str(lang).unwrap()) {
+                  audio_track = Some(index as u32 + 1);
+                  break;
+                }
+              }
+            }
+          }
+          if subtitle_language.is_some() {
+            for (index, stream) in subtitle_streams.iter().enumerate() {
+              if let Some(lang) = &stream.Language {
+                if subtitle_language == Some(LanguageCode::from_str(lang).unwrap()) {
+                  subtitle_track = Some(index as u32 + 1);
+                  break;
+                }
+              }
+            }
+          }
+          *previous_settings = Some((false, audio_track, subtitle_track, String::new()));
+        },
+        Err(err) => {
+          print_message(PrintMessageType::Error, format!("Failed to get user prefences: {}", err.status()).as_str());
+        }
+      }
+    }
+
     if handle.config.transcoding {
       let time = (item.UserData.PlaybackPositionTicks as f64) / 10000000.0;
       let formated: String = if time > 60.0 {
@@ -854,7 +916,7 @@ pub trait MediaCenter {
       } else {
         time.to_string()
       };
-      if !previous_settings.clone().unwrap_or((false, 0, 0, String::new())).0 {
+      if !previous_settings.clone().unwrap_or((false, Some(0), Some(0), String::new())).0 {
         print!("\nDo you want to start at: {}?\n  (Y)es | (N)o", formated.cyan().bold());
         match getch("YyNn") {
           'N' | 'n' => {
@@ -925,7 +987,7 @@ pub trait MediaCenter {
       }
       if audio_tracks.len() > 1 {
         let mut skip = false;
-        if let Some((_, selection, _, _)) = previous_settings {
+        if let Some((_, Some(selection), _, _)) = previous_settings {
           for track in audio_tracks.clone() {
             if track.Index == *selection {
               skip = true;
@@ -954,7 +1016,7 @@ pub trait MediaCenter {
       }
       if subtitle_tracks.len() > 1 {
         let mut skip = false;
-        if let Some((_, _, selection, _)) = previous_settings {
+        if let Some((_, _, Some(selection), _)) = previous_settings {
           for track in subtitle_tracks.clone() {
             if track.Index == *selection {
               skip = true;
@@ -982,7 +1044,7 @@ pub trait MediaCenter {
         }
       }
 
-      *previous_settings = Some((false, audio_track_index, subtitle_track_index, mbps.clone()));
+      *previous_settings = Some((false, Some(audio_track_index), Some(subtitle_track_index), mbps.clone()));
 
       enable_raw_mode().unwrap();
       execute!(stdout, RestorePosition, MoveToColumn(0), Clear(ClearType::FromCursorDown), LeaveAlternateScreen).unwrap();

@@ -12,8 +12,8 @@ crossterm = "0.27.0"
 dirs = "5.0.1"
 discord-presence = "1.2.0"
 futures = "0.3.30"
-http = "1.1.0"
-isahc = { version = "1.7.2", features=["json"] }
+isahc = { version = "1.7.2", features = ["json"] }
+isolanguage-1 = { version = "0.2.3", git = "https://github.com/Vernoxvernax/isolanguage-1.git" }
 libmpv-sirno = "2.0.2-fork.1"
 tokio-tungstenite = { version = "0.21.0", features = ["native-tls"] }
 regex = "1.10.4"

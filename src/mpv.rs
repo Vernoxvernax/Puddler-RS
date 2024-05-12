@@ -55,7 +55,7 @@ impl Player {
     self.media_center = Some(media_center);
   }
 
-  pub fn set_plex_video(&mut self, item: PlexItem, server_address: String, auth: String, preference: (Option<u32>, Option<u32>)) {
+  pub fn set_plex_video(&mut self, item: PlexItem, server_address: String, auth: String, transcoding_settings: &mut Option<(bool, Option<u32>, Option<u32>, String)>) {
     let handle = &mut self.media_center_config;
     if handle.config.media_center_type != MediaCenterType::Plex {
       panic!("What da hell?!");
@@ -97,6 +97,13 @@ impl Player {
         }
       }
     }
+
+    let preferred_tracks = if let Some(settings) = transcoding_settings {
+      (settings.1, settings.2)
+    } else {
+      (None, None)
+    };
+
     self.video = Some(Video {
       title: item.to_string_split(),
       stream_url,
@@ -106,12 +113,12 @@ impl Player {
       total_runtime: item.duration.unwrap_or(0) / 1000,
       external_media: if commands.is_empty() { None } else { Some(commands) },
       played: true,
-      preferred_audio_track: preference.0,
-      preferred_subtitle_track: preference.1
+      preferred_audio_track: preferred_tracks.0,
+      preferred_subtitle_track: preferred_tracks.1
     });
   }
 
-  pub fn set_jellyfin_video(&mut self, item: Item, playback_info: PlaybackInfo, server_address: String, auth_token: String, preference: (Option<u32>, Option<u32>)) {
+  pub fn set_jellyfin_video(&mut self, item: Item, playback_info: PlaybackInfo, server_address: String, auth_token: String, transcoding_settings: &mut Option<(bool, Option<u32>, Option<u32>, String)>) {
     let handle = &self.media_center_config;
     if handle.config.media_center_type == MediaCenterType::Plex {
       panic!("What da hell?!");
@@ -153,6 +160,12 @@ impl Player {
         commands.push(command);
       }
     }
+
+    let preferred_tracks = if let Some(settings) = transcoding_settings {
+      (settings.1, settings.2)
+    } else {
+      (None, None)
+    };
     
     self.video = Some(Video {
       title: item.to_string_split(),
@@ -163,8 +176,8 @@ impl Player {
       total_runtime: item.RunTimeTicks.unwrap() / 10000000,
       external_media: if commands.is_empty() { None } else { Some(commands) },
       played: true,
-      preferred_audio_track: preference.0,
-      preferred_subtitle_track: preference.1
+      preferred_audio_track: preferred_tracks.0,
+      preferred_subtitle_track: preferred_tracks.1
     });
   }
 
@@ -272,6 +285,7 @@ impl Player {
     let mut sub_track: u32 = 0;
     let mut volume_level: u32 = 0;
     let mut muted: bool = false;
+    let initial_preferences = (video.preferred_audio_track, video.preferred_subtitle_track);
     'main: loop {
       if let Ok(msg) = output.try_recv() {
         let message = msg.to_string();
@@ -310,11 +324,11 @@ impl Player {
             }
             // let's hope loading external subs isn't async ...
             load_external_subtitles(self.video.clone().unwrap(), &mpv);
-            if let Some(audio_track) = video.preferred_audio_track {
-              mpv.set_property("aid", audio_track as i64).expect("Failed to set preferred audio track.");
+            if let Some(audio_track_) = initial_preferences.0 {
+              mpv.set_property("aid", audio_track_ as i64).expect("Failed to set preferred audio track.");
             }
-            if let Some(subtitle_track) = video.preferred_subtitle_track {
-              mpv.set_property("sid", subtitle_track as i64).expect("Failed to set preferred subtitle track.");
+            if let Some(subtitle_track_) = initial_preferences.1 {
+              mpv.set_property("sid", subtitle_track_ as i64).expect("Failed to set preferred subtitle track.");
             }
           }
           Event::Shutdown | Event::EndFile(_) => {
