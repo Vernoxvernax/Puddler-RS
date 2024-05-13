@@ -367,9 +367,13 @@ impl Player {
         }
         if let Ok(track) = mpv.get_property::<i64>("current-tracks/audio/id") {
           video.preferred_audio_track = Some(track as u32);
+        } else {
+          video.preferred_audio_track = Some(0);
         }
         if let Ok(track) = mpv.get_property::<i64>("current-tracks/sub/id") {
           video.preferred_subtitle_track = Some(track as u32);
+        } else {
+          video.preferred_subtitle_track = Some(0);
         }
         if current_time > old_pos + 15.0 {
           if paused {
