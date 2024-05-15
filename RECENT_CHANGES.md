@@ -1,5 +1,6 @@
 ### Changes since **0.7.0**:
 
+* fix(jellyfin/emby): fix external subtitle url
 * feat(playback): support for user preferred audio/sub tracks
   * This is currently very experimental.
   * Every platform returns different kinds of language codes so I had to add another dependency. (very small though)
