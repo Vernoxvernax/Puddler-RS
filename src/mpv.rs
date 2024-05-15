@@ -140,7 +140,7 @@ impl Player {
         } else {
           stream.Codec.as_ref().unwrap().to_owned()
         };
-        let mut media_url = format!("{}/Videos/{}/{}/Subtitles/{}/Stream.{}?api_key={}",
+        let mut media_url = format!("{}Videos/{}/{}/Subtitles/{}/Stream.{}?api_key={}",
         server_address, item.Id, media_source.Id, index, extension, auth_token);
         if item.UserData.PlaybackPositionTicks != 0 && handle.config.transcoding {
           media_url += &("&StartPositionTicks=".to_owned() + &item.UserData.PlaybackPositionTicks.to_string());
