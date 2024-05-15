@@ -854,13 +854,13 @@ pub trait MediaCenter {
           let user = serde_json::from_str::<UserDto>(&res.text().unwrap()).unwrap();
           let mut audio_streams: Vec<MediaStream> = vec![];
           let mut subtitle_streams: Vec<MediaStream> = vec![];
-          let audio_language = if !user.Configuration.AudioLanguagePreference.is_empty() {
-            Some(LanguageCode::from_str(&user.Configuration.AudioLanguagePreference).unwrap())
+          let audio_language = if let Ok(lang) = LanguageCode::from_str(&user.Configuration.AudioLanguagePreference) {
+            Some(lang)
           } else {
             None
           };
-          let subtitle_language = if !user.Configuration.SubtitleLanguagePreference.is_empty() {
-            Some(LanguageCode::from_str(&user.Configuration.SubtitleLanguagePreference).unwrap())
+          let subtitle_language = if let Ok(lang) = LanguageCode::from_str(&user.Configuration.SubtitleLanguagePreference) {
+            Some(lang)
           } else {
             None
           };
@@ -876,9 +876,11 @@ pub trait MediaCenter {
           if audio_language.is_some() {
             for (index, stream) in audio_streams.iter().enumerate() {
               if let Some(lang) = &stream.Language {
-                if audio_language == Some(LanguageCode::from_str(lang).unwrap()) {
-                  audio_track = Some(index as u32 + 1);
-                  break;
+                if let Ok(lang_code) = LanguageCode::from_str(lang) {
+                  if audio_language == Some(lang_code) {
+                    audio_track = Some(index as u32 + 1);
+                    break;
+                  }
                 }
               }
             }
@@ -886,9 +888,11 @@ pub trait MediaCenter {
           if subtitle_language.is_some() {
             for (index, stream) in subtitle_streams.iter().enumerate() {
               if let Some(lang) = &stream.Language {
-                if subtitle_language == Some(LanguageCode::from_str(lang).unwrap()) {
-                  subtitle_track = Some(index as u32 + 1);
-                  break;
+                if let Ok(lang_code) = LanguageCode::from_str(lang) {
+                  if subtitle_language == Some(lang_code) {
+                    subtitle_track = Some(index as u32 + 1);
+                    break;
+                  }
                 }
               }
             }

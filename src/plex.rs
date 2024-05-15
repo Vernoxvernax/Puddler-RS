@@ -841,13 +841,13 @@ impl PlexServer {
         Ok(plex_user) => {
           let mut audio_streams: Vec<PlexStream> = vec![];
           let mut subtitle_streams: Vec<PlexStream> = vec![];
-          let audio_language = if !plex_user.profile.defaultAudioLanguage.is_empty() {
-            Some(LanguageCode::from_str(&plex_user.profile.defaultAudioLanguage).unwrap())
+          let audio_language = if let Ok(lang) = LanguageCode::from_str(&plex_user.profile.defaultAudioLanguage) {
+            Some(lang)
           } else {
             None
           };
-          let subtitle_language = if !plex_user.profile.defaultSubtitleLanguage.is_empty() {
-            Some(LanguageCode::from_str(&plex_user.profile.defaultSubtitleLanguage).unwrap())
+          let subtitle_language = if let Ok(lang) = LanguageCode::from_str(&plex_user.profile.defaultSubtitleLanguage) {
+            Some(lang)
           } else {
             None
           };
@@ -863,9 +863,11 @@ impl PlexServer {
           if audio_language.is_some() {
             for (index, stream) in audio_streams.iter().enumerate() {
               if let Some(lang) = &stream.languageCode {
-                if audio_language == Some(LanguageCode::from_str(lang).unwrap()) {
-                  audio_track = Some(index as u32 + 1);
-                  break;
+                if let Ok(lang_code) = LanguageCode::from_str(lang) {
+                  if audio_language == Some(lang_code) {
+                    audio_track = Some(index as u32 + 1);
+                    break;
+                  }
                 }
               }
             }
@@ -873,9 +875,11 @@ impl PlexServer {
           if subtitle_language.is_some() {
             for (index, stream) in subtitle_streams.iter().enumerate() {
               if let Some(lang) = &stream.languageCode {
-                if subtitle_language == Some(LanguageCode::from_str(lang).unwrap()) {
-                  subtitle_track = Some(index as u32 + 1);
-                  break;
+                if let Ok(lang_code) = LanguageCode::from_str(lang) {
+                  if subtitle_language == Some(lang_code) {
+                    subtitle_track = Some(index as u32 + 1);
+                    break;
+                  }
                 }
               }
             }
