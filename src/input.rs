@@ -130,7 +130,7 @@ fn series_select(text: Vec<String>, episodes: Vec<Episode>) -> (SeriesOptions, O
     text.iter().for_each(|l| println!("{}", l));
   }
 
-  let mut changed = false;
+  let mut update = false;
   let mut input = String::new();
   print!(": ");
   print!("{}", main_options);
@@ -146,7 +146,7 @@ fn series_select(text: Vec<String>, episodes: Vec<Episode>) -> (SeriesOptions, O
         if let KeyCode::Char(ch) = code {
           if ch.is_ascii_digit() {
             input.push(ch);
-            changed = true;
+            update = true;
           } else if ch == 'c' && modifiers == KeyModifiers::CONTROL {
             execute!(stdout, LeaveAlternateScreen, EnableLineWrap, Show).unwrap();
             disable_raw_mode().unwrap();
@@ -155,15 +155,15 @@ fn series_select(text: Vec<String>, episodes: Vec<Episode>) -> (SeriesOptions, O
             if mode != SeriesOptions::Played {
               options = format!("\nMode: [{}] (Press '{}' again toggle between Played and Un-Played)", "Played".bold(), ch.to_uppercase());
               mode = SeriesOptions::Played;
-              changed = true;
+              update = true;
             } else {
               options = format!("\nMode: [{}] (Press '{}' again toggle between Played and Un-Played)", "Un-Played".bold(), ch.to_uppercase());
               mode = SeriesOptions::UnPlayed;
-              changed = true;
+              update = true;
             }
           } else if ch == '-' || ch == ',' && mode == SeriesOptions::Played || mode == SeriesOptions::UnPlayed {
             input.push(ch);
-            changed = true;
+            update = true;
           }
         } else if KeyCode::Enter == code {
           if input.is_empty() {
@@ -185,16 +185,16 @@ fn series_select(text: Vec<String>, episodes: Vec<Episode>) -> (SeriesOptions, O
             options = main_options.clone();
           }
           input.pop();
-          changed = true;
+          update = true;
         } else if KeyCode::Up == code {
           if skip_lines > 0 && text.len() > (terminal_height - 5) {
             skip_lines -= 1;
-            changed = true;
+            update = true;
           }
         } else if KeyCode::Down == code {
           if text.len() > (terminal_height - 3) + skip_lines {
             skip_lines += 1;
-            changed = true;
+            update = true;
           }
         } else if KeyCode::Left == code {
           input.clear();
@@ -203,7 +203,7 @@ fn series_select(text: Vec<String>, episodes: Vec<Episode>) -> (SeriesOptions, O
         }
       }
     }
-    if changed {
+    if update {
       disable_raw_mode().unwrap();
       execute!(stdout, MoveTo(0, 0), Clear(ClearType::FromCursorDown)).unwrap();
       if (terminal_height - 5) < text.len() {
@@ -233,7 +233,7 @@ fn series_select(text: Vec<String>, episodes: Vec<Episode>) -> (SeriesOptions, O
       print!("{}", options);
       stdout.flush().expect("Failed to flush stdout");
       enable_raw_mode().unwrap();
-      changed = false;
+      update = false;
     }
   }
   execute!(stdout, LeaveAlternateScreen, EnableLineWrap, Show).unwrap();
@@ -467,6 +467,7 @@ pub fn interactive_select(options: Vec<InteractiveOption>) -> ((usize, usize), O
     execute!(stdout, EnterAlternateScreen, DisableLineWrap, Hide).unwrap();
   }
   let mut corrected_selection = display_options(&options, selection, inputs.clone());
+  let mut update = false;
   loop {
     if crossterm::event::poll(Duration::from_millis(250)).unwrap() {
       if let Event::Key(KeyEvent { code, modifiers, kind: KeyEventKind::Press, .. }) = crossterm::event::read().unwrap() {
@@ -592,23 +593,31 @@ pub fn interactive_select(options: Vec<InteractiveOption>) -> ((usize, usize), O
             }
           }
         };
+        update = true;
       } else {
         continue;
       }
     }
     if options[selection.0].option_type == InteractiveOptionType::Button5s {
+      let old: usize = selection.1;
       selection.1 += (options[selection.0].text.len() as f64 / 5.0 / 2.0_f64.powi(2)).round() as usize;
+      if selection.1 != old {
+        update = true;
+      }
       if selection.1 > options[selection.0].text.len() {
         selection.1 = 0;
         break;
       }
     }
-    if options.len() != 1 {
-      execute!(stdout, MoveToPreviousLine((options.len() - 1) as u16), Clear(ClearType::FromCursorDown)).unwrap();
-    } else {
-      execute!(stdout, MoveToColumn(0)).unwrap();
+    if update {
+      if options.len() != 1 {
+        execute!(stdout, MoveToPreviousLine((options.len() - 1) as u16), Clear(ClearType::FromCursorDown)).unwrap();
+      } else {
+        execute!(stdout, MoveToColumn(0)).unwrap();
+      }
+      corrected_selection = display_options(&options, selection, inputs.clone());
+      update = false;
     }
-    corrected_selection = display_options(&options, selection, inputs.clone());
   }
   if options.len() == 1 {
     execute!(stdout, MoveToColumn(0), Clear(ClearType::UntilNewLine), Show).unwrap();
