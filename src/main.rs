@@ -74,7 +74,9 @@ fn main() -> ExitCode {
     settings.glsl_shaders = command.get_many::<String>("glsl-shaders").unwrap().map(|sh| sh.to_string()).collect();
   }
   
-  settings.mpv_debug_log = command.get_flag("debug");
+  if command.get_flag("debug") {
+    settings.mpv_debug_log = true;
+  }
 
   let mut options: Vec<MenuOptions> = vec![];
 
