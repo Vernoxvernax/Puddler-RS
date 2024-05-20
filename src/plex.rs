@@ -688,7 +688,7 @@ impl PlexServer {
     let mut index = 0;
     let mut stdout = stdout();
     while index < playlist.len() {
-      if let Ok(mut item) = self.get_item(playlist[index].clone().ratingKey) {
+      if let Ok(item) = self.get_item(playlist[index].clone().ratingKey) {
         let mut next_index = index + 1;
         let mut streamable_item = item.clone();
         if self.create_transcoding_info(&mut streamable_item, &mut transcoding_settings).is_ok() {
@@ -707,7 +707,7 @@ impl PlexServer {
             player_settings.1 = ret.preferred_subtitle_track;
             if !ret.played {
               if let Ok(updated_item) = self.get_item(item.ratingKey.clone()) {
-                item = updated_item;
+                playlist[index] = updated_item;
               } else {
                 print_message(PrintMessageType::Error, format!("Failed to get updated information for {}.", item.to_string()).as_str())
               }

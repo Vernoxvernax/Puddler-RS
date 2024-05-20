@@ -725,7 +725,7 @@ pub trait MediaCenter {
     let mut index = 0;
     let mut stdout = stdout();
     while index < playlist.len() {
-      let mut item = playlist[index].clone();
+      let item = playlist[index].clone();
       let mut next_index = index + 1;
       let mut streamable_item = item.clone();
       if let Ok(playback_info) = self.post_playbackinfo(&mut streamable_item, &mut transcoding_settings) {
@@ -743,7 +743,7 @@ pub trait MediaCenter {
           if !ret.played {
             let url = format!("Users/{}/Items/{}", self.get_config_handle().get_active_user().unwrap().user_id, item.Id);
             if let Ok(updated_item) = self.get_item(url) {
-              item = updated_item;
+              playlist[index] = updated_item;
             } else {
               print_message(PrintMessageType::Error, format!("Failed to get updated information for {}.", item.to_string()).as_str())
             }
