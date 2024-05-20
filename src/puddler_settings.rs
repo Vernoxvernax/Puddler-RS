@@ -40,7 +40,7 @@ impl ToString for PuddlerSettingType {
       PuddlerSettingType::DefaultMediaServer => String::from("Default media server"),
       PuddlerSettingType::DiscordPresence => String::from("Discord Presence"),
       PuddlerSettingType::Fullscreen => String::from("Fullscreen"),
-      PuddlerSettingType::GPU => String::from("Hardware Encoding"),
+      PuddlerSettingType::GPU => String::from("Hardware Acceleration"),
       PuddlerSettingType::GLSL_Shaders => String::from("GLSL Shaders"),
       PuddlerSettingType::MPV_Config_Location => String::from("MPV Config Location"),
       PuddlerSettingType::MPV_Debug => String::from("MPV Debug Log"),
