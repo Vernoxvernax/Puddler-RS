@@ -1,6 +1,10 @@
 ### Changes since **0.7.0**:
 
-* fix(jellyfin/emby): fix external subtitle url
+* fix(text): fix incorrect description of option (hardware acceleration)
+* fix(cli/config): don't override the debug_log option
+* fix(playback): fix the "finish" item option
+* fix(input): only update the interface when necessary
+* fix(jellyfin/emby): fix external subtitles url
 * feat(playback): support for user preferred audio/sub tracks
   * This is currently very experimental.
   * Every platform returns different kinds of language codes so I had to add another dependency. (very small though)
