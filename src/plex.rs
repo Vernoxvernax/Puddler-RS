@@ -734,6 +734,10 @@ impl PlexServer {
               }
               next_index += 1;
             }
+            if options.is_empty() {
+              print_message(PrintMessageType::Warning, "Playlist done. Returning to menu.");
+              return;
+            }
             options.append(&mut vec![
               InteractiveOption {
                 text: "Back to Menu".to_string(),
