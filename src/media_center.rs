@@ -520,7 +520,7 @@ pub trait MediaCenter {
     stdout.flush().unwrap();
 
     if media_center_type == MediaCenterType::Jellyfin {
-      if let Ok(items) = self.get_items(
+      if let Ok(mut items) = self.get_items(
         format!("Shows/NextUp?UserId={}", user.user_id),
         false
       ) {
@@ -532,6 +532,7 @@ pub trait MediaCenter {
             }
           ]);
         }
+        items.retain(|i| !total.contains(&i));
         for item in items.clone() {
           options.append(&mut vec![InteractiveOption {
             text: item.to_string_full(),
