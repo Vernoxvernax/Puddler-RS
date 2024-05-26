@@ -14,6 +14,31 @@ use crossterm::{
 };
 use crate::{media_center::Series, printing::INVALID_INPUT, MenuOptions};
 
+trait CSplit {
+  fn take_chars(&self, start: usize, end: usize) -> String;
+}
+
+impl CSplit for String {
+  /// Start and End are inclusive
+  fn take_chars(&self, start: usize, end: usize) -> String {
+    let chars: Vec<char> = self.chars().collect();
+    let mut collect: bool = false;
+    let mut collector: String = String::new();
+    for (index, ch) in chars.iter().enumerate() {
+      if index == start {
+        collect = true;
+      }
+      if collect {
+        collector.push(*ch);
+      }
+      if index == end {
+        break;
+      }
+    }
+    collector
+  }
+}
+
 #[derive(Clone, PartialEq)]
 pub enum InteractiveOptionType {
   Header,
@@ -408,8 +433,8 @@ fn display_options(options: &[InteractiveOption], selected_index: (usize, usize)
       InteractiveOptionType::Button5s => {
         if index == selected_index.0 {
           output = format!("   [ {}{} ]",
-            option.text.clone()[..selected_index.1].underlined().bold().on_white().black(),
-            option.text.clone()[selected_index.1..].underlined().bold()
+            option.text.clone().take_chars(0, selected_index.1).underlined().bold().on_white().black(),
+            option.text.clone().take_chars(selected_index.1+1, option.text.chars().count()).underlined().bold()
           );
           stop = true;
         } else {

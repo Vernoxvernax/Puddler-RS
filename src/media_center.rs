@@ -264,6 +264,7 @@ pub struct Season {
 pub trait ToStringAdv {
   fn to_string_split(&self) -> Vec<String>;
   fn to_string_full(&self) -> String;
+  fn to_string_ext(&self) -> String;
 }
 
 impl ToStringAdv for Item {
@@ -315,10 +316,19 @@ impl ToStringAdv for Item {
     }
   }
 
+  fn to_string_ext(&self) -> String {
+    let full = self.to_string_full();
+    if let Some(percentage) = self.UserData.PlayedPercentage {
+      format!("{} {}%", full, percentage.round())
+    } else {
+      full
+    }
+  }
+
   fn to_string_full(&self) -> String {
     let basic = self.to_string();
-    if let Some(percentage) = self.UserData.PlayedPercentage {
-      format!("{} {}%", basic, percentage.round())
+    if self.UserData.Played {
+      format!("{} - {}", basic, "(Played)".green())
     } else {
       basic
     }
@@ -338,11 +348,6 @@ impl ToString for Item {
     } else {
       "(???)".to_string()
     };
-    let played_status = if self.UserData.Played {
-      format!(" - {}", "(Played)".green())
-    } else {
-      String::new()
-    };
     let mut name: String;
     match self.Type.as_str() {
       "Season" | "Episode" => name = self.SeriesName.clone().unwrap_or(String::from("???")),
@@ -355,7 +360,7 @@ impl ToString for Item {
     
     match self.Type.as_str() {
       "Movie" | "Series" => {
-        format!("{} {}{}", name, time, played_status)
+        format!("{} {}", name, time)
       },
       "Season" => {
         format!("{} {} - {}",
@@ -365,16 +370,15 @@ impl ToString for Item {
         )
       },
       "Episode" => {
-        format!("{} {} - S{:02}E{:02} - {}{}",
+        format!("{} {} - S{:02}E{:02} - {}",
           name,
           time,
           self.ParentIndexNumber.unwrap_or(0),
           self.IndexNumber.unwrap_or(0),
-          self.Name,
-          played_status
+          self.Name
         )
       },
-      _ => format!("{} {} (unknown media type){}", self.Name, time, played_status)
+      _ => format!("{} {} (unknown media type)", self.Name, time)
     }
   }
 }
@@ -504,7 +508,7 @@ pub trait MediaCenter {
       }
       for item in items.clone() {
         options.append(&mut vec![InteractiveOption {
-          text: item.to_string_full(),
+          text: item.to_string_ext(),
           option_type: InteractiveOptionType::Button
         }]);
       }
@@ -535,7 +539,7 @@ pub trait MediaCenter {
         items.retain(|i| !total.contains(&i));
         for item in items.clone() {
           options.append(&mut vec![InteractiveOption {
-            text: item.to_string_full(),
+            text: item.to_string_ext(),
             option_type: InteractiveOptionType::Button
           }]);
         }
@@ -569,7 +573,7 @@ pub trait MediaCenter {
       }
       for item in items.clone() {
         options.append(&mut vec![InteractiveOption {
-          text: item.to_string_full(),
+          text: item.to_string_ext(),
           option_type: InteractiveOptionType::Button
         }]);
       }
@@ -597,7 +601,7 @@ pub trait MediaCenter {
       }
       for item in items.clone() {
         options.append(&mut vec![InteractiveOption {
-          text: item.to_string_full(),
+          text: item.to_string_ext(),
           option_type: InteractiveOptionType::Button
         }]);
       }
@@ -648,7 +652,7 @@ pub trait MediaCenter {
             }]);
             for item in items.clone() {
               options.append(&mut vec![InteractiveOption {
-                text: item.to_string_full(),
+                text: item.to_string_ext(),
                 option_type: InteractiveOptionType::Button
               }]);
             }
@@ -681,7 +685,7 @@ pub trait MediaCenter {
   }
 
   fn process_item(&mut self, item: Item) {
-    println!("Selected: {}", item.to_string().cyan());
+    println!("Selected: {}", item.to_string_ext().cyan());
     let mut playlist: Vec<Item> = vec![];
     match item.Type.as_str() {
       "Movie" => {
@@ -750,11 +754,11 @@ pub trait MediaCenter {
             }
             options.append(&mut vec![
               InteractiveOption {
-                text: format!("Finish: {}", item.to_string_full()),
+                text: format!("Finish: {}", item.to_string_ext()),
                 option_type: InteractiveOptionType::Button
               },
               InteractiveOption {
-                text: format!("Mark as played: {}", item.to_string_full()),
+                text: format!("Mark as played: {}", item.to_string_ext()),
                 option_type: InteractiveOptionType::Button
               }
             ]);
@@ -764,7 +768,7 @@ pub trait MediaCenter {
                  // (might want to use unmark in the menu before watching a series again)
             if !next_item.UserData.Played {
               options.push(InteractiveOption {
-                text: format!("Continue with: {}", next_item.to_string()),
+                text: format!("Continue with: {}", next_item.to_string_ext()),
                 option_type: InteractiveOptionType::Button5s
               });
               break;
@@ -1283,12 +1287,12 @@ pub trait MediaCenter {
         }
         line.push_str(format!("[{:0zero_pad_amount$}] ", index).as_str());
         let terminal_size = terminal::size().unwrap().0 as usize;
-        if 13 + zero_pad_amount + index.to_string().len() + episode.to_string().len() > terminal_size {
-          line.push_str(format!("{}...", episode.to_string()).as_str());
+        if 13 + zero_pad_amount + index.to_string().len() + episode.to_string_ext().len() > terminal_size {
+          line.push_str(format!("{}...", episode.to_string_ext()).as_str());
           just_text.push(line.clone());
           line.clear();
         } else {
-          line.push_str(episode.to_string().as_str());
+          line.push_str(episode.to_string_ext().as_str());
           just_text.push(line.clone());
           line.clear();
         }

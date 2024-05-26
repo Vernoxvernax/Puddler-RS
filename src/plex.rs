@@ -231,14 +231,33 @@ impl ToStringAdv for PlexItem {
     }
   }
 
-  fn to_string_full(&self) -> String {
-    let basic = self.to_string();
+  fn to_string_ext(&self) -> String {
+    let full = self.to_string_full();
     if let Some(offset) = self.viewOffset {
       if let Some(duration) = self.duration {
-        return format!("{} {}%", basic, ((offset as f64 / duration as f64) * 100.0).round());
+        return format!("{} {}%", full, ((offset as f64 / duration as f64) * 100.0).round());
       }
     }
-    basic
+    full
+  }
+
+  fn to_string_full(&self) -> String {
+    let basic = self.to_string();
+    let mut played_status = String::new();
+    if &self.r#type == "season" || &self.r#type == "show" {
+      if let Some(leafCount) = self.leafCount {
+        if let Some(viewedLeafCount) = self.viewedLeafCount {
+          if leafCount <= viewedLeafCount {
+            played_status = format!(" - {}", "(Played)".green());
+          }
+        }
+      }
+    } else if let Some(viewCount) = self.viewCount {
+      if viewCount > 0  {
+        played_status = format!(" - {}", "(Played)".green());
+      }
+    }
+    format!("{}{}", basic, played_status)
   }
 }
 
@@ -251,20 +270,6 @@ impl ToString for PlexItem {
     } else {
       "(???)".to_string()
     };
-    let mut played_status = String::new();
-    if &self.r#type == "season" || &self.r#type == "show" {
-      if let Some(leafCount) = self.leafCount {
-        if let Some(viewedLeafCount) = self.viewedLeafCount {
-          if !leafCount > viewedLeafCount {
-            played_status = format!(" - {}", "(Played)".green());
-          }
-        }
-      }
-    } else if let Some(viewCount) = self.viewCount {
-      if viewCount > 0  {
-        played_status = format!(" - {}", "(Played)".green());
-      }
-    }
 
     let mut name: String;
     match self.r#type.as_str() {
@@ -279,7 +284,7 @@ impl ToString for PlexItem {
     
     match self.r#type.as_str() {
       "movie" | "show" => {
-        format!("{} {}{}", name, time, played_status)
+        format!("{} {}", name, time)
       },
       "season" => {
         format!("{} {} - {}",
@@ -289,16 +294,15 @@ impl ToString for PlexItem {
         )
       },
       "episode" => {
-        format!("{} {} - S{:02}E{:02} - {}{}",
+        format!("{} {} - S{:02}E{:02} - {}",
           name,
           time,
           self.parentIndex.unwrap_or(0),
           self.index.unwrap_or(0),
-          self.title,
-          played_status
+          self.title
         )
       },
-      _ => format!("{} {} (unknown media type){}", self.title, time, played_status)
+      _ => format!("{} {} (unknown media type)", self.title, time)
     }
   }
 }
@@ -393,7 +397,7 @@ impl MediaCenter for PlexServer {
       }
       for item in items.clone() {
         options.append(&mut vec![InteractiveOption {
-          text: item.to_string_full(),
+          text: item.to_string_ext(),
           option_type: InteractiveOptionType::Button
         }]);
       }
@@ -439,7 +443,7 @@ impl MediaCenter for PlexServer {
             }]);
             for item in items.clone() {
               options.append(&mut vec![InteractiveOption {
-                text: item.to_string_full(),
+                text: item.to_string_ext(),
                 option_type: InteractiveOptionType::Button
               }]);
             }
@@ -640,7 +644,7 @@ impl PlexServer {
   }
 
   fn process_item(&mut self, item: PlexItem) {
-    println!("Selected: {}", item.to_string().cyan());
+    println!("Selected: {}", item.to_string_full().cyan());
     let mut playlist: Vec<PlexItem> = vec![];
     match item.r#type.as_str() {
       "movie" => {
@@ -713,11 +717,11 @@ impl PlexServer {
               }
               options.append(&mut vec![
                 InteractiveOption {
-                  text: format!("Finish: {}", item.to_string_full()),
+                  text: format!("Finish: {}", item.to_string_ext()),
                   option_type: InteractiveOptionType::Button
                 },
                 InteractiveOption {
-                  text: format!("Mark as played: {}", item.to_string_full()),
+                  text: format!("Mark as played: {}", item.to_string_ext()),
                   option_type: InteractiveOptionType::Button
                 }
               ]);
@@ -727,7 +731,7 @@ impl PlexServer {
                     // (might want to use unmark in the menu before watching a series again)
               if next_item.viewCount.is_none() {
                 options.push(InteractiveOption {
-                  text: format!("Continue with: {}", next_item.to_string()),
+                  text: format!("Continue with: {}", next_item.to_string_ext()),
                   option_type: InteractiveOptionType::Button5s
                 });
                 break;
@@ -1161,12 +1165,12 @@ impl PlexServer {
         }
         line.push_str(format!("[{:0zero_pad_amount$}] ", index).as_str());
         let terminal_size = terminal::size().unwrap().0 as usize;
-        if 13 + zero_pad_amount + index.to_string().len() + episode.to_string().len() > terminal_size {
-          line.push_str(format!("{}...", episode.to_string()).as_str());
+        if 13 + zero_pad_amount + index.to_string().len() + episode.to_string_ext().len() > terminal_size {
+          line.push_str(format!("{}...", episode.to_string_ext()).as_str());
           just_text.push(line.clone());
           line.clear();
         } else {
-          line.push_str(episode.to_string().as_str());
+          line.push_str(episode.to_string_ext().as_str());
           just_text.push(line.clone());
           line.clear();
         }
