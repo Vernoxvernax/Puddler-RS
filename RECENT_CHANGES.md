@@ -1,5 +1,11 @@
 ### Changes since **0.7.0**:
 
+* fix(printing): cleaner item titles; correctly splitting chars
+  * "(Played)" was still in Mpv's titlebar.
+  * ContinueMenu: Dont split chars based on the byte index
+* fix(jellyfin): avoid duplicates in menu
+  * Whenever an episode has been played long enough to show up in Continue Watching, it also shows up in NextUp which lead to duplicates in the menu.
+* refactor(playlist): exit playlist mode when there is nothing left to do
 * fix(text): fix incorrect description of option (hardware acceleration)
 * fix(cli/config): don't override the debug_log option
 * fix(playback): fix the "finish" item option
