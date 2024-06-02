@@ -746,8 +746,7 @@ pub trait MediaCenter {
           let mut options: Vec<InteractiveOption> = vec![];
           execute!(stdout, DisableLineWrap).unwrap();
           if !ret.played {
-            let url = format!("Users/{}/Items/{}", self.get_config_handle().get_active_user().unwrap().user_id, item.Id);
-            if let Ok(updated_item) = self.get_item(url) {
+            if let Ok(updated_item) = self.get_item(item.Id.clone()) {
               playlist[index] = updated_item;
             } else {
               print_message(PrintMessageType::Error, format!("Failed to get updated information for {}.", item.to_string()).as_str())
@@ -1357,14 +1356,12 @@ pub trait MediaCenter {
     series
   }
 
-  fn get_item(&mut self, mut url: String) -> Result<Item, ()> {
-    if !url.contains('?') {
-      url.push('?')
-    } else if !url.ends_with('&') {
-      url.push('&')
-    }
-    let modded_url = format!("{}Fields=PremiereDate,MediaSources,Status,ProductionYear&collapseBoxSetItems=False&IsMissing=False", url);
-    match self.get(modded_url.clone()) {
+  fn get_item(&mut self, item_id: String) -> Result<Item, ()> {
+    let url = format!(
+      "Users/{}/Items/{}?Fields=PremiereDate,MediaSources,Status,ProductionYear&collapseBoxSetItems=False&IsMissing=False",
+      self.get_config_handle().get_active_user().unwrap().user_id, item_id
+    );
+    match self.get(url.clone()) {
       Ok(mut result) => {
         if let Ok(json) = serde_json::from_str::<Value>(&result.text().unwrap()) {
           if let Ok(item_list) = serde_json::from_value::<Item>(json) {

@@ -688,99 +688,95 @@ impl PlexServer {
     let mut player = Player::new(self.get_config_handle().clone(), settings.clone());
 
     let mut transcoding_settings = None;
-    let mut player_settings: (Option<u32>, Option<u32>) = (None, None);
     let mut index = 0;
     let mut stdout = stdout();
     while index < playlist.len() {
-      if let Ok(item) = self.get_item(playlist[index].clone().ratingKey) {
-        let mut next_index = index + 1;
-        let mut streamable_item = item.clone();
-        if self.create_transcoding_info(&mut streamable_item, &mut transcoding_settings).is_ok() {
-          self.insert_value(MediaCenterValues::PlaybackInfo, serde_json::to_string(&streamable_item).unwrap());
-          self.update_player(&mut player);
-          player.set_plex_video(streamable_item, server_address.clone(), auth.clone(), &mut transcoding_settings);
-          let ret = player.play();
-          if let Some((_, ref mut audio, ref mut subtitle, ..)) = transcoding_settings.as_mut() {
-            *audio = ret.preferred_audio_track;
-            *subtitle = ret.preferred_subtitle_track
-          }
-          'playback_done: loop {
-            let mut options: Vec<InteractiveOption> = vec![];
-            execute!(stdout, DisableLineWrap).unwrap();
-            player_settings.0 = ret.preferred_audio_track;
-            player_settings.1 = ret.preferred_subtitle_track;
-            if !ret.played {
-              if let Ok(updated_item) = self.get_item(item.ratingKey.clone()) {
-                playlist[index] = updated_item;
-              } else {
-                print_message(PrintMessageType::Error, format!("Failed to get updated information for {}.", item.to_string()).as_str())
-              }
-              options.append(&mut vec![
-                InteractiveOption {
-                  text: format!("Finish: {}", item.to_string_ext()),
-                  option_type: InteractiveOptionType::Button
-                },
-                InteractiveOption {
-                  text: format!("Mark as played: {}", item.to_string_ext()),
-                  option_type: InteractiveOptionType::Button
-                }
-              ]);
-            }
-            while let Some(next_item) = playlist.get(index+1) { 
-                    // skip every item that has been played already
-                    // (might want to use unmark in the menu before watching a series again)
-              if next_item.viewCount.is_none() {
-                options.push(InteractiveOption {
-                  text: format!("Continue with: {}", next_item.to_string_ext()),
-                  option_type: InteractiveOptionType::Button5s
-                });
-                break;
-              }
-              next_index += 1;
-            }
-            if options.is_empty() {
-              print_message(PrintMessageType::Warning, "Playlist done. Returning to menu.");
-              return;
+      let item = playlist[index].clone();
+      let mut next_index = index + 1;
+      let mut streamable_item = item.clone();
+      if self.create_transcoding_info(&mut streamable_item, &mut transcoding_settings).is_ok() {
+        self.insert_value(MediaCenterValues::PlaybackInfo, serde_json::to_string(&streamable_item).unwrap());
+        self.update_player(&mut player);
+        player.set_plex_video(streamable_item, server_address.clone(), auth.clone(), &mut transcoding_settings);
+        let ret = player.play();
+        if let Some((_, ref mut audio, ref mut subtitle, ..)) = transcoding_settings.as_mut() {
+          *audio = ret.preferred_audio_track;
+          *subtitle = ret.preferred_subtitle_track
+        }
+        'playback_done: loop {
+          let mut options: Vec<InteractiveOption> = vec![];
+          execute!(stdout, DisableLineWrap).unwrap();
+          if !ret.played {
+            if let Ok(updated_item) = self.get_item(item.ratingKey.clone()) {
+              playlist[index] = updated_item;
+            } else {
+              print_message(PrintMessageType::Error, format!("Failed to get updated information for {}.", item.to_string()).as_str())
             }
             options.append(&mut vec![
               InteractiveOption {
-                text: "Back to Menu".to_string(),
-                option_type: InteractiveOptionType::Special
+                text: format!("Finish: {}", item.to_string_ext()),
+                option_type: InteractiveOptionType::Button
               },
               InteractiveOption {
-                text: "Exit Application".to_string(),
-                option_type: InteractiveOptionType::Special
-              },
+                text: format!("Mark as played: {}", item.to_string_ext()),
+                option_type: InteractiveOptionType::Button
+              }
             ]);
-            match interactive_select(options) {
-              ((_, _), Some(text), InteractiveOptionType::Button) => {
-                if text.starts_with("Finish") {
-                  transcoding_settings.as_mut().unwrap().0 = true;
-                  break 'playback_done;
-                } else if text.starts_with("Mark") {
-                  self.item_set_playstate(item.ratingKey.clone(), true);
-                  continue 'playback_done;
-                } else if text.starts_with("Continue") {
-                  index = next_index;
-                  break 'playback_done;
-                }
-              },
-              ((_, _), Some(text), InteractiveOptionType::Special) => {
-                match text.as_str() {
-                  "Back to Menu" => {
-                    execute!(stdout, EnableLineWrap).unwrap();
-                    return;
-                  },
-                  _ => {
-                    execute!(stdout, EnableLineWrap).unwrap();
-                    exit(0)
-                  }
-                }
-              },
-              _ => ()
-            }
-            execute!(stdout, EnableLineWrap).unwrap();
           }
+          while let Some(next_item) = playlist.get(index+1) { 
+                  // skip every item that has been played already
+                  // (might want to use unmark in the menu before watching a series again)
+            if next_item.viewCount.is_none() {
+              options.push(InteractiveOption {
+                text: format!("Continue with: {}", next_item.to_string_ext()),
+                option_type: InteractiveOptionType::Button5s
+              });
+              break;
+            }
+            next_index += 1;
+          }
+          if options.is_empty() {
+            print_message(PrintMessageType::Warning, "Playlist done. Returning to menu.");
+            return;
+          }
+          options.append(&mut vec![
+            InteractiveOption {
+              text: "Back to Menu".to_string(),
+              option_type: InteractiveOptionType::Special
+            },
+            InteractiveOption {
+              text: "Exit Application".to_string(),
+              option_type: InteractiveOptionType::Special
+            },
+          ]);
+          match interactive_select(options) {
+            ((_, _), Some(text), InteractiveOptionType::Button) => {
+              if text.starts_with("Finish") {
+                transcoding_settings.as_mut().unwrap().0 = true;
+                break 'playback_done;
+              } else if text.starts_with("Mark") {
+                self.item_set_playstate(item.ratingKey.clone(), true);
+                continue 'playback_done;
+              } else if text.starts_with("Continue") {
+                index = next_index;
+                break 'playback_done;
+              }
+            },
+            ((_, _), Some(text), InteractiveOptionType::Special) => {
+              match text.as_str() {
+                "Back to Menu" => {
+                  execute!(stdout, EnableLineWrap).unwrap();
+                  return;
+                },
+                _ => {
+                  execute!(stdout, EnableLineWrap).unwrap();
+                  exit(0)
+                }
+              }
+            },
+            _ => ()
+          }
+          execute!(stdout, EnableLineWrap).unwrap();
         }
       }
     }
