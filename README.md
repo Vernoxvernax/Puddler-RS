@@ -1,6 +1,6 @@
 # Puddler-RS
 
-Emby & Jellyfin command line client, powered by MPV. Written in Rust.
+Jellyfin & Emby & Plex command line client, powered by MPV. Written in Rust.
 
 [![Rust](https://github.com/Vernoxvernax/Puddler-RS/actions/workflows/release-builds.yml/badge.svg)](https://github.com/Vernoxvernax/Puddler-RS/actions/workflows/release-builds.yml)
 ![GitHub issues](https://img.shields.io/github/issues/Vernoxvernax/Puddler-RS)
@@ -13,7 +13,7 @@ ___
 
 ## Requirements
 
-* fully configured Emby or Jellyfin server (+account)
+* fully configured Jellyfin or Emby or Plex server (+account)
 * at least some knowledge of IP addresses and networking
 
 ___

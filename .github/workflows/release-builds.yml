@@ -45,7 +45,7 @@ jobs:
       with:
         draft: false
         prerelease: false
-        name: ${{ github.ref }}
+        name: ${{ github.ref_name }}
         tag_name: ${{ github.ref }}
         body_path: RECENT_CHANGES.md
         files: puddler, puddler.exe
