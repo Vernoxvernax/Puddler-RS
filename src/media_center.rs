@@ -1814,14 +1814,21 @@ pub trait MediaCenter {
     } else {
       panic!("Request header missing!! Make sure you are running write_headers().");
     };
-    let response = Request::get(url)
-      .timeout(Duration::from_secs(5))
+    let request = Request::get(url)
+      .timeout(Duration::from_secs(15))
       .header(authorization_2.clone().0, authorization_2.clone().1)
       .header(String::from("X-Application"), request_headers.clone().0)
       .header(String::from("X-Emby-Token"), request_headers.clone().1)
       .header("Content-Type", "application/json")
       .body(()).unwrap()
-    .send().unwrap();
+    .send();
+
+    let response = if let Err(res) = request {
+      print_message(PrintMessageType::Error, res.to_string().as_str());
+      exit(1);
+    } else {
+      request.unwrap()
+    };
 
     match response.status() {
       StatusCode::OK => {
@@ -1836,7 +1843,7 @@ pub trait MediaCenter {
   fn delete(&mut self, url: String, body: String) -> Result<Response<Body>, String> {
     let url = format!("{}{}", self.get_address(), url);
     let headers = self.get_headers();
-    let mut builder = Request::delete(url);
+    let mut builder = Request::delete(url).timeout(Duration::from_secs(15));
     if headers.len() == 1 {
       let authorization_1 = headers.get(0).unwrap();
       builder = builder.header(authorization_1.clone().0, authorization_1.clone().1);
@@ -1847,15 +1854,23 @@ pub trait MediaCenter {
       builder = builder.header(String::from("X-Application"), request_headers.clone().0);
       builder = builder.header(String::from("X-Emby-Token"), request_headers.clone().1);
     }
-    let mut request = builder.header("Content-Type", "application/json")
+    let request = builder.header("Content-Type", "application/json")
       .body(body).unwrap()
-    .send().unwrap();
-    match request.status() {
+    .send();
+
+    let mut response = if let Err(res) = request {
+      print_message(PrintMessageType::Error, res.to_string().as_str());
+      exit(1);
+    } else {
+      request.unwrap()
+    };
+
+    match response.status() {
       StatusCode::OK => {
-        Ok(request)
+        Ok(response)
       },
       _ => {
-        Err(request.text().unwrap())
+        Err(response.text().unwrap())
       }
     }
   }
@@ -1863,7 +1878,7 @@ pub trait MediaCenter {
   fn post(&mut self, url: String, body: String) -> Result<Response<Body>, String> {
     let url = format!("{}{}", self.get_address(), url);
     let headers = self.get_headers();
-    let mut builder = Request::post(url);
+    let mut builder = Request::post(url).timeout(Duration::from_secs(15));
     if headers.len() == 1 {
       let authorization_1 = headers.get(0).unwrap();
       builder = builder.header(authorization_1.clone().0, authorization_1.clone().1);
@@ -1874,19 +1889,22 @@ pub trait MediaCenter {
       builder = builder.header(String::from("X-Application"), request_headers.clone().0);
       builder = builder.header(String::from("X-Emby-Token"), request_headers.clone().1);
     }
-    let mut request = if let Ok(request_) = builder.header("Content-Type", "application/json")
+    let request = builder.header("Content-Type", "application/json")
       .body(body).unwrap()
-    .send() {
-      request_
+    .send();
+
+    let mut response = if let Err(res) = request {
+      return Err(res.to_string());
     } else {
-      return Err("Failed to send request".to_string());
+      request.unwrap()
     };
-    match request.status() {
+
+    match response.status() {
       StatusCode::OK | StatusCode::NO_CONTENT => {
-        Ok(request)
+        Ok(response)
       },
       _ => {
-        Err(request.text().unwrap())
+        Err(response.text().unwrap())
       }
     }
   }

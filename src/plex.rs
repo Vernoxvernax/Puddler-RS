@@ -483,12 +483,19 @@ impl MediaCenter for PlexServer {
       url.push('&')
     }
     let url = format!("{}{}X-Plex-Token={}&X-Plex-Client-Identifier={}", self.get_address(), url, user.access_token, self.config_handle.get_device_id());
-    let response = Request::get(url.clone())
-      .timeout(Duration::from_secs(5))
+    let request = Request::get(url.clone())
+      .timeout(Duration::from_secs(15))
       .header("Content-Type", "application/json")
       .header("accept", "application/json")
       .body(()).unwrap()
-    .send().unwrap();
+    .send();
+
+    let response = if let Err(res) = request {
+      print_message(PrintMessageType::Error, res.to_string().as_str());
+      exit(1);
+    } else {
+      request.unwrap()
+    };
 
     match response.status() {
       StatusCode::OK => {
@@ -1106,12 +1113,19 @@ impl PlexServer {
       url.push('&')
     }
     let url = format!("{}{}X-Plex-Token={}&X-Plex-Client-Identifier={}", self.get_address(), url, user.access_token, self.config_handle.get_device_id());
-    let response = Request::put(url)
-      .timeout(Duration::from_secs(5))
+    let request = Request::put(url)
+      .timeout(Duration::from_secs(15))
       .header("Content-Type", "application/json")
       .header("accept", "application/json")
       .body(()).unwrap()
-    .send().unwrap();
+    .send();
+
+    let response = if let Err(res) = request {
+      print_message(PrintMessageType::Error, res.to_string().as_str());
+      exit(1);
+    } else {
+      request.unwrap()
+    };
 
     match response.status() {
       StatusCode::OK => {
@@ -1523,13 +1537,20 @@ fn plex_tv(request_type: RequestType, user: Option<UserConfig>, device_id: Strin
     Request::post(modded_url)
   };
 
-  let response = builder
-    .timeout(Duration::from_secs(5))
+  let request = builder
+    .timeout(Duration::from_secs(15))
     .header("Content-Type", "application/json")
     .header("accept", "application/json")
     .header("User-Agent", APPNAME)
     .body(()).unwrap()
-  .send().unwrap();
+  .send();
+
+  let response = if let Err(res) = request {
+    print_message(PrintMessageType::Error, res.to_string().as_str());
+    exit(1);
+  } else {
+    request.unwrap()
+  };
 
   match response.status() {
     StatusCode::OK | StatusCode::CREATED => {
