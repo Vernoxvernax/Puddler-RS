@@ -1,31 +1,34 @@
 #![allow(non_snake_case)]
-use std::{
-  fmt::Debug, fs, path::{Path, PathBuf}, result::Result
-};
+use serde_derive::{Deserialize, Serialize};
 use serde_json::Value;
-use serde_derive::{Deserialize,Serialize};
+use std::{
+  fmt::Debug,
+  fs,
+  path::{Path, PathBuf},
+  result::Result,
+};
 
-use crate::{error::MediaCenterConfigError, input::{getch, take_string_input}, media_center::broadcast_search, printing::{print_message, PrintMessageType}, APPNAME};
+use crate::{
+  error::MediaCenterConfigError,
+  input::{getch, take_string_input},
+  media_center::broadcast_search,
+  printing::{print_message, PrintMessageType},
+  APPNAME,
+};
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Copy)]
 pub enum MediaCenterType {
   Jellyfin,
   Emby,
-  Plex
+  Plex,
 }
 
 impl ToString for MediaCenterType {
   fn to_string(&self) -> String {
     match self {
-      MediaCenterType::Jellyfin => {
-        String::from("Jellyfin")
-      },
-      MediaCenterType::Emby => {
-        String::from("Emby")
-      },
-      MediaCenterType::Plex => {
-        String::from("Plex")
-      }
+      MediaCenterType::Jellyfin => String::from("Jellyfin"),
+      MediaCenterType::Emby => String::from("Emby"),
+      MediaCenterType::Plex => String::from("Plex"),
     }
   }
 }
@@ -35,33 +38,33 @@ pub struct MediaCenterConfig {
   pub media_center_type: MediaCenterType,
   pub server_name: String,
   pub transcoding: bool,
-  pub specific_values: Value
+  pub specific_values: Value,
 }
 
 #[derive(Clone)]
 pub struct Config {
   pub config: MediaCenterConfig,
-  pub path: String
+  pub path: String,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ServerConfig {
   pub device_id: String,
   pub address: String,
-  pub users: Vec<UserConfig>
+  pub users: Vec<UserConfig>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct UserConfig {
   pub access_token: String,
   pub username: String,
-  pub user_id: String
+  pub user_id: String,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct UserCredentials {
   pub username: String,
-  pub password: String
+  pub password: String,
 }
 
 #[derive(Clone, Debug)]
@@ -72,12 +75,16 @@ pub enum Objective {
   ServerName,
   Users,
   SearchLocalInstance,
-  User
+  User,
 }
 
 pub fn get_mediacenter_folder() -> PathBuf {
   let config_path = dirs::config_dir().unwrap();
-  let mut media_center_path = format!("{}/{}/media-center", &config_path.display().to_string(), APPNAME.to_lowercase());
+  let mut media_center_path = format!(
+    "{}/{}/media-center",
+    &config_path.display().to_string(),
+    APPNAME.to_lowercase()
+  );
   if cfg!(windows) {
     media_center_path = media_center_path.replace('/', "\\");
   }
@@ -95,8 +102,8 @@ impl Config {
         media_center_type: MediaCenterType::Emby,
         server_name: String::new(),
         transcoding: false,
-        specific_values: serde_json::from_str("{}").unwrap()
-      }
+        specific_values: serde_json::from_str("{}").unwrap(),
+      },
     }
   }
 
@@ -104,11 +111,14 @@ impl Config {
     let mut files: Vec<Config> = vec![];
     let media_center_folder = get_mediacenter_folder();
     if fs::read_dir(media_center_folder.clone()).unwrap().count() == 0 {
-      print_message(PrintMessageType::Warning, "No media center configuration found. Creating new config...");
+      print_message(
+        PrintMessageType::Warning,
+        "No media center configuration found. Creating new config...",
+      );
       self.ask_for_setting(Objective::MediaCenterType);
       match self.config.media_center_type {
         MediaCenterType::Plex => (),
-        _ => self.ask_for_setting(Objective::SearchLocalInstance)
+        _ => self.ask_for_setting(Objective::SearchLocalInstance),
       }
       self.save();
     } else {
@@ -121,7 +131,7 @@ impl Config {
         if let Ok(serialized) = serde_json::from_str::<MediaCenterConfig>(&content) {
           files.append(&mut vec![Config {
             path: file_path,
-            config: serialized
+            config: serialized,
           }]);
         }
       }
@@ -166,7 +176,7 @@ impl Config {
         let mut temp = ServerConfig {
           address,
           device_id,
-          users
+          users,
         };
         match setting {
           Objective::DeviceID => {
@@ -182,13 +192,17 @@ impl Config {
             }
           },
           Objective::User => {
-            let user_index = temp.users.iter().position(|u| u.access_token == value).unwrap();
+            let user_index = temp
+              .users
+              .iter()
+              .position(|u| u.access_token == value)
+              .unwrap();
             temp.users.remove(user_index);
-          }
-          _ => eprintln!("THAT is not a specific config setting.")
+          },
+          _ => eprintln!("THAT is not a specific config setting."),
         }
         self.config.specific_values = serde_json::to_value(temp).unwrap();
-      }
+      },
     }
   }
 
@@ -211,7 +225,7 @@ impl Config {
     let mut temp = ServerConfig {
       address,
       device_id,
-      users
+      users,
     };
     match setting {
       Objective::DeviceID => {
@@ -230,27 +244,38 @@ impl Config {
         temp.users = serde_json::from_str(&value).unwrap();
       },
       Objective::User => {
-        temp.users.append(&mut vec![serde_json::from_str(&value).unwrap()]);
-      }
-      _ => eprintln!("THAT is not a specific config setting.")
+        temp
+          .users
+          .append(&mut vec![serde_json::from_str(&value).unwrap()]);
+      },
+      _ => eprintln!("THAT is not a specific config setting."),
     }
     self.config.specific_values = serde_json::to_value(temp).unwrap();
   }
 
   pub fn save(&mut self) {
-    match fs::write(self.path.clone(), serde_json::to_string_pretty(&self.config).unwrap()) {
+    match fs::write(
+      self.path.clone(),
+      serde_json::to_string_pretty(&self.config).unwrap(),
+    ) {
       Ok(()) => print_message(PrintMessageType::Warning, "Saved media-center config."),
-      Err(e) => print_message(PrintMessageType::Error, format!("Failed to save config file: {}", e).as_str())
+      Err(e) => print_message(
+        PrintMessageType::Error,
+        format!("Failed to save config file: {}", e).as_str(),
+      ),
     }
   }
 
   pub fn delete(&mut self) {
-    print!("Are you sure you want to delete \"{}\"?\n (Y)es / (N)o", self.config.server_name);
+    print!(
+      "Are you sure you want to delete \"{}\"?\n (Y)es / (N)o",
+      self.config.server_name
+    );
     match getch("YyNn") {
       'Y' | 'y' => {
         fs::remove_file(self.path.clone()).unwrap();
-      }
-      _ => ()
+      },
+      _ => (),
     };
     println!();
   }
@@ -273,8 +298,8 @@ impl Config {
       let address = serde_address.unwrap().as_str().unwrap();
       match self.config.media_center_type {
         MediaCenterType::Plex => Some(address.to_string()),
-        MediaCenterType::Emby => Some(address.to_owned()+"emby/"),
-        MediaCenterType::Jellyfin => Some(address.to_string())
+        MediaCenterType::Emby => Some(address.to_owned() + "emby/"),
+        MediaCenterType::Jellyfin => Some(address.to_string()),
       }
     } else {
       None
@@ -283,7 +308,7 @@ impl Config {
 
   pub fn set_active_user(&mut self, identifier: String) {
     if let Ok(mut old_users) = serde_json::from_value::<Vec<UserConfig>>(
-      self.config.specific_values.get("users").unwrap().clone()
+      self.config.specific_values.get("users").unwrap().clone(),
     ) {
       let mut user_index = 0;
       for (index, user) in old_users.iter().enumerate() {
@@ -295,7 +320,10 @@ impl Config {
       let special_user = old_users[user_index].clone();
       old_users.remove(user_index);
       old_users.insert(0, special_user);
-      self.insert_specific_value(Objective::Users, serde_json::to_string_pretty(&old_users).unwrap());
+      self.insert_specific_value(
+        Objective::Users,
+        serde_json::to_string_pretty(&old_users).unwrap(),
+      );
     }
   }
 
@@ -313,7 +341,7 @@ impl Config {
       MediaCenterType::Plex => panic!("this too"),
       _ => {
         self.remove_specific_value(Objective::User, identifier);
-      }
+      },
     }
   }
 
@@ -347,10 +375,13 @@ impl Config {
               self.ask_for_setting(Objective::Address);
             }
           },
-          _ => panic!("Plex servers do not support this feature.")
+          _ => panic!("Plex servers do not support this feature."),
         }
         if self.check_existing_config() {
-          print_message(PrintMessageType::Warning, "A media-center configuration with that name already exists. Please try again.");
+          print_message(
+            PrintMessageType::Warning,
+            "A media-center configuration with that name already exists. Please try again.",
+          );
           self.ask_for_setting(Objective::ServerName);
         }
         return;
@@ -364,7 +395,12 @@ impl Config {
             let file_name = take_string_input(vec![]);
             self.config.server_name = self.config.server_name.replace(' ', "_");
             let config_path = dirs::config_dir().unwrap();
-            let config_file_path = format!("{}/{}/media-center/{}.json", &config_path.display().to_string(), APPNAME.to_lowercase(), file_name);
+            let config_file_path = format!(
+              "{}/{}/media-center/{}.json",
+              &config_path.display().to_string(),
+              APPNAME.to_lowercase(),
+              file_name
+            );
             self.path = config_file_path;
           } else {
             break;
@@ -385,8 +421,8 @@ impl Config {
           }
         }
         self.insert_specific_value(Objective::Address, address);
-      }
-      _ => {}
+      },
+      _ => {},
     }
     println!();
   }
@@ -395,7 +431,12 @@ impl Config {
     if self.path.is_empty() {
       self.config.server_name = self.config.server_name.replace(' ', "_");
       let config_path = dirs::config_dir().unwrap();
-      let config_file_path = format!("{}/{}/media-center/{}.json", &config_path.display().to_string(), APPNAME.to_lowercase(), self.config.server_name);
+      let config_file_path = format!(
+        "{}/{}/media-center/{}.json",
+        &config_path.display().to_string(),
+        APPNAME.to_lowercase(),
+        self.config.server_name
+      );
       self.path = config_file_path;
     }
     Path::is_file(Path::new(&self.path))

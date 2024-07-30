@@ -1,18 +1,23 @@
-use std::{
-  char, io::{
-    self, prelude::*, stdin, stdout
-  }, process::exit, time::Duration
-};
+use crate::{media_center::Series, printing::INVALID_INPUT, MenuOptions};
 use crossterm::{
   cursor::{
-    EnableBlinking, Hide, MoveLeft, MoveTo, MoveToColumn, MoveToNextLine, MoveToPreviousLine, RestorePosition, SavePosition, Show
-  }, event::{
-    poll, read, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers
-  }, execute, style::{Print, Stylize}, terminal::{
-    self, disable_raw_mode, enable_raw_mode, Clear, ClearType, DisableLineWrap, EnableLineWrap, EnterAlternateScreen, LeaveAlternateScreen
-  }
+    EnableBlinking, Hide, MoveLeft, MoveTo, MoveToColumn, MoveToNextLine, MoveToPreviousLine,
+    RestorePosition, SavePosition, Show,
+  },
+  event::{poll, read, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
+  execute,
+  style::{Print, Stylize},
+  terminal::{
+    self, disable_raw_mode, enable_raw_mode, Clear, ClearType, DisableLineWrap, EnableLineWrap,
+    EnterAlternateScreen, LeaveAlternateScreen,
+  },
 };
-use crate::{media_center::Series, printing::INVALID_INPUT, MenuOptions};
+use std::{
+  char,
+  io::{self, prelude::*, stdin, stdout},
+  process::exit,
+  time::Duration,
+};
 
 trait CSplit {
   fn take_chars(&self, start: usize, end: usize) -> String;
@@ -75,7 +80,7 @@ pub enum InteractiveOptionType {
 #[derive(Clone)]
 pub struct InteractiveOption {
   pub text: String,
-  pub option_type: InteractiveOptionType
+  pub option_type: InteractiveOptionType,
 }
 
 #[derive(Clone, PartialEq)]
@@ -83,7 +88,7 @@ pub enum SeriesOptions {
   Back,
   Played,
   UnPlayed,
-  Play
+  Play,
 }
 
 fn string_to_range(input: String) -> Vec<usize> {
@@ -142,28 +147,33 @@ fn string_to_range(input: String) -> Vec<usize> {
   indexes.sort();
 
   let mut minimum: Vec<usize> = vec![];
-  indexes.iter().for_each(|num| if let Some(last) = minimum.last() {
-    if last != num {
+  indexes.iter().for_each(|num| {
+    if let Some(last) = minimum.last() {
+      if last != num {
+        minimum.push(*num);
+      }
+    } else {
       minimum.push(*num);
     }
-  } else {
-    minimum.push(*num);
   });
   minimum
 }
 
 struct Episode {
   title: String,
-  watched: bool
+  watched: bool,
 }
 
 fn series_select(text: Vec<String>, episodes: Vec<Episode>) -> (SeriesOptions, Option<Vec<usize>>) {
   let mut stdout = stdout();
   stdout.flush().expect("Failed to flush stdout");
-  let main_options = format!("\nOptions: [{}oggle Watching-Status], [Left-Arrow to go back]", "T".bold().grey());
-  
+  let main_options = format!(
+    "\nOptions: [{}oggle Watching-Status], [Left-Arrow to go back]",
+    "T".bold().grey()
+  );
+
   execute!(stdout, EnterAlternateScreen, DisableLineWrap, Hide).unwrap();
-  
+
   let total_size = {
     let size = episodes.len();
     (size as f64).log10().floor() as usize + 1
@@ -171,7 +181,9 @@ fn series_select(text: Vec<String>, episodes: Vec<Episode>) -> (SeriesOptions, O
   let terminal_height = terminal::size().unwrap().1 as usize;
   let terminal_width = terminal::size().unwrap().0 as usize;
   if (terminal_height - 3) < text.len() {
-    text[..terminal_height - 3].iter().for_each(|l| println!("{}", l));
+    text[..terminal_height - 3]
+      .iter()
+      .for_each(|l| println!("{}", l));
     println!("{}[⇣]", " ".repeat(terminal_width - 5));
   } else {
     text.iter().for_each(|l| println!("{}", l));
@@ -189,7 +201,13 @@ fn series_select(text: Vec<String>, episodes: Vec<Episode>) -> (SeriesOptions, O
   let mut index_selection: Vec<usize> = vec![];
   loop {
     if poll(Duration::from_millis(100)).unwrap() {
-      if let Ok(Event::Key(KeyEvent { code, modifiers, state: _, kind: KeyEventKind::Press })) = read() {
+      if let Ok(Event::Key(KeyEvent {
+        code,
+        modifiers,
+        state: _,
+        kind: KeyEventKind::Press,
+      })) = read()
+      {
         if let KeyCode::Char(ch) = code {
           if ch.is_ascii_digit() {
             input.push(ch);
@@ -200,15 +218,26 @@ fn series_select(text: Vec<String>, episodes: Vec<Episode>) -> (SeriesOptions, O
             exit(1);
           } else if ch == 't' {
             if mode != SeriesOptions::Played {
-              options = format!("\nMode: [{}] (Press '{}' again toggle between Played and Un-Played)", "Played".bold(), ch.to_uppercase());
+              options = format!(
+                "\nMode: [{}] (Press '{}' again toggle between Played and Un-Played)",
+                "Played".bold(),
+                ch.to_uppercase()
+              );
               mode = SeriesOptions::Played;
               update = true;
             } else {
-              options = format!("\nMode: [{}] (Press '{}' again toggle between Played and Un-Played)", "Un-Played".bold(), ch.to_uppercase());
+              options = format!(
+                "\nMode: [{}] (Press '{}' again toggle between Played and Un-Played)",
+                "Un-Played".bold(),
+                ch.to_uppercase()
+              );
               mode = SeriesOptions::UnPlayed;
               update = true;
             }
-          } else if ch == '-' || ch == ',' && mode == SeriesOptions::Played || mode == SeriesOptions::UnPlayed {
+          } else if ch == '-'
+            || ch == ',' && mode == SeriesOptions::Played
+            || mode == SeriesOptions::UnPlayed
+          {
             input.push(ch);
             update = true;
           }
@@ -254,7 +283,9 @@ fn series_select(text: Vec<String>, episodes: Vec<Episode>) -> (SeriesOptions, O
       disable_raw_mode().unwrap();
       execute!(stdout, MoveTo(0, 0), Clear(ClearType::FromCursorDown)).unwrap();
       if (terminal_height - 5) < text.len() {
-        text[skip_lines..(terminal_height - 3) + skip_lines].iter().for_each(|l| println!("{}", l));
+        text[skip_lines..(terminal_height - 3) + skip_lines]
+          .iter()
+          .for_each(|l| println!("{}", l));
         if skip_lines != terminal_height - 5 {
           println!("{}[⇣]", " ".repeat(terminal_width - 5));
         } else {
@@ -267,10 +298,19 @@ fn series_select(text: Vec<String>, episodes: Vec<Episode>) -> (SeriesOptions, O
         let selection = input.parse::<usize>().unwrap_or(episodes.len());
         print!(": {}", input);
         if !input.is_empty() && selection < episodes.len() && input.len() <= total_size {
-          print!("{} = {}", " ".repeat(total_size - input.len()), episodes[selection].title);
+          print!(
+            "{} = {}",
+            " ".repeat(total_size - input.len()),
+            episodes[selection].title
+          );
         }
       } else if (input.ends_with(',') || input.ends_with('-')) && input.len() > 1 {
-        print!("[{}]: {}{}", "T".bold().grey(), &input[..input.len() - 1], input[input.len() - 1..].to_string().underlined());
+        print!(
+          "[{}]: {}{}",
+          "T".bold().grey(),
+          &input[..input.len() - 1],
+          input[input.len() - 1..].to_string().underlined()
+        );
       } else {
         print!("[{}]: {}", "T".bold().grey(), input);
         let range = string_to_range(input.clone());
@@ -298,13 +338,16 @@ fn series_select(text: Vec<String>, episodes: Vec<Episode>) -> (SeriesOptions, O
   }
 }
 
-pub fn plex_series_select(text: Vec<String>, series: crate::plex::Series) -> (SeriesOptions, Option<Vec<usize>>) {
+pub fn plex_series_select(
+  text: Vec<String>,
+  series: crate::plex::Series,
+) -> (SeriesOptions, Option<Vec<usize>>) {
   let mut episodes: Vec<Episode> = vec![];
   for season in series.seasons.clone() {
     for episode in season.episodes {
       episodes.push(Episode {
         title: episode.to_string(),
-        watched: episode.viewCount.is_some()
+        watched: episode.viewCount.is_some(),
       });
     }
   }
@@ -312,13 +355,16 @@ pub fn plex_series_select(text: Vec<String>, series: crate::plex::Series) -> (Se
   series_select(text, episodes)
 }
 
-pub fn jelly_series_select(text: Vec<String>, series: Series) -> (SeriesOptions, Option<Vec<usize>>) {
+pub fn jelly_series_select(
+  text: Vec<String>,
+  series: Series,
+) -> (SeriesOptions, Option<Vec<usize>>) {
   let mut episodes: Vec<Episode> = vec![];
   for season in series.seasons.clone() {
     for episode in season.episodes {
       episodes.push(Episode {
         title: episode.to_string(),
-        watched: episode.UserData.Played
+        watched: episode.UserData.Played,
       });
     }
   }
@@ -331,15 +377,19 @@ pub fn interactive_menuoption(options: Vec<MenuOptions>) -> MenuOptions {
   for option in options.clone() {
     choices.append(&mut vec![InteractiveOption {
       text: option.to_string(),
-      option_type: InteractiveOptionType::Button
+      option_type: InteractiveOptionType::Button,
     }]);
   }
 
   let selection = interactive_select(choices);
-  return options.get(selection.0.0).unwrap().clone();
+  return options.get(selection.0 .0).unwrap().clone();
 }
 
-fn display_options(options: &[InteractiveOption], selected_index: (usize, usize), inputs: Vec<String>) -> (usize, usize) {
+fn display_options(
+  options: &[InteractiveOption],
+  selected_index: (usize, usize),
+  inputs: Vec<String>,
+) -> (usize, usize) {
   let terminal_width = terminal::size().unwrap().0 as usize - 3;
   let terminal_height = terminal::size().unwrap().1 as usize - 3;
   let too_many_items = options.len() > terminal_height;
@@ -403,7 +453,11 @@ fn display_options(options: &[InteractiveOption], selected_index: (usize, usize)
           text = format!("{}", " ".underlined());
         }
         if index == selected_index.0 {
-          output = format!("   [ {}: {} ]", option.text.clone().underlined().bold(), text);
+          output = format!(
+            "   [ {}: {} ]",
+            option.text.clone().underlined().bold(),
+            text
+          );
           stop = true;
         } else {
           output = format!("   [ {}: {} ]", option.text, inputs.get(index).unwrap());
@@ -465,15 +519,28 @@ fn display_options(options: &[InteractiveOption], selected_index: (usize, usize)
       },
       InteractiveOptionType::Button5s => {
         if index == selected_index.0 {
-          output = format!("   [ {}{} ]",
-            option.text.clone().take_chars(0, selected_index.1).underlined().bold().on_white().black(),
-            option.text.clone().take_chars(selected_index.1+1, option.text.chars().count()).underlined().bold()
+          output = format!(
+            "   [ {}{} ]",
+            option
+              .text
+              .clone()
+              .take_chars(0, selected_index.1)
+              .underlined()
+              .bold()
+              .on_white()
+              .black(),
+            option
+              .text
+              .clone()
+              .take_chars(selected_index.1 + 1, option.text.chars().count())
+              .underlined()
+              .bold()
           );
           stop = true;
         } else {
           output = format!("   [ {} ]", option.text);
         }
-      }
+      },
     }
     if index == options.len() - 1 {
       print!("{}", output);
@@ -496,11 +563,19 @@ fn display_options(options: &[InteractiveOption], selected_index: (usize, usize)
   (real_index as usize, selected_index.1)
 }
 
-pub fn interactive_select(options: Vec<InteractiveOption>) -> ((usize, usize), Option<String>, InteractiveOptionType) {
+pub fn interactive_select(
+  options: Vec<InteractiveOption>,
+) -> ((usize, usize), Option<String>, InteractiveOptionType) {
   let terminal_height = terminal::size().unwrap().1 as usize - 3;
   enable_raw_mode().unwrap();
   let mut stdout = io::stdout();
-  execute!(stdout, Hide, MoveToColumn(0), Clear(ClearType::FromCursorDown)).unwrap();
+  execute!(
+    stdout,
+    Hide,
+    MoveToColumn(0),
+    Clear(ClearType::FromCursorDown)
+  )
+  .unwrap();
   let mut selection = (0, 0);
   loop {
     match options[selection.0].option_type {
@@ -511,14 +586,14 @@ pub fn interactive_select(options: Vec<InteractiveOption>) -> ((usize, usize), O
         selection.1 = 1;
         break;
       },
-      _ => break
+      _ => break,
     }
   }
   let mut inputs: Vec<String> = vec![];
   for option in options.clone() {
     match option.option_type {
       InteractiveOptionType::Special => inputs.append(&mut vec![option.text]),
-      _ => inputs.append(&mut vec![String::new()])
+      _ => inputs.append(&mut vec![String::new()]),
     }
   }
   if options.len() > terminal_height {
@@ -528,7 +603,13 @@ pub fn interactive_select(options: Vec<InteractiveOption>) -> ((usize, usize), O
   let mut update = false;
   loop {
     if crossterm::event::poll(Duration::from_millis(250)).unwrap() {
-      if let Event::Key(KeyEvent { code, modifiers, kind: KeyEventKind::Press, .. }) = crossterm::event::read().unwrap() {
+      if let Event::Key(KeyEvent {
+        code,
+        modifiers,
+        kind: KeyEventKind::Press,
+        ..
+      }) = crossterm::event::read().unwrap()
+      {
         match code {
           KeyCode::Up => {
             if selection.0 >= 1 {
@@ -553,7 +634,7 @@ pub fn interactive_select(options: Vec<InteractiveOption>) -> ((usize, usize), O
                   selection.1 = 0;
                   break;
                 },
-                _ => break
+                _ => break,
               }
             }
           },
@@ -576,7 +657,7 @@ pub fn interactive_select(options: Vec<InteractiveOption>) -> ((usize, usize), O
                   selection.1 = 0;
                   break;
                 },
-                _ => break
+                _ => break,
               }
             }
           },
@@ -657,7 +738,8 @@ pub fn interactive_select(options: Vec<InteractiveOption>) -> ((usize, usize), O
     }
     if options[selection.0].option_type == InteractiveOptionType::Button5s {
       let old: usize = selection.1;
-      selection.1 += (options[selection.0].text.len() as f64 / 5.0 / 2.0_f64.powi(2)).round() as usize;
+      selection.1 +=
+        (options[selection.0].text.len() as f64 / 5.0 / 2.0_f64.powi(2)).round() as usize;
       if selection.1 != old {
         update = true;
       }
@@ -668,7 +750,12 @@ pub fn interactive_select(options: Vec<InteractiveOption>) -> ((usize, usize), O
     }
     if update {
       if options.len() != 1 {
-        execute!(stdout, MoveToPreviousLine((options.len() - 1) as u16), Clear(ClearType::FromCursorDown)).unwrap();
+        execute!(
+          stdout,
+          MoveToPreviousLine((options.len() - 1) as u16),
+          Clear(ClearType::FromCursorDown)
+        )
+        .unwrap();
       } else {
         execute!(stdout, MoveToColumn(0)).unwrap();
       }
@@ -677,19 +764,40 @@ pub fn interactive_select(options: Vec<InteractiveOption>) -> ((usize, usize), O
     }
   }
   if options.len() == 1 {
-    execute!(stdout, MoveToColumn(0), Clear(ClearType::UntilNewLine), Show).unwrap();
+    execute!(
+      stdout,
+      MoveToColumn(0),
+      Clear(ClearType::UntilNewLine),
+      Show
+    )
+    .unwrap();
   } else {
-    execute!(stdout, MoveToPreviousLine((options.len() - 1) as u16), Clear(ClearType::FromCursorDown), Show).unwrap();
+    execute!(
+      stdout,
+      MoveToPreviousLine((options.len() - 1) as u16),
+      Clear(ClearType::FromCursorDown),
+      Show
+    )
+    .unwrap();
   }
   if options.len() > terminal_height {
     execute!(stdout, LeaveAlternateScreen, EnableLineWrap, Show).unwrap();
   }
   disable_raw_mode().unwrap();
   if options[selection.0].option_type == InteractiveOptionType::Button
-  || options[selection.0].option_type == InteractiveOptionType::Button5s {
-    (corrected_selection, Some(options[selection.0].text.clone()), InteractiveOptionType::Button)
+    || options[selection.0].option_type == InteractiveOptionType::Button5s
+  {
+    (
+      corrected_selection,
+      Some(options[selection.0].text.clone()),
+      InteractiveOptionType::Button,
+    )
   } else {
-    (corrected_selection, Some(inputs[selection.0].clone()), options[selection.0].option_type.clone())
+    (
+      corrected_selection,
+      Some(inputs[selection.0].clone()),
+      options[selection.0].option_type.clone(),
+    )
   }
 }
 
@@ -711,7 +819,12 @@ pub fn clear_stdin() {
   }
 }
 
-pub fn adv_getch(allowed: &str, any_key: bool, timeout_secs: Option<u64>, message: &str) -> Option<char> {
+pub fn adv_getch(
+  allowed: &str,
+  any_key: bool,
+  timeout_secs: Option<u64>,
+  message: &str,
+) -> Option<char> {
   let mut stdout = stdout();
   let mut timer = timeout_secs.map(|seconds| seconds * 2);
 
@@ -727,8 +840,14 @@ pub fn adv_getch(allowed: &str, any_key: bool, timeout_secs: Option<u64>, messag
 
   loop {
     if poll(Duration::from_millis(500)).unwrap() {
-      if let Ok(Event::Key(KeyEvent { code, modifiers, state: _, kind: KeyEventKind::Press })) = read() {
-        if modifiers == KeyModifiers::NONE && ! any_key {
+      if let Ok(Event::Key(KeyEvent {
+        code,
+        modifiers,
+        state: _,
+        kind: KeyEventKind::Press,
+      })) = read()
+      {
+        if modifiers == KeyModifiers::NONE && !any_key {
           for ch in allowed.chars() {
             if code == KeyCode::Char(ch) {
               disable_raw_mode().unwrap();
@@ -740,7 +859,11 @@ pub fn adv_getch(allowed: &str, any_key: bool, timeout_secs: Option<u64>, messag
               return Some(ch);
             }
           }
-          if code == KeyCode::Up || code == KeyCode::Left || code == KeyCode::Right || code == KeyCode::Down {
+          if code == KeyCode::Up
+            || code == KeyCode::Left
+            || code == KeyCode::Right
+            || code == KeyCode::Down
+          {
             continue;
           }
           writeln!(stdout).unwrap();
@@ -807,7 +930,13 @@ pub fn hidden_string_input(mask: Option<char>) -> String {
   let mut input = String::new();
   loop {
     if poll(Duration::from_millis(500)).unwrap() {
-      if let Ok(Event::Key(KeyEvent { code, modifiers, state: _, kind: KeyEventKind::Press })) = read() {
+      if let Ok(Event::Key(KeyEvent {
+        code,
+        modifiers,
+        state: _,
+        kind: KeyEventKind::Press,
+      })) = read()
+      {
         if modifiers == KeyModifiers::CONTROL && code == KeyCode::Char('c') {
           write!(stdout, "^C").unwrap();
           disable_raw_mode().unwrap();

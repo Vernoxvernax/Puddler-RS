@@ -1,6 +1,30 @@
-use crate::{emby::EmbyServer, input::{hidden_string_input, interactive_select, jelly_series_select, take_string_input, InteractiveOption, InteractiveOptionType, SeriesOptions}, jellyfin::JellyfinServer, media_config::{Config, MediaCenterType, Objective, UserConfig}, mpv::Player, plex::PlexServer, printing::{print_message, PrintMessageType}, puddler_settings::PuddlerSettings, APPNAME, VERSION};
-use crossterm::{cursor::{EnableBlinking, Hide, MoveToColumn, RestorePosition, SavePosition, Show}, event::{poll, read, Event, KeyCode, KeyEvent, KeyModifiers}, execute, style::Stylize, terminal::{self, disable_raw_mode, enable_raw_mode, Clear, ClearType, DisableLineWrap, EnableLineWrap, EnterAlternateScreen, LeaveAlternateScreen}};
-use isahc::{config::Configurable, http::StatusCode, Body, ReadResponseExt, Request, RequestExt, Response};
+use crate::{
+  emby::EmbyServer,
+  input::{
+    hidden_string_input, interactive_select, jelly_series_select, take_string_input,
+    InteractiveOption, InteractiveOptionType, SeriesOptions,
+  },
+  jellyfin::JellyfinServer,
+  media_config::{Config, MediaCenterType, Objective, UserConfig},
+  mpv::Player,
+  plex::PlexServer,
+  printing::{print_message, PrintMessageType},
+  puddler_settings::PuddlerSettings,
+  APPNAME, VERSION,
+};
+use crossterm::{
+  cursor::{EnableBlinking, Hide, MoveToColumn, RestorePosition, SavePosition, Show},
+  event::{poll, read, Event, KeyCode, KeyEvent, KeyModifiers},
+  execute,
+  style::Stylize,
+  terminal::{
+    self, disable_raw_mode, enable_raw_mode, Clear, ClearType, DisableLineWrap, EnableLineWrap,
+    EnterAlternateScreen, LeaveAlternateScreen,
+  },
+};
+use isahc::{
+  config::Configurable, http::StatusCode, Body, ReadResponseExt, Request, RequestExt, Response,
+};
 use isolanguage_1::LanguageCode;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -8,7 +32,16 @@ use serde_json::Value;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::input::getch;
-use std::{fmt, io::{stdin, stdout, Write}, net::UdpSocket, process::exit, str::{from_utf8, FromStr}, sync::{Arc, Mutex}, thread, time::Duration};
+use std::{
+  fmt,
+  io::{stdin, stdout, Write},
+  net::UdpSocket,
+  process::exit,
+  str::{from_utf8, FromStr},
+  sync::{Arc, Mutex},
+  thread,
+  time::Duration,
+};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct UDPAnswer {
@@ -19,14 +52,14 @@ pub struct UDPAnswer {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct UserCredentials {
   pub username: String,
-  pub password: String
+  pub password: String,
 }
 
 #[derive(Debug)]
 pub enum MediaCenterValues {
   Header,
   SessionID,
-  PlaybackInfo
+  PlaybackInfo,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Clone)]
@@ -46,7 +79,7 @@ pub struct Item {
   pub ProductionYear: Option<u32>,
   pub Status: Option<String>,
   pub EndDate: Option<String>,
-  pub MediaSources: Option<Vec<MediaSourceInfo>>
+  pub MediaSources: Option<Vec<MediaSourceInfo>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
@@ -56,7 +89,7 @@ pub struct MediaSourceInfo {
   pub SupportsTranscoding: bool,
   pub MediaStreams: Vec<MediaStream>,
   pub Bitrate: Option<u64>,
-  pub TranscodingUrl: Option<String>
+  pub TranscodingUrl: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
@@ -73,7 +106,7 @@ pub struct MediaStream {
   pub IsDefault: bool,
   pub IsExternal: bool,
   pub SupportsExternalStream: bool,
-  pub Path: Option<String>
+  pub Path: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq, Clone)]
@@ -89,14 +122,14 @@ struct PlayRequest {
   PlaybackStartTimeTicks: u64,
   PlaySessionId: String,
   PlayMethod: PlayMethod,
-  RepeatMode: RepeatMode
+  RepeatMode: RepeatMode,
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq, Clone)]
 struct Capabilities {
   PlayableMediaTypes: String,
   SupportsMediaControl: bool,
-  SupportedCommands: Vec<String>
+  SupportedCommands: Vec<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq, Clone)]
@@ -114,7 +147,7 @@ struct PlaybackStopInfo {
   SessionId: String,
   MediaSourceId: String,
   PositionTicks: String,
-  Failed: bool
+  Failed: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq, Clone)]
@@ -131,29 +164,62 @@ struct PlaybackProgressInfo {
   VolumeLevel: u32,
   PlayMethod: PlayMethod,
   PlaySessionId: String,
-  EventName: EventName
+  EventName: EventName,
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq, Clone)]
 enum PlayMethod {
   Transcode,
   DirectStream,
-  DirectPlay
+  DirectPlay,
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq, Clone)]
 enum RepeatMode {
   RepeatNone,
   RepeatAll,
-  RepeatOne
+  RepeatOne,
 }
 
 impl fmt::Display for MediaStream {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     if self.IsDefault {
-      write!(f, "Title = \"{}\", Language = \"{}\", Codec = \"{}\" {}", self.Title.as_ref().unwrap_or(self.DisplayTitle.as_ref().unwrap_or(&"".to_string())), self.DisplayLanguage.as_ref().unwrap_or(self.Language.as_ref().unwrap_or(&"undefined".to_string())), self.Codec.as_ref().unwrap_or(&"???".to_string()).to_uppercase(), "[Default]".to_string().green())
+      write!(
+        f,
+        "Title = \"{}\", Language = \"{}\", Codec = \"{}\" {}",
+        self
+          .Title
+          .as_ref()
+          .unwrap_or(self.DisplayTitle.as_ref().unwrap_or(&"".to_string())),
+        self
+          .DisplayLanguage
+          .as_ref()
+          .unwrap_or(self.Language.as_ref().unwrap_or(&"undefined".to_string())),
+        self
+          .Codec
+          .as_ref()
+          .unwrap_or(&"???".to_string())
+          .to_uppercase(),
+        "[Default]".to_string().green()
+      )
     } else {
-      write!(f, "Title = \"{}\", Language = \"{}\", Codec = \"{}\"", self.Title.as_ref().unwrap_or(self.DisplayTitle.as_ref().unwrap_or(&"".to_string())), self.DisplayLanguage.as_ref().unwrap_or(self.Language.as_ref().unwrap_or(&"undefined".to_string())), self.Codec.as_ref().unwrap_or(&"???".to_string()).to_uppercase())
+      write!(
+        f,
+        "Title = \"{}\", Language = \"{}\", Codec = \"{}\"",
+        self
+          .Title
+          .as_ref()
+          .unwrap_or(self.DisplayTitle.as_ref().unwrap_or(&"".to_string())),
+        self
+          .DisplayLanguage
+          .as_ref()
+          .unwrap_or(self.Language.as_ref().unwrap_or(&"undefined".to_string())),
+        self
+          .Codec
+          .as_ref()
+          .unwrap_or(&"???".to_string())
+          .to_uppercase()
+      )
     }
   }
 }
@@ -208,12 +274,12 @@ struct DeviceProfile {
   MaxStreamingBitrate: u64,
   MaxStaticMusicBitrate: u64,
   TranscodingProfiles: Vec<TranscodingProfile>,
-  SubtitleProfiles: Vec<SubtitleProfile>
+  SubtitleProfiles: Vec<SubtitleProfile>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct DirectPlayProfile {
-  Type: String
+  Type: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -228,37 +294,37 @@ struct TranscodingProfile {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct SubtitleProfile {
   Format: String,
-  Method: String
+  Method: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct PlaybackInfo {
   pub MediaSources: Vec<MediaSourceInfo>,
-  pub PlaySessionId: String
+  pub PlaySessionId: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct UserDto {
-  Configuration: UserConfiguration
+  Configuration: UserConfiguration,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct UserConfiguration {
   PlayDefaultAudioTrack: bool,
   AudioLanguagePreference: String,
-  SubtitleLanguagePreference: String
+  SubtitleLanguagePreference: String,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Clone)]
 pub struct Series {
   item_id: String,
-  pub seasons: Vec<Season>
+  pub seasons: Vec<Season>,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Clone)]
 pub struct Season {
   pub item: Item,
-  pub episodes: Vec<Item>
+  pub episodes: Vec<Item>,
 }
 
 pub trait ToStringAdv {
@@ -267,12 +333,20 @@ pub trait ToStringAdv {
   fn to_string_ext(&self) -> String;
 }
 
+// Provides a few functions to output the proper title of the Item
+// with some additional changes.
+// * `to_string_split` -> same as `to_string()`, but split into a vector (for easier management in player.rs)
+// * `to_string_full` -> `to_string()` with an additional on/off indicator, whether the Item has been played already
+// * `to_string_ext` -> same as `to_string_full()`, but using a percentage indicator
 impl ToStringAdv for Item {
   fn to_string_split(&self) -> Vec<String> {
     let time = if let (Some(start), Some(end)) = (self.PremiereDate.clone(), self.EndDate.clone()) {
       format!("({}-{})", &start[0..4], &end[0..4])
     } else if self.Status == Some(String::from("Continuing")) {
-      format!("({}-)", &self.PremiereDate.clone().unwrap_or(String::from("????"))[0..4])
+      format!(
+        "({}-)",
+        &self.PremiereDate.clone().unwrap_or(String::from("????"))[0..4]
+      )
     } else if let Some(premiere_date) = &self.PremiereDate {
       format!("({})", &premiere_date[0..4])
     } else if let Some(production_year) = &self.ProductionYear {
@@ -283,13 +357,13 @@ impl ToStringAdv for Item {
     let mut name: String;
     match self.Type.as_str() {
       "Season" | "Episode" => name = self.SeriesName.clone().unwrap_or(String::from("???")),
-      _ => name = self.Name.clone()
+      _ => name = self.Name.clone(),
     }
     if name.contains('(') {
       let re = Regex::new(r" \(\d{4}\)").unwrap();
       name = re.replace_all(&name, "").to_string();
     }
-    
+
     match self.Type.as_str() {
       "Movie" | "Series" => {
         vec![format!("{} {}", name, time)]
@@ -298,21 +372,22 @@ impl ToStringAdv for Item {
         vec![
           self.to_string(),
           format!("{} {}", name, time),
-          self.Name.clone()
+          self.Name.clone(),
         ]
       },
       "Episode" => {
         vec![
           self.to_string(),
           format!("{} {}", name, time),
-          format!("S{:02}E{:02} ({})",
+          format!(
+            "S{:02}E{:02} ({})",
             self.ParentIndexNumber.unwrap_or(0),
             self.IndexNumber.unwrap_or(0),
             self.Name
-          )
+          ),
         ]
       },
-      _ => vec![format!("{} {} (unknown media type)", self.Name, time)]
+      _ => vec![format!("{} {} (unknown media type)", self.Name, time)],
     }
   }
 
@@ -335,12 +410,16 @@ impl ToStringAdv for Item {
   }
 }
 
+// Properly compiles titles, dates and other metadata into one string.
 impl ToString for Item {
   fn to_string(&self) -> String {
     let time = if let (Some(start), Some(end)) = (self.PremiereDate.clone(), self.EndDate.clone()) {
       format!("({}-{})", &start[0..4], &end[0..4])
     } else if self.Status == Some(String::from("Continuing")) {
-      format!("({}-)", &self.PremiereDate.clone().unwrap_or(String::from("????"))[0..4])
+      format!(
+        "({}-)",
+        &self.PremiereDate.clone().unwrap_or(String::from("????"))[0..4]
+      )
     } else if let Some(premiere_date) = &self.PremiereDate {
       format!("({})", &premiere_date[0..4])
     } else if let Some(production_year) = &self.ProductionYear {
@@ -351,26 +430,23 @@ impl ToString for Item {
     let mut name: String;
     match self.Type.as_str() {
       "Season" | "Episode" => name = self.SeriesName.clone().unwrap_or(String::from("???")),
-      _ => name = self.Name.clone()
+      _ => name = self.Name.clone(),
     }
     if name.contains('(') {
       let re = Regex::new(r" \(\d{4}\)").unwrap();
       name = re.replace_all(&name, "").to_string();
     }
-    
+
     match self.Type.as_str() {
       "Movie" | "Series" => {
         format!("{} {}", name, time)
       },
       "Season" => {
-        format!("{} {} - {}",
-          name,
-          time,
-          self.Name.clone()
-        )
+        format!("{} {} - {}", name, time, self.Name.clone())
       },
       "Episode" => {
-        format!("{} {} - S{:02}E{:02} - {}",
+        format!(
+          "{} {} - S{:02}E{:02} - {}",
           name,
           time,
           self.ParentIndexNumber.unwrap_or(0),
@@ -378,22 +454,16 @@ impl ToString for Item {
           self.Name
         )
       },
-      _ => format!("{} {} (unknown media type)", self.Name, time)
+      _ => format!("{} {} (unknown media type)", self.Name, time),
     }
   }
 }
 
 pub fn set_config(handle: Config, settings: PuddlerSettings) -> Box<dyn MediaCenter> {
   match handle.config.media_center_type {
-    MediaCenterType::Emby => {
-      Box::new(EmbyServer::new(handle, settings))
-    },
-    MediaCenterType::Jellyfin => {
-      Box::new(JellyfinServer::new(handle, settings))
-    }
-    _ => {
-      Box::new(PlexServer::new(handle, settings))
-    }
+    MediaCenterType::Emby => Box::new(EmbyServer::new(handle, settings)),
+    MediaCenterType::Jellyfin => Box::new(JellyfinServer::new(handle, settings)),
+    _ => Box::new(PlexServer::new(handle, settings)),
   }
 }
 
@@ -412,9 +482,14 @@ pub trait MediaCenter {
       let handle = self.get_config_handle();
       let config = &mut handle.config;
       let users = serde_json::from_value::<Vec<UserConfig>>(
-        config.specific_values.get("users").unwrap().clone()
-      ).unwrap();
-      let user_name_list = users.iter().map(|u| u.username.clone()).collect::<Vec<String>>().join(":");
+        config.specific_values.get("users").unwrap().clone(),
+      )
+      .unwrap();
+      let user_name_list = users
+        .iter()
+        .map(|u| u.username.clone())
+        .collect::<Vec<String>>()
+        .join(":");
       let transcoding = if config.transcoding {
         format!("{}", "Enabled".green())
       } else {
@@ -423,52 +498,55 @@ pub trait MediaCenter {
       let settings = vec![
         InteractiveOption {
           text: format!("Settings: {}", config.server_name.clone().cyan()),
-          option_type: InteractiveOptionType::Header
+          option_type: InteractiveOptionType::Header,
         },
         InteractiveOption {
-          text: String::from("Set default user:")+&user_name_list,
-          option_type: InteractiveOptionType::ListButtons
+          text: String::from("Set default user:") + &user_name_list,
+          option_type: InteractiveOptionType::ListButtons,
         },
         InteractiveOption {
           text: String::from("Add User"),
-          option_type: InteractiveOptionType::Button
+          option_type: InteractiveOptionType::Button,
         },
         InteractiveOption {
-          text: String::from("Delete User:")+&user_name_list,
-          option_type: InteractiveOptionType::ListButtons
+          text: String::from("Delete User:") + &user_name_list,
+          option_type: InteractiveOptionType::ListButtons,
         },
         InteractiveOption {
-          text: String::from("Transcoding:")+&transcoding,
-          option_type: InteractiveOptionType::ListButtons
+          text: String::from("Transcoding:") + &transcoding,
+          option_type: InteractiveOptionType::ListButtons,
         },
         InteractiveOption {
           text: format!("{}", "Save".green()),
-          option_type: InteractiveOptionType::Button
+          option_type: InteractiveOptionType::Button,
         },
         InteractiveOption {
           text: format!("{}", "Delete".red()),
-          option_type: InteractiveOptionType::Button
+          option_type: InteractiveOptionType::Button,
         },
         InteractiveOption {
           text: String::from("Back"),
-          option_type: InteractiveOptionType::Special
+          option_type: InteractiveOptionType::Special,
         },
       ];
       match interactive_select(settings) {
         (_, _, InteractiveOptionType::Special) => break,
         ((i1, i2), _, InteractiveOptionType::ListButtons) => {
           if i1 == 0 {
-            handle.set_active_user(users[i2-1].clone().access_token);
+            handle.set_active_user(users[i2 - 1].clone().access_token);
           } else if i1 == 2 {
             if users.len() == 1 {
-              print_message(PrintMessageType::Error, "Please add a second user before deleting this one.");
+              print_message(
+                PrintMessageType::Error,
+                "Please add a second user before deleting this one.",
+              );
             } else {
-              handle.remove_user(users[i2-1].clone().access_token);
+              handle.remove_user(users[i2 - 1].clone().access_token);
             }
           } else if i1 == 3 {
             config.transcoding = !config.transcoding;
           }
-        }
+        },
         ((i1, _), _, InteractiveOptionType::Button) => {
           if i1 == 1 {
             self.login();
@@ -479,7 +557,7 @@ pub trait MediaCenter {
             break;
           }
         },
-        _ => ()
+        _ => (),
       }
     }
   }
@@ -496,20 +574,18 @@ pub trait MediaCenter {
     let mut options: Vec<InteractiveOption> = vec![];
     if let Ok(items) = self.get_items(
       format!("Users/{}/Items/Resume?Limit=15", user.user_id),
-      false
+      false,
     ) {
       if !items.is_empty() {
-        options.append(&mut vec![
-          InteractiveOption {
-            text: String::from("Continue Watching:"),
-            option_type: InteractiveOptionType::Header
-          }
-        ]);
+        options.append(&mut vec![InteractiveOption {
+          text: String::from("Continue Watching:"),
+          option_type: InteractiveOptionType::Header,
+        }]);
       }
       for item in items.clone() {
         options.append(&mut vec![InteractiveOption {
           text: item.to_string_ext(),
-          option_type: InteractiveOptionType::Button
+          option_type: InteractiveOptionType::Button,
         }]);
       }
       total.extend(items);
@@ -524,23 +600,19 @@ pub trait MediaCenter {
     stdout.flush().unwrap();
 
     if media_center_type == MediaCenterType::Jellyfin {
-      if let Ok(mut items) = self.get_items(
-        format!("Shows/NextUp?UserId={}", user.user_id),
-        false
-      ) {
+      if let Ok(mut items) = self.get_items(format!("Shows/NextUp?UserId={}", user.user_id), false)
+      {
         if total.is_empty() && !items.is_empty() {
-          options.append(&mut vec![
-            InteractiveOption {
-              text: String::from("Continue Watching:"),
-              option_type: InteractiveOptionType::Header
-            }
-          ]);
+          options.append(&mut vec![InteractiveOption {
+            text: String::from("Continue Watching:"),
+            option_type: InteractiveOptionType::Header,
+          }]);
         }
         items.retain(|i| !total.contains(&i));
         for item in items.clone() {
           options.append(&mut vec![InteractiveOption {
             text: item.to_string_ext(),
-            option_type: InteractiveOptionType::Button
+            option_type: InteractiveOptionType::Button,
           }]);
         }
         total.extend(items);
@@ -556,25 +628,28 @@ pub trait MediaCenter {
     stdout.flush().unwrap();
 
     let latest_episode_size = if let Ok(items) = self.get_items(
-      format!("Users/{}/Items/Latest?Limit=10&IncludeItemTypes=Episode", user.user_id),
-      true
+      format!(
+        "Users/{}/Items/Latest?Limit=10&IncludeItemTypes=Episode",
+        user.user_id
+      ),
+      true,
     ) {
       if !total.is_empty() {
         options.append(&mut vec![InteractiveOption {
           text: String::from(""),
-          option_type: InteractiveOptionType::Header
+          option_type: InteractiveOptionType::Header,
         }]);
       }
       if !items.is_empty() {
         options.append(&mut vec![InteractiveOption {
           text: String::from("Latest:"),
-          option_type: InteractiveOptionType::Header
+          option_type: InteractiveOptionType::Header,
         }]);
       }
       for item in items.clone() {
         options.append(&mut vec![InteractiveOption {
           text: item.to_string_ext(),
-          option_type: InteractiveOptionType::Button
+          option_type: InteractiveOptionType::Button,
         }]);
       }
       total.extend(items.clone());
@@ -590,19 +665,22 @@ pub trait MediaCenter {
     stdout.flush().unwrap();
 
     if let Ok(items) = self.get_items(
-      format!("Users/{}/Items/Latest?Limit=10&IncludeItemTypes=Movie", user.user_id),
-      true
+      format!(
+        "Users/{}/Items/Latest?Limit=10&IncludeItemTypes=Movie",
+        user.user_id
+      ),
+      true,
     ) {
       if latest_episode_size == 0 && !items.is_empty() {
         options.append(&mut vec![InteractiveOption {
           text: String::from("Latest:"),
-          option_type: InteractiveOptionType::Header
+          option_type: InteractiveOptionType::Header,
         }]);
       }
       for item in items.clone() {
         options.append(&mut vec![InteractiveOption {
           text: item.to_string_ext(),
-          option_type: InteractiveOptionType::Button
+          option_type: InteractiveOptionType::Button,
         }]);
       }
       total.extend(items);
@@ -617,16 +695,16 @@ pub trait MediaCenter {
     options.append(&mut vec![
       InteractiveOption {
         text: String::from(""),
-        option_type: InteractiveOptionType::Header
+        option_type: InteractiveOptionType::Header,
       },
       InteractiveOption {
         text: String::from("Search"),
-        option_type: InteractiveOptionType::TextInput
+        option_type: InteractiveOptionType::TextInput,
       },
       InteractiveOption {
         text: format!("Return to {} Menu", APPNAME),
-        option_type: InteractiveOptionType::Special
-      }
+        option_type: InteractiveOptionType::Special,
+      },
     ]);
 
     let menu = options.clone();
@@ -641,30 +719,33 @@ pub trait MediaCenter {
         (_, Some(mut search), InteractiveOptionType::TextInput) => {
           search = search.trim().to_owned();
           if let Ok(items) = self.get_items(
-            format!("Items?SearchTerm={}&UserId={}&Recursive=true&IncludeItemTypes=Series,Movie",
-            urlencoding::encode(&search), user.user_id),
-            false
+            format!(
+              "Items?SearchTerm={}&UserId={}&Recursive=true&IncludeItemTypes=Series,Movie",
+              urlencoding::encode(&search),
+              user.user_id
+            ),
+            false,
           ) {
             options.clear();
             options.append(&mut vec![InteractiveOption {
               text: format!("Search-Result for \"{}\":", search.cyan()),
-              option_type: InteractiveOptionType::Header
+              option_type: InteractiveOptionType::Header,
             }]);
             for item in items.clone() {
               options.append(&mut vec![InteractiveOption {
                 text: item.to_string_ext(),
-                option_type: InteractiveOptionType::Button
+                option_type: InteractiveOptionType::Button,
               }]);
             }
             options.append(&mut vec![
               InteractiveOption {
                 text: String::from("Back"),
-                option_type: InteractiveOptionType::Special
+                option_type: InteractiveOptionType::Special,
               },
               InteractiveOption {
                 text: format!("Return to {} Menu", APPNAME),
-                option_type: InteractiveOptionType::Special
-              }
+                option_type: InteractiveOptionType::Special,
+              },
             ]);
             current_items = items;
           } else {
@@ -679,7 +760,7 @@ pub trait MediaCenter {
             return;
           }
         },
-        _ => panic!("UNKOWN OPTION TYPE")
+        _ => panic!("UNKOWN OPTION TYPE"),
       }
     }
   }
@@ -713,16 +794,16 @@ pub trait MediaCenter {
         let series = self.resolve_series(item);
         playlist = self.choose_from_series(series);
       },
-      _ => ()
+      _ => (),
     }
     if playlist.is_empty() {
       return;
     }
-    
+
     let headers = self.get_headers();
     let auth_token = &headers.get(2).unwrap().1;
     let server_address = self.get_address();
-    
+
     let settings = self.get_settings().clone();
     let mut player = Player::new(self.get_config_handle().clone(), settings.clone());
 
@@ -733,10 +814,21 @@ pub trait MediaCenter {
       let item = playlist[index].clone();
       let mut next_index = index + 1;
       let mut streamable_item = item.clone();
-      if let Ok(playback_info) = self.post_playbackinfo(&mut streamable_item, &mut transcoding_settings) {
-        self.insert_value(MediaCenterValues::PlaybackInfo, serde_json::to_string(&playback_info).unwrap());
+      if let Ok(playback_info) =
+        self.post_playbackinfo(&mut streamable_item, &mut transcoding_settings)
+      {
+        self.insert_value(
+          MediaCenterValues::PlaybackInfo,
+          serde_json::to_string(&playback_info).unwrap(),
+        );
         self.update_player(&mut player);
-        player.set_jellyfin_video(streamable_item, playback_info, server_address.clone(), auth_token.to_string(), &mut transcoding_settings);
+        player.set_jellyfin_video(
+          streamable_item,
+          playback_info,
+          server_address.clone(),
+          auth_token.to_string(),
+          &mut transcoding_settings,
+        );
         let ret = player.play();
         if let Some((_, ref mut audio, ref mut subtitle, ..)) = transcoding_settings.as_mut() {
           *audio = ret.preferred_audio_track;
@@ -749,43 +841,53 @@ pub trait MediaCenter {
             if let Ok(updated_item) = self.get_item(item.Id.clone()) {
               playlist[index] = updated_item;
             } else {
-              print_message(PrintMessageType::Error, format!("Failed to get updated information for {}.", item.to_string()).as_str())
+              print_message(
+                PrintMessageType::Error,
+                format!(
+                  "Failed to get updated information for {}.",
+                  item.to_string()
+                )
+                .as_str(),
+              )
             }
             options.append(&mut vec![
               InteractiveOption {
                 text: format!("Finish: {}", item.to_string_ext()),
-                option_type: InteractiveOptionType::Button
+                option_type: InteractiveOptionType::Button,
               },
               InteractiveOption {
                 text: format!("Mark as played: {}", item.to_string_ext()),
-                option_type: InteractiveOptionType::Button
-              }
+                option_type: InteractiveOptionType::Button,
+              },
             ]);
           }
-          while let Some(next_item) = playlist.get(index+1) {
-                 // skip every item that has been played already
-                 // (might want to use unmark in the menu before watching a series again)
+          while let Some(next_item) = playlist.get(index + 1) {
+            // skip every item that has been played already
+            // (might want to use unmark in the menu before watching a series again)
             if !next_item.UserData.Played {
               options.push(InteractiveOption {
                 text: format!("Continue with: {}", next_item.to_string_ext()),
-                option_type: InteractiveOptionType::Button5s
+                option_type: InteractiveOptionType::Button5s,
               });
               break;
             }
             next_index += 1;
           }
           if options.is_empty() {
-            print_message(PrintMessageType::Warning, "Playlist done. Returning to menu.");
+            print_message(
+              PrintMessageType::Warning,
+              "Playlist done. Returning to menu.",
+            );
             return;
           }
           options.append(&mut vec![
             InteractiveOption {
               text: "Back to Menu".to_string(),
-              option_type: InteractiveOptionType::Special
+              option_type: InteractiveOptionType::Special,
             },
             InteractiveOption {
               text: "Exit Application".to_string(),
-              option_type: InteractiveOptionType::Special
+              option_type: InteractiveOptionType::Special,
             },
           ]);
           match interactive_select(options) {
@@ -801,19 +903,17 @@ pub trait MediaCenter {
                 break 'playback_done;
               }
             },
-            ((_, _), Some(text), InteractiveOptionType::Special) => {
-              match text.as_str() {
-                "Back to Menu" => {
-                  execute!(stdout, EnableLineWrap).unwrap();
-                  return;
-                },
-                _ => {
-                  execute!(stdout, EnableLineWrap).unwrap();
-                  exit(0)
-                }
-              }
+            ((_, _), Some(text), InteractiveOptionType::Special) => match text.as_str() {
+              "Back to Menu" => {
+                execute!(stdout, EnableLineWrap).unwrap();
+                return;
+              },
+              _ => {
+                execute!(stdout, EnableLineWrap).unwrap();
+                exit(0)
+              },
             },
-            _ => ()
+            _ => (),
           }
           execute!(stdout, EnableLineWrap).unwrap();
         }
@@ -823,7 +923,11 @@ pub trait MediaCenter {
 
   fn update_player(&mut self, player: &mut Player);
 
-  fn post_playbackinfo(&mut self, item: &mut Item, previous_settings: &mut Option<(bool, Option<u32>, Option<u32>, String)>) -> Result<PlaybackInfo, ()> {
+  fn post_playbackinfo(
+    &mut self,
+    item: &mut Item,
+    previous_settings: &mut Option<(bool, Option<u32>, Option<u32>, String)>,
+  ) -> Result<PlaybackInfo, ()> {
     let mut handle = self.get_config_handle().clone();
     let user_id = handle.get_active_user().unwrap().user_id;
     let mut stdout = stdout();
@@ -835,23 +939,34 @@ pub trait MediaCenter {
     } else {
       return Err(());
     };
-    
+
     // This is the only setting which isn't saved across the playlist. Don't really see the point in that tbh.
     if mediasource_list.len() > 1 {
       let mut options: Vec<InteractiveOption> = vec![InteractiveOption {
         text: "\nPlease select from the following files:".to_string(),
-        option_type: InteractiveOptionType::Header
+        option_type: InteractiveOptionType::Header,
       }];
       for mediasource in mediasource_list.clone() {
         options.push(InteractiveOption {
-          text: mediasource.Path.split_terminator('/').last().unwrap().to_string(),
-          option_type: InteractiveOptionType::Button
+          text: mediasource
+            .Path
+            .split_terminator('/')
+            .last()
+            .unwrap()
+            .to_string(),
+          option_type: InteractiveOptionType::Button,
         });
       }
       let ((index, _), ..) = interactive_select(options);
       mediasource_index = index;
       enable_raw_mode().unwrap();
-      execute!(stdout, RestorePosition, MoveToColumn(0), Clear(ClearType::FromCursorDown)).unwrap();
+      execute!(
+        stdout,
+        RestorePosition,
+        MoveToColumn(0),
+        Clear(ClearType::FromCursorDown)
+      )
+      .unwrap();
       disable_raw_mode().unwrap();
     }
 
@@ -862,12 +977,15 @@ pub trait MediaCenter {
           let user = serde_json::from_str::<UserDto>(&res.text().unwrap()).unwrap();
           let mut audio_streams: Vec<MediaStream> = vec![];
           let mut subtitle_streams: Vec<MediaStream> = vec![];
-          let audio_language = if let Ok(lang) = LanguageCode::from_str(&user.Configuration.AudioLanguagePreference) {
-            Some(lang)
-          } else {
-            None
-          };
-          let subtitle_language = if let Ok(lang) = LanguageCode::from_str(&user.Configuration.SubtitleLanguagePreference) {
+          let audio_language =
+            if let Ok(lang) = LanguageCode::from_str(&user.Configuration.AudioLanguagePreference) {
+              Some(lang)
+            } else {
+              None
+            };
+          let subtitle_language = if let Ok(lang) =
+            LanguageCode::from_str(&user.Configuration.SubtitleLanguagePreference)
+          {
             Some(lang)
           } else {
             None
@@ -908,8 +1026,11 @@ pub trait MediaCenter {
           *previous_settings = Some((false, audio_track, subtitle_track, String::new()));
         },
         Err(err) => {
-          print_message(PrintMessageType::Error, format!("Failed to get user prefences: {}", err.status()).as_str());
-        }
+          print_message(
+            PrintMessageType::Error,
+            format!("Failed to get user prefences: {}", err.status()).as_str(),
+          );
+        },
       }
     }
 
@@ -917,19 +1038,31 @@ pub trait MediaCenter {
       let time = (item.UserData.PlaybackPositionTicks as f64) / 10000000.0;
       let formated: String = if time > 60.0 {
         if (time / 60.0) > 60.0 {
-          format!("{:02}:{:02}:{:02}",
+          format!(
+            "{:02}:{:02}:{:02}",
             ((time / 60.0) / 60.0).trunc(),
             ((((time / 60.0) / 60.0) - ((time / 60.0) / 60.).trunc()) * 60.0).trunc(),
             (((time / 60.0) - (time / 60.0).trunc()) * 60.0).trunc()
           )
         } else {
-          format!("00:{:02}:{:02}", (time / 60.0).trunc(), (((time / 60.0) - (time / 60.0).trunc()) * 60.0).trunc())
+          format!(
+            "00:{:02}:{:02}",
+            (time / 60.0).trunc(),
+            (((time / 60.0) - (time / 60.0).trunc()) * 60.0).trunc()
+          )
         }
       } else {
         time.to_string()
       };
-      if !previous_settings.clone().unwrap_or((false, Some(0), Some(0), String::new())).0 {
-        print!("\nDo you want to start at: {}?\n  (Y)es | (N)o", formated.cyan().bold());
+      if !previous_settings
+        .clone()
+        .unwrap_or((false, Some(0), Some(0), String::new()))
+        .0
+      {
+        print!(
+          "\nDo you want to start at: {}?\n  (Y)es | (N)o",
+          formated.cyan().bold()
+        );
         match getch("YyNn") {
           'N' | 'n' => {
             print!("Please enter a playback position in minutes: ");
@@ -941,18 +1074,29 @@ pub trait MediaCenter {
               if input.trim().parse::<f64>().is_err() {
                 print!("\nInvalid input, please try again.\n: ");
               } else if input.contains('.') {
-                if input.split('.').collect::<Vec<&str>>().get(1).unwrap().len() > 8 {
+                if input
+                  .split('.')
+                  .collect::<Vec<&str>>()
+                  .get(1)
+                  .unwrap()
+                  .len()
+                  > 8
+                {
                   print!("\nInvalid input, please lower the amount of decimal places.\n: ");
                 } else {
-                  break
+                  break;
                 }
               } else {
-                break
+                break;
               }
             }
-            item.UserData.PlaybackPositionTicks = (input.trim().parse::<f64>().unwrap() * 60.0 * 10000000.0).to_string().parse::<u64>().unwrap();
+            item.UserData.PlaybackPositionTicks =
+              (input.trim().parse::<f64>().unwrap() * 60.0 * 10000000.0)
+                .to_string()
+                .parse::<u64>()
+                .unwrap();
           },
-          _ => ()
+          _ => (),
         }
       }
 
@@ -971,13 +1115,20 @@ pub trait MediaCenter {
           if !mbps.trim().is_numeric() {
             print!("\nInvalid input! Enter something like \"25\" equal to ~3MB/s.\n: ")
           } else {
-            break
+            break;
           }
-        };
+        }
       }
-      
+
       enable_raw_mode().unwrap();
-      execute!(stdout, RestorePosition, MoveToColumn(0), Clear(ClearType::FromCursorDown), EnterAlternateScreen).unwrap();
+      execute!(
+        stdout,
+        RestorePosition,
+        MoveToColumn(0),
+        Clear(ClearType::FromCursorDown),
+        EnterAlternateScreen
+      )
+      .unwrap();
       disable_raw_mode().unwrap();
 
       let mut audio_track_index: u32 = 0;
@@ -985,7 +1136,14 @@ pub trait MediaCenter {
       println!();
       let media_source = &mediasource_list[mediasource_index];
       if !media_source.SupportsTranscoding {
-        print_message(PrintMessageType::Error, format!("MediaSource \"{}\" does not support transcoding. Trying next ...", media_source.Id).as_str());
+        print_message(
+          PrintMessageType::Error,
+          format!(
+            "MediaSource \"{}\" does not support transcoding. Trying next ...",
+            media_source.Id
+          )
+          .as_str(),
+        );
         exit(1);
       }
       let mut audio_tracks: Vec<MediaStream> = vec![];
@@ -994,7 +1152,7 @@ pub trait MediaCenter {
         match media_stream.Type.as_str() {
           "Audio" => audio_tracks.push(media_stream),
           "Subtitle" => subtitle_tracks.push(media_stream),
-          _ => ()
+          _ => (),
         }
       }
       if audio_tracks.len() > 1 {
@@ -1009,16 +1167,14 @@ pub trait MediaCenter {
           }
         }
         if !skip {
-          let mut options: Vec<InteractiveOption> = vec![
-            InteractiveOption {
-              text: "Please choose which audio track to use:".to_string(),
-              option_type: InteractiveOptionType::Header
-            }
-          ];
+          let mut options: Vec<InteractiveOption> = vec![InteractiveOption {
+            text: "Please choose which audio track to use:".to_string(),
+            option_type: InteractiveOptionType::Header,
+          }];
           for track in audio_tracks.clone() {
             options.push(InteractiveOption {
               text: track.to_string(),
-              option_type: InteractiveOptionType::Button
+              option_type: InteractiveOptionType::Button,
             });
           }
           if let ((ind, _), _, InteractiveOptionType::Button) = interactive_select(options) {
@@ -1038,16 +1194,14 @@ pub trait MediaCenter {
           }
         }
         if !skip {
-          let mut options: Vec<InteractiveOption> = vec![
-            InteractiveOption {
-              text: "Please choose which subtitle track to use:".to_string(),
-              option_type: InteractiveOptionType::Header
-            }
-          ];
+          let mut options: Vec<InteractiveOption> = vec![InteractiveOption {
+            text: "Please choose which subtitle track to use:".to_string(),
+            option_type: InteractiveOptionType::Header,
+          }];
           for track in subtitle_tracks.clone() {
             options.push(InteractiveOption {
               text: track.to_string(),
-              option_type: InteractiveOptionType::Button
+              option_type: InteractiveOptionType::Button,
             });
           }
           if let ((ind, _), _, InteractiveOptionType::Button) = interactive_select(options) {
@@ -1056,10 +1210,22 @@ pub trait MediaCenter {
         }
       }
 
-      *previous_settings = Some((false, Some(audio_track_index), Some(subtitle_track_index), mbps.clone()));
+      *previous_settings = Some((
+        false,
+        Some(audio_track_index),
+        Some(subtitle_track_index),
+        mbps.clone(),
+      ));
 
       enable_raw_mode().unwrap();
-      execute!(stdout, RestorePosition, MoveToColumn(0), Clear(ClearType::FromCursorDown), LeaveAlternateScreen).unwrap();
+      execute!(
+        stdout,
+        RestorePosition,
+        MoveToColumn(0),
+        Clear(ClearType::FromCursorDown),
+        LeaveAlternateScreen
+      )
+      .unwrap();
       disable_raw_mode().unwrap();
 
       let bitrate = mbps.trim().parse::<u64>().unwrap() * 1000000;
@@ -1089,58 +1255,60 @@ pub trait MediaCenter {
               Container: "mkv".to_string(),
               VideoCodec: "hevc".to_string(),
               TranscodeSeekInfo: "Auto".to_string(),
-              Context: "Streaming".to_string()
+              Context: "Streaming".to_string(),
             },
             TranscodingProfile {
               Type: "Video".to_string(),
               Container: "mkv".to_string(),
               VideoCodec: "avc".to_string(),
               TranscodeSeekInfo: "Auto".to_string(),
-              Context: "Streaming".to_string()
+              Context: "Streaming".to_string(),
             },
             TranscodingProfile {
               Type: "Video".to_string(),
               Container: "mkv".to_string(),
               VideoCodec: "av1".to_string(),
               TranscodeSeekInfo: "Auto".to_string(),
-              Context: "Streaming".to_string()
-            }
-          ].to_vec(),
+              Context: "Streaming".to_string(),
+            },
+          ]
+          .to_vec(),
           SubtitleProfiles: [
             SubtitleProfile {
               Format: "subrip".to_string(),
-              Method: "Embed".to_string()
+              Method: "Embed".to_string(),
             },
             SubtitleProfile {
               Format: "srt".to_string(),
-              Method: "Embed".to_string()
+              Method: "Embed".to_string(),
             },
             SubtitleProfile {
               Format: "ass".to_string(),
-              Method: "Embed".to_string()
+              Method: "Embed".to_string(),
             },
             SubtitleProfile {
               Format: "ssa".to_string(),
-              Method: "Embed".to_string()
+              Method: "Embed".to_string(),
             },
             SubtitleProfile {
               Format: "pgssub".to_string(),
-              Method: "Embed".to_string()
+              Method: "Embed".to_string(),
             },
             SubtitleProfile {
               Format: "sub".to_string(),
-              Method: "Embed".to_string()
+              Method: "Embed".to_string(),
             },
             SubtitleProfile {
               Format: "dvdsub".to_string(),
-              Method: "Embed".to_string()
+              Method: "Embed".to_string(),
             },
             SubtitleProfile {
               Format: "pgs".to_string(),
-              Method: "Embed".to_string()
-            }
-          ].to_vec()
-        }
+              Method: "Embed".to_string(),
+            },
+          ]
+          .to_vec(),
+        },
       };
 
       let url = format!("Items/{}/PlaybackInfo?UserId={}", item.Id, user_id);
@@ -1150,9 +1318,12 @@ pub trait MediaCenter {
           Ok(serde_json::from_str::<PlaybackInfo>(search_text).unwrap())
         },
         Err(err) => {
-          print_message(PrintMessageType::Error, format!("Failed to post playback information: {}", err).as_str());
+          print_message(
+            PrintMessageType::Error,
+            format!("Failed to post playback information: {}", err).as_str(),
+          );
           Err(())
-        }
+        },
       }
     } else {
       let url = format!("Items/{}/PlaybackInfo?UserId={}", item.Id, user_id);
@@ -1162,9 +1333,16 @@ pub trait MediaCenter {
           Ok(serde_json::from_str::<PlaybackInfo>(search_text).unwrap())
         },
         Err(mut err) => {
-          print_message(PrintMessageType::Error, format!("Failed to post playback information: {}", err.text().unwrap()).as_str());
+          print_message(
+            PrintMessageType::Error,
+            format!(
+              "Failed to post playback information: {}",
+              err.text().unwrap()
+            )
+            .as_str(),
+          );
           Err(())
-        }
+        },
       }
     }
   }
@@ -1182,23 +1360,25 @@ pub trait MediaCenter {
   }
 
   fn item_set_playstate(&mut self, item_id: String, played: bool) {
-    let status_str = if played {
-      "Played"
-    } else {
-      "Un-Played"
-    };
+    let status_str = if played { "Played" } else { "Un-Played" };
     let current_time = chrono::Local::now();
     let format_string = "%Y%m%d%H%M%S";
     let formatted_time = current_time.format(format_string);
     let user = self.get_config_handle().get_active_user().unwrap();
-    let url = format!("Users/{}/PlayedItems/{}?DatePlayed={}", user.user_id, item_id, formatted_time);
+    let url = format!(
+      "Users/{}/PlayedItems/{}?DatePlayed={}",
+      user.user_id, item_id, formatted_time
+    );
     let req = if played {
       self.post(url, String::new())
     } else {
       self.delete(url, String::new())
     };
     if let Err(err) = req {
-      print_message(PrintMessageType::Error, format!("Failed to mark item as {}: {}", status_str, err).as_str());
+      print_message(
+        PrintMessageType::Error,
+        format!("Failed to mark item as {}: {}", status_str, err).as_str(),
+      );
     }
   }
 
@@ -1222,7 +1402,7 @@ pub trait MediaCenter {
           series = self.resolve_series(series.seasons[0].episodes[0].clone());
           continue;
         },
-        _ => panic!("What?!")
+        _ => panic!("What?!"),
       }
       let mut items: Vec<Item> = vec![];
       let mut record = false;
@@ -1255,9 +1435,7 @@ pub trait MediaCenter {
 
     let full_size = {
       let mut size = 0;
-      series.seasons.iter().for_each(|s| {
-        size += s.episodes.len()
-      });
+      series.seasons.iter().for_each(|s| size += s.episodes.len());
       size
     };
     let zero_pad_amount = (full_size as f64).log10().floor() as usize + 1;
@@ -1286,7 +1464,9 @@ pub trait MediaCenter {
         }
         line.push_str(format!("[{:0zero_pad_amount$}] ", index).as_str());
         let terminal_size = terminal::size().unwrap().0 as usize;
-        if 13 + zero_pad_amount + index.to_string().len() + episode.to_string_ext().len() > terminal_size {
+        if 13 + zero_pad_amount + index.to_string().len() + episode.to_string_ext().len()
+          > terminal_size
+        {
           line.push_str(format!("{}...", episode.to_string_ext()).as_str());
           just_text.push(line.clone());
           line.clear();
@@ -1309,17 +1489,17 @@ pub trait MediaCenter {
 
     let mut series = Series {
       item_id: item.SeriesId.clone().unwrap_or(item.Id),
-      seasons: vec![]
+      seasons: vec![],
     };
 
     if let Ok(items) = self.get_items(
       format!("Users/{}/Items?ParentId={}", user.user_id, series.item_id),
-      false
+      false,
     ) {
       for season in items {
         series.seasons.append(&mut vec![Season {
           item: season,
-          episodes: vec![]
+          episodes: vec![],
         }]);
       }
     } else {
@@ -1335,19 +1515,20 @@ pub trait MediaCenter {
     for (season_index, season) in series.seasons.clone().iter().enumerate() {
       if let Ok(items) = self.get_items(
         format!("Users/{}/Items?ParentId={}", user.user_id, season.item.Id),
-        false
+        false,
       ) {
         for episode in items {
           if !episode_ids.contains(&episode.Id) {
             episode_ids.push(episode.Id.clone());
-            series.seasons[season_index].episodes.append(&mut vec![episode]);
+            series.seasons[season_index]
+              .episodes
+              .append(&mut vec![episode]);
           }
         }
 
         if series.seasons[season_index].episodes.is_empty() {
           series.seasons.remove(season_index);
         }
-
       } else {
         exit(1);
       };
@@ -1367,15 +1548,24 @@ pub trait MediaCenter {
           if let Ok(item_list) = serde_json::from_value::<Item>(json) {
             return Ok(item_list);
           } else {
-            print_message(PrintMessageType::Error, "Failed to serialize the json response into an item.");
+            print_message(
+              PrintMessageType::Error,
+              "Failed to serialize the json response into an item.",
+            );
           }
         } else {
-          print_message(PrintMessageType::Error, "Failed to convert response into json.");
+          print_message(
+            PrintMessageType::Error,
+            "Failed to convert response into json.",
+          );
         }
       },
       Err(mut e) => {
-        print_message(PrintMessageType::Error, format!("Failed to get item at \"{}\"\n{}\n", url, e.text().unwrap()).as_str());
-      }
+        print_message(
+          PrintMessageType::Error,
+          format!("Failed to get item at \"{}\"\n{}\n", url, e.text().unwrap()).as_str(),
+        );
+      },
     }
     Err(())
   }
@@ -1396,24 +1586,39 @@ pub trait MediaCenter {
           if let Ok(item_list) = serde_json::from_value::<Vec<Item>>(json) {
             return Ok(item_list);
           } else {
-            print_message(PrintMessageType::Error, "Failed to serialize the json response into an item list.");
+            print_message(
+              PrintMessageType::Error,
+              "Failed to serialize the json response into an item list.",
+            );
           }
         } else {
-          print_message(PrintMessageType::Error, "Failed to convert response into json.");
+          print_message(
+            PrintMessageType::Error,
+            "Failed to convert response into json.",
+          );
         }
       },
       Err(mut e) => {
-        print_message(PrintMessageType::Error, format!("Failed to get item list at \"{}\"\n{}\n", url, e.text().unwrap()).as_str());
-      }
+        print_message(
+          PrintMessageType::Error,
+          format!(
+            "Failed to get item list at \"{}\"\n{}\n",
+            url,
+            e.text().unwrap()
+          )
+          .as_str(),
+        );
+      },
     }
     Err(())
   }
 
-  fn stop_playback(&mut self, 
+  fn stop_playback(
+    &mut self,
     item_id: String,
     playbackpositionticks: u64,
     total_runtime: u64,
-    time_pos: f64
+    time_pos: f64,
   ) -> bool {
     let playback_info = self.get_playback_info();
     let mut time_position = (time_pos * 10000000.0).round() as u64;
@@ -1428,36 +1633,45 @@ pub trait MediaCenter {
 
     let finished_obj: PlaybackStopInfo;
     let success_message: String;
-    let difference = (((total_runtime * 10000000) as f64) - time_position as f64) / ((total_runtime * 10000000) as f64);
-    if difference < 0.15 { // watched more than 75%
+    let difference = (((total_runtime * 10000000) as f64) - time_position as f64)
+      / ((total_runtime * 10000000) as f64);
+    if difference < 0.15 {
+      // watched more than 75%
       let url = format!("Users/{}/PlayedItems/{}", user.user_id, item_id);
       match self.post(url, String::new()) {
         Ok(_) => {
           print_message(PrintMessageType::Success, "Marked item as [Played].");
         },
         Err(err) => {
-          print_message(PrintMessageType::Error, format!("Failed to report PlaySession as stopped: {}", err).as_str());
-        }
+          print_message(
+            PrintMessageType::Error,
+            format!("Failed to report PlaySession as stopped: {}", err).as_str(),
+          );
+        },
       }
       return true;
-    } else if difference < 0.85 { // watched more than 15%
+    } else if difference < 0.85 {
+      // watched more than 15%
       finished_obj = PlaybackStopInfo {
         ItemId: item_id,
         PlaySessionId: playback_info.PlaySessionId.to_string(),
         SessionId: session_id,
         MediaSourceId: playback_info.MediaSources[0].Id.to_string(),
         PositionTicks: time_position.to_string(),
-        Failed: false
+        Failed: false,
       };
       let formatted: String = if time_as_secs > 60.0 {
         if (time_as_secs / 60.0) > 60.0 {
-          format!("{:02}:{:02}:{:02}",
+          format!(
+            "{:02}:{:02}:{:02}",
             ((time_as_secs / 60.0) / 60.0).trunc(),
-            ((((time_as_secs / 60.0) / 60.0) - ((time_as_secs / 60.0) / 60.).trunc()) * 60.0).trunc(),
+            ((((time_as_secs / 60.0) / 60.0) - ((time_as_secs / 60.0) / 60.).trunc()) * 60.0)
+              .trunc(),
             (((time_as_secs / 60.0) - (time_as_secs / 60.0).trunc()) * 60.0).trunc()
           )
         } else {
-          format!("00:{:02}:{:02}",
+          format!(
+            "00:{:02}:{:02}",
             (time_as_secs / 60.0).trunc(),
             (((time_as_secs / 60.0) - (time_as_secs / 60.0).trunc()) * 60.0).trunc()
           )
@@ -1465,7 +1679,10 @@ pub trait MediaCenter {
       } else {
         time_as_secs.to_string()
       };
-      success_message = format!("Playback progress ({}) has been sent to your server.", formatted)
+      success_message = format!(
+        "Playback progress ({}) has been sent to your server.",
+        formatted
+      )
     } else {
       finished_obj = PlaybackStopInfo {
         ItemId: item_id,
@@ -1473,7 +1690,7 @@ pub trait MediaCenter {
         SessionId: session_id,
         MediaSourceId: playback_info.MediaSources[0].Id.to_string(),
         PositionTicks: (playbackpositionticks as f64).to_string(),
-        Failed: false
+        Failed: false,
       };
       success_message = "Playback progress of this item has not been changed.".to_string();
     }
@@ -1482,17 +1699,21 @@ pub trait MediaCenter {
       Ok(_) => {
         print_message(PrintMessageType::Success, &success_message);
         false
-      }
+      },
       Err(err) => {
-        print_message(PrintMessageType::Error, format!("Failed to log playback progress to your server: {}", err).as_str());
+        print_message(
+          PrintMessageType::Error,
+          format!("Failed to log playback progress to your server: {}", err).as_str(),
+        );
         false
-      }
+      },
     }
   }
 
   fn get_playback_info(&mut self) -> PlaybackInfo;
 
-  fn report_playback(&mut self,
+  fn report_playback(
+    &mut self,
     item_id: String,
     playbackpositionticks: u64,
     mut time_pos: f64,
@@ -1501,7 +1722,7 @@ pub trait MediaCenter {
     paused: bool,
     muted: bool,
     volume_level: u32,
-    _socket: &mut UnboundedSender<String>
+    _socket: &mut UnboundedSender<String>,
   ) {
     let playback_info = self.get_playback_info();
     let session_id = self.get_session_id().expect("This shouldn't be None!");
@@ -1514,7 +1735,10 @@ pub trait MediaCenter {
     };
     let playmethod: PlayMethod;
     (playmethod, time_pos) = if self.get_config_handle().config.transcoding {
-      (PlayMethod::Transcode, time_pos * 10000000.0 + (playbackpositionticks * 10000000) as f64)
+      (
+        PlayMethod::Transcode,
+        time_pos * 10000000.0 + (playbackpositionticks * 10000000) as f64,
+      )
     } else {
       (PlayMethod::DirectPlay, time_pos * 10000000.0)
     };
@@ -1531,19 +1755,19 @@ pub trait MediaCenter {
       VolumeLevel: volume_level,
       PlaySessionId: playback_info.PlaySessionId.to_string(),
       PlayMethod: playmethod,
-      EventName: event_name
+      EventName: event_name,
     };
 
     let url = "Sessions/Playing/Progress".to_string();
     if let Err(err) = self.post(url, serde_json::to_string(&update_object).unwrap()) {
-      print_message(PrintMessageType::Error, format!("Failed to report PlaySession as started: {}", err).as_str());
+      print_message(
+        PrintMessageType::Error,
+        format!("Failed to report PlaySession as started: {}", err).as_str(),
+      );
     }
   }
 
-  fn start_playback(&mut self,
-    item_id: String,
-    playbackpositionticks: u64
-  ) {
+  fn start_playback(&mut self, item_id: String, playbackpositionticks: u64) {
     let playback_info = self.get_playback_info();
     let session_id = self.get_session_id().expect("This shouldn't be a None!");
     let playmethod = if self.get_config_handle().config.transcoding {
@@ -1554,7 +1778,12 @@ pub trait MediaCenter {
     let audio_index = if let Some(transcoding_url) = &playback_info.MediaSources[0].TranscodingUrl {
       if transcoding_url.contains("AudioStreamIndex") {
         let reg = Regex::new(r#"(?:AudioStreamIndex=)(\d+)"#).unwrap();
-        let num = reg.captures(transcoding_url).unwrap().get(1).unwrap().as_str();
+        let num = reg
+          .captures(transcoding_url)
+          .unwrap()
+          .get(1)
+          .unwrap()
+          .as_str();
         num.parse::<u32>().unwrap()
       } else {
         0
@@ -1562,17 +1791,23 @@ pub trait MediaCenter {
     } else {
       0
     };
-    let subtitle_index = if let Some(transcoding_url) = &playback_info.MediaSources[0].TranscodingUrl {
-      if transcoding_url.contains("SubtitleStreamIndex") {
-        let reg = Regex::new(r#"(?:SubtitleStreamIndex=)(\d+)"#).unwrap();
-        let num = reg.captures(transcoding_url).unwrap().get(1).unwrap().as_str();
-        num.parse::<u32>().unwrap()
+    let subtitle_index =
+      if let Some(transcoding_url) = &playback_info.MediaSources[0].TranscodingUrl {
+        if transcoding_url.contains("SubtitleStreamIndex") {
+          let reg = Regex::new(r#"(?:SubtitleStreamIndex=)(\d+)"#).unwrap();
+          let num = reg
+            .captures(transcoding_url)
+            .unwrap()
+            .get(1)
+            .unwrap()
+            .as_str();
+          num.parse::<u32>().unwrap()
+        } else {
+          0
+        }
       } else {
         0
-      }
-    } else {
-      0
-    };
+      };
 
     let playing_object = PlayRequest {
       CanSeek: true,
@@ -1586,12 +1821,15 @@ pub trait MediaCenter {
       PlaybackStartTimeTicks: playbackpositionticks * 10000000,
       PlaySessionId: playback_info.PlaySessionId.to_string(),
       PlayMethod: playmethod,
-      RepeatMode: RepeatMode::RepeatNone
+      RepeatMode: RepeatMode::RepeatNone,
     };
 
     let url = "Sessions/Playing".to_string();
     if let Err(err) = self.post(url, serde_json::to_string(&playing_object).unwrap()) {
-      print_message(PrintMessageType::Error, format!("Failed to start playsession!: {}", err).as_str());
+      print_message(
+        PrintMessageType::Error,
+        format!("Failed to start playsession!: {}", err).as_str(),
+      );
     }
   }
 
@@ -1612,27 +1850,34 @@ pub trait MediaCenter {
             handle.ask_for_setting(Objective::Address);
           }
           handle.get_address().unwrap()
-        }
+        },
       }
     }
   }
 
   fn create_user_credentials(&mut self) -> UserCredentials {
     let config = &self.get_config_handle().config;
-    print!("Please enter your {} username", config.media_center_type.to_string());
+    print!(
+      "Please enter your {} username",
+      config.media_center_type.to_string()
+    );
     let username = take_string_input(vec![]);
-    print!("Please enter your {} password: ", config.media_center_type.to_string());
+    print!(
+      "Please enter your {} password: ",
+      config.media_center_type.to_string()
+    );
     let password = hidden_string_input(Some('*'));
     println!();
-    UserCredentials {
-      username,
-      password
-    }
+    UserCredentials { username, password }
   }
 
   fn re_authenticate(&mut self) {
     if let Some(user) = self.get_config_handle().get_active_user() {
-      print!("Logging in with {} on {} ", user.username.cyan(), self.get_config_handle().config.server_name.clone().cyan());
+      print!(
+        "Logging in with {} on {} ",
+        user.username.cyan(),
+        self.get_config_handle().config.server_name.clone().cyan()
+      );
       loop {
         let config = self.get_config_handle();
         let url = format!("Sessions?DeviceId={}", config.get_device_id());
@@ -1642,9 +1887,13 @@ pub trait MediaCenter {
             let json_response = serde_json::from_str::<Value>(&response.text().unwrap()).unwrap();
             if let Some(id) = json_response[0].get("Id") {
               println!("{}\n", "🗸".green());
-              self.insert_value(MediaCenterValues::SessionID, id.as_str().unwrap().to_string());
+              self.insert_value(
+                MediaCenterValues::SessionID,
+                id.as_str().unwrap().to_string(),
+              );
               if let Some(support) = json_response[0].get("SupportedCommands") {
-                if !support.to_string().contains("PlayState") { // yea that should be sufficient
+                if !support.to_string().contains("PlayState") {
+                  // yea that should be sufficient
                   self.report_session_capabilities().unwrap();
                 }
               }
@@ -1653,19 +1902,28 @@ pub trait MediaCenter {
               continue;
             } else {
               println!("{}", "𐄂".red());
-              print_message(PrintMessageType::Error, "Creating a new session failed. Please login again.");
+              print_message(
+                PrintMessageType::Error,
+                "Creating a new session failed. Please login again.",
+              );
               self.get_config_handle().remove_user(user.access_token);
             }
           },
           Err(mut e) => {
             println!("{}", "𐄂".red());
             if e.status() == StatusCode::UNAUTHORIZED {
-              print_message(PrintMessageType::Error, format!("{}: This session expired. Please login again.", e.status()).as_str());
+              print_message(
+                PrintMessageType::Error,
+                format!("{}: This session expired. Please login again.", e.status()).as_str(),
+              );
               self.get_config_handle().remove_user(user.access_token);
             } else {
-              print_message(PrintMessageType::Error, format!("{}: {}", e.status(), e.text().unwrap()).as_str());
+              print_message(
+                PrintMessageType::Error,
+                format!("{}: {}", e.status(), e.text().unwrap()).as_str(),
+              );
             }
-          }
+          },
         }
         break;
       }
@@ -1682,19 +1940,29 @@ pub trait MediaCenter {
         if let Some(user) = handle.get_active_user() {
           let authorization_header: (String, String) = (
             String::from("Authorization"),
-            format!("Emby UserId={}, Client=Emby Theater, Device={}, DeviceId={}, Version={}, Token={}",
-              user.user_id, APPNAME, handle.get_device_id(), VERSION, user.access_token)
+            format!(
+              "Emby UserId={}, Client=Emby Theater, Device={}, DeviceId={}, Version={}, Token={}",
+              user.user_id,
+              APPNAME,
+              handle.get_device_id(),
+              VERSION,
+              user.access_token
+            ),
           );
-          self.insert_value(MediaCenterValues::Header, serde_json::to_string(&authorization_header).unwrap());
-          let request_header: (String, String) = (
-            format!("{}/{}", APPNAME, VERSION),
-            user.access_token
+          self.insert_value(
+            MediaCenterValues::Header,
+            serde_json::to_string(&authorization_header).unwrap(),
           );
-          self.insert_value(MediaCenterValues::Header, serde_json::to_string(&request_header).unwrap());
+          let request_header: (String, String) =
+            (format!("{}/{}", APPNAME, VERSION), user.access_token);
+          self.insert_value(
+            MediaCenterValues::Header,
+            serde_json::to_string(&request_header).unwrap(),
+          );
         } else {
           panic!("Trying to generate a new header without any user existent?!");
         }
-      }
+      },
     }
   }
 
@@ -1703,8 +1971,15 @@ pub trait MediaCenter {
       let url = "Users/AuthenticateByName".to_string();
       let server_name = self.get_config_handle().config.server_name.clone();
       let creds = self.create_user_credentials();
-      let body = format!("{{\"Username\":\"{}\",\"pw\":\"{}\"}}", creds.username, creds.password);
-      print!("Logging in with {} on {} ", creds.username.clone().cyan(), server_name.clone().cyan());
+      let body = format!(
+        "{{\"Username\":\"{}\",\"pw\":\"{}\"}}",
+        creds.username, creds.password
+      );
+      print!(
+        "Logging in with {} on {} ",
+        creds.username.clone().cyan(),
+        server_name.clone().cyan()
+      );
       match self.post(url.clone(), body.clone()) {
         Ok(mut res) => {
           println!("{}", "🗸".green());
@@ -1713,7 +1988,7 @@ pub trait MediaCenter {
           let user = UserConfig {
             access_token: json_response["AccessToken"].as_str().unwrap().to_string(),
             username: session_obj["UserName"].as_str().unwrap().to_string(),
-            user_id: session_obj["UserId"].as_str().unwrap().to_string()
+            user_id: session_obj["UserId"].as_str().unwrap().to_string(),
           };
           let device_id = session_obj["DeviceId"].as_str().unwrap().to_string();
           let config = self.get_config_handle();
@@ -1725,7 +2000,7 @@ pub trait MediaCenter {
           let session_id = session_obj["Id"].as_str().unwrap().to_string();
           self.insert_value(MediaCenterValues::SessionID, session_id);
           break;
-        }
+        },
         Err(e) => {
           println!("{}", "𐄂".red());
           match e.as_str() {
@@ -1737,9 +2012,9 @@ pub trait MediaCenter {
             },
             _ => {
               print_message(PrintMessageType::Error, "Login failed! Please try again.");
-            }
+            },
           }
-        }
+        },
       }
     }
     self.report_session_capabilities().unwrap();
@@ -1779,8 +2054,8 @@ pub trait MediaCenter {
         String::from("Play"),
         String::from("Playstate"),
         String::from("PlayNext"),
-        String::from("PlayMediaSource")
-      ]
+        String::from("PlayMediaSource"),
+      ],
     };
 
     let url: String;
@@ -1791,13 +2066,14 @@ pub trait MediaCenter {
     }
 
     match self.post(url, serde_json::to_string(&capabilities).unwrap()) {
-      Ok(_) => {
-        Ok(())
-      },
+      Ok(_) => Ok(()),
       Err(err) => {
-        print_message(PrintMessageType::Error, format!("Failed to post remote control support: {}.", err).as_str());
+        print_message(
+          PrintMessageType::Error,
+          format!("Failed to post remote control support: {}.", err).as_str(),
+        );
         Err(())
-      }
+      },
     }
   }
 
@@ -1820,8 +2096,9 @@ pub trait MediaCenter {
       .header(String::from("X-Application"), request_headers.clone().0)
       .header(String::from("X-Emby-Token"), request_headers.clone().1)
       .header("Content-Type", "application/json")
-      .body(()).unwrap()
-    .send();
+      .body(())
+      .unwrap()
+      .send();
 
     let response = if let Err(res) = request {
       print_message(PrintMessageType::Error, res.to_string().as_str());
@@ -1831,12 +2108,8 @@ pub trait MediaCenter {
     };
 
     match response.status() {
-      StatusCode::OK => {
-        Ok(response)
-      },
-      _ => {
-        Err(response)
-      }
+      StatusCode::OK => Ok(response),
+      _ => Err(response),
     }
   }
 
@@ -1854,9 +2127,11 @@ pub trait MediaCenter {
       builder = builder.header(String::from("X-Application"), request_headers.clone().0);
       builder = builder.header(String::from("X-Emby-Token"), request_headers.clone().1);
     }
-    let request = builder.header("Content-Type", "application/json")
-      .body(body).unwrap()
-    .send();
+    let request = builder
+      .header("Content-Type", "application/json")
+      .body(body)
+      .unwrap()
+      .send();
 
     let mut response = if let Err(res) = request {
       print_message(PrintMessageType::Error, res.to_string().as_str());
@@ -1866,12 +2141,8 @@ pub trait MediaCenter {
     };
 
     match response.status() {
-      StatusCode::OK => {
-        Ok(response)
-      },
-      _ => {
-        Err(response.text().unwrap())
-      }
+      StatusCode::OK => Ok(response),
+      _ => Err(response.text().unwrap()),
     }
   }
 
@@ -1889,9 +2160,11 @@ pub trait MediaCenter {
       builder = builder.header(String::from("X-Application"), request_headers.clone().0);
       builder = builder.header(String::from("X-Emby-Token"), request_headers.clone().1);
     }
-    let request = builder.header("Content-Type", "application/json")
-      .body(body).unwrap()
-    .send();
+    let request = builder
+      .header("Content-Type", "application/json")
+      .body(body)
+      .unwrap()
+      .send();
 
     let mut response = if let Err(res) = request {
       return Err(res.to_string());
@@ -1900,12 +2173,8 @@ pub trait MediaCenter {
     };
 
     match response.status() {
-      StatusCode::OK | StatusCode::NO_CONTENT => {
-        Ok(response)
-      },
-      _ => {
-        Err(response.text().unwrap())
-      }
+      StatusCode::OK | StatusCode::NO_CONTENT => Ok(response),
+      _ => Err(response.text().unwrap()),
     }
   }
 
@@ -1943,7 +2212,13 @@ pub fn broadcast_search(media_center_type: MediaCenterType) -> Option<UDPAnswer>
       break;
     }
     if poll(Duration::from_millis(100)).unwrap() {
-      if let Ok(Event::Key(KeyEvent { code, modifiers, state: _, kind: _ })) = read() {
+      if let Ok(Event::Key(KeyEvent {
+        code,
+        modifiers,
+        state: _,
+        kind: _,
+      })) = read()
+      {
         if modifiers == KeyModifiers::CONTROL && code == KeyCode::Char('c') {
           disable_raw_mode().unwrap();
           println!("^C");
@@ -1960,7 +2235,10 @@ pub fn broadcast_search(media_center_type: MediaCenterType) -> Option<UDPAnswer>
   let obj = address.lock().unwrap().clone();
   if let Some(answer) = obj {
     println!();
-    print!("Is this IP-Adress/Domain the correct one: {}\n (Y)es / (N)o", answer.Address);
+    print!(
+      "Is this IP-Adress/Domain the correct one: {}\n (Y)es / (N)o",
+      answer.Address
+    );
     match getch("YyNn") {
       'Y' | 'y' => {
         println!();
@@ -1969,7 +2247,7 @@ pub fn broadcast_search(media_center_type: MediaCenterType) -> Option<UDPAnswer>
       _ => {
         println!();
         None
-      }
+      },
     }
   } else {
     println!("No local media-instances found.\n");
@@ -1979,12 +2257,20 @@ pub fn broadcast_search(media_center_type: MediaCenterType) -> Option<UDPAnswer>
 
 fn broadcast(message: &str) -> Result<UDPAnswer, ()> {
   let socket: UdpSocket = UdpSocket::bind("0.0.0.0:0").expect("Failed to bind to network socket.");
-  socket.set_read_timeout(Some(Duration::new(5, 0))).expect("Failed to set timeout.");
-  socket.set_broadcast(true).expect("Failed to start broadcast.");
-  socket.send_to(&String::from(message).into_bytes(), "255.255.255.255:7359").expect("Failed to send broadcast.");
-  let mut buf  = [0; 4096];
+  socket
+    .set_read_timeout(Some(Duration::new(5, 0)))
+    .expect("Failed to set timeout.");
+  socket
+    .set_broadcast(true)
+    .expect("Failed to start broadcast.");
+  socket
+    .send_to(&String::from(message).into_bytes(), "255.255.255.255:7359")
+    .expect("Failed to send broadcast.");
+  let mut buf = [0; 4096];
   if socket.recv_from(&mut buf).is_ok() {
-    let parsed = from_utf8(&buf).expect("Failed to read buffer into &str").trim_matches(char::from(0));
+    let parsed = from_utf8(&buf)
+      .expect("Failed to read buffer into &str")
+      .trim_matches(char::from(0));
     let udp_answer: UDPAnswer = serde_json::from_str(parsed).unwrap();
     Ok(udp_answer)
   } else {

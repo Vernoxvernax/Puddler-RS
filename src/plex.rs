@@ -1,14 +1,43 @@
-use std::{fmt, io::{stdin, stdout, Write}, process::exit, str::FromStr, sync::mpsc, thread::{self, sleep}, time::Duration};
 use chrono::{DateTime, Utc};
-use isahc::{config::Configurable, http::StatusCode, Body, ReadResponseExt, Request, RequestExt, Response};
+use crossterm::{
+  cursor::{Hide, MoveToColumn, RestorePosition, SavePosition, Show},
+  execute,
+  style::Stylize,
+  terminal::{
+    self, disable_raw_mode, enable_raw_mode, Clear, ClearType, DisableLineWrap, EnableLineWrap,
+    EnterAlternateScreen, LeaveAlternateScreen,
+  },
+};
+use isahc::{
+  config::Configurable, http::StatusCode, Body, ReadResponseExt, Request, RequestExt, Response,
+};
 use isolanguage_1::LanguageCode;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use crossterm::{cursor::{Hide, MoveToColumn, RestorePosition, SavePosition, Show}, execute, style::Stylize, terminal::{self, disable_raw_mode, enable_raw_mode, Clear, ClearType, DisableLineWrap, EnableLineWrap, EnterAlternateScreen, LeaveAlternateScreen}};
+use std::{
+  fmt,
+  io::{stdin, stdout, Write},
+  process::exit,
+  str::FromStr,
+  sync::mpsc,
+  thread::{self, sleep},
+  time::Duration,
+};
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::{input::{getch, interactive_select, plex_series_select, take_string_input, InteractiveOption, InteractiveOptionType, SeriesOptions}, media_center::{IsNumeric, MediaCenter, MediaCenterValues, ToStringAdv}, media_config::{Config, Objective, UserConfig}, mpv::Player, printing::{print_message, PrintMessageType}, puddler_settings::PuddlerSettings, APPNAME, VERSION};
+use crate::{
+  input::{
+    getch, interactive_select, plex_series_select, take_string_input, InteractiveOption,
+    InteractiveOptionType, SeriesOptions,
+  },
+  media_center::{IsNumeric, MediaCenter, MediaCenterValues, ToStringAdv},
+  media_config::{Config, Objective, UserConfig},
+  mpv::Player,
+  printing::{print_message, PrintMessageType},
+  puddler_settings::PuddlerSettings,
+  APPNAME, VERSION,
+};
 
 const PLEX_CLIENT_PROFILES: &str = "add-direct-play-profile(
 type=videoProfile
@@ -37,7 +66,7 @@ scope=videoCodec
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 struct PlexLibrary {
-  MediaContainer: MediaContainer
+  MediaContainer: MediaContainer,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
@@ -45,14 +74,14 @@ struct MediaContainer {
   size: u32,
   mixedParents: Option<bool>,
   Metadata: Option<Vec<PlexItem>>,
-  Hub: Option<Vec<PlexHub>>
+  Hub: Option<Vec<PlexHub>>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 struct PlexHub {
   r#type: String,
   size: u32,
-  Metadata: Option<Vec<PlexItem>>
+  Metadata: Option<Vec<PlexItem>>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
@@ -73,7 +102,7 @@ pub struct PlexItem {
   leafCount: Option<u32>,
   viewedLeafCount: Option<u32>,
   index: Option<u32>,
-  pub viewOffset: Option<u64>
+  pub viewOffset: Option<u64>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
@@ -87,7 +116,7 @@ pub struct PlexMediaFile {
   audioCodec: String,
   videoCodec: String,
   deletedAt: Option<u64>,
-  pub Part: Vec<PlexMediaPart>
+  pub Part: Vec<PlexMediaPart>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
@@ -96,7 +125,7 @@ pub struct PlexMediaPart {
   pub key: String,
   duration: u64,
   file: String,
-  pub Stream: Option<Vec<PlexStream>>
+  pub Stream: Option<Vec<PlexStream>>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
@@ -111,23 +140,52 @@ pub struct PlexStream {
   audioChannelLayout: Option<String>,
   title: Option<String>,
   pub displayTitle: Option<String>,
-  pub language: Option<String>
+  pub language: Option<String>,
 }
 
 impl fmt::Display for PlexStream {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     if self.default == Some(true) {
-      write!(f, "Title = \"{}\", Language = \"{}\", Codec = \"{}\" {}",
-        self.title.as_ref().unwrap_or(self.displayTitle.as_ref().unwrap_or(&"".to_string())),
-        self.language.as_ref().unwrap_or(self.languageCode.as_ref().unwrap_or(&"undefined".to_string())),
-        self.codec.as_ref().unwrap_or(&"???".to_string()).to_uppercase(),
+      write!(
+        f,
+        "Title = \"{}\", Language = \"{}\", Codec = \"{}\" {}",
+        self
+          .title
+          .as_ref()
+          .unwrap_or(self.displayTitle.as_ref().unwrap_or(&"".to_string())),
+        self.language.as_ref().unwrap_or(
+          self
+            .languageCode
+            .as_ref()
+            .unwrap_or(&"undefined".to_string())
+        ),
+        self
+          .codec
+          .as_ref()
+          .unwrap_or(&"???".to_string())
+          .to_uppercase(),
         "[Default]".to_string().green()
       )
     } else {
-      write!(f, "Title = \"{}\", Language = \"{}\", Codec = \"{}\"",
-      self.title.as_ref().unwrap_or(self.displayTitle.as_ref().unwrap_or(&"".to_string())),
-      self.language.as_ref().unwrap_or(self.languageCode.as_ref().unwrap_or(&"undefined".to_string())),
-      self.codec.as_ref().unwrap_or(&"???".to_string()).to_uppercase())
+      write!(
+        f,
+        "Title = \"{}\", Language = \"{}\", Codec = \"{}\"",
+        self
+          .title
+          .as_ref()
+          .unwrap_or(self.displayTitle.as_ref().unwrap_or(&"".to_string())),
+        self.language.as_ref().unwrap_or(
+          self
+            .languageCode
+            .as_ref()
+            .unwrap_or(&"undefined".to_string())
+        ),
+        self
+          .codec
+          .as_ref()
+          .unwrap_or(&"???".to_string())
+          .to_uppercase()
+      )
     }
   }
 }
@@ -136,13 +194,13 @@ impl fmt::Display for PlexStream {
 struct PlexTVUser {
   id: u64,
   username: String,
-  profile: PlexUserProfile
+  profile: PlexUserProfile,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 struct PlexUserProfile {
   defaultAudioLanguage: String,
-  defaultSubtitleLanguage: String
+  defaultSubtitleLanguage: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
@@ -161,7 +219,7 @@ pub struct PlexResources {
   accessToken: Option<String>,
   name: String,
   provides: String,
-  publicAddress: String
+  publicAddress: String,
 }
 
 #[derive(Clone)]
@@ -170,19 +228,19 @@ pub struct PlexServer {
   headers: Vec<(String, String)>,
   session_id: Option<String>,
   settings: PuddlerSettings,
-  playback_info: Option<PlexItem>
+  playback_info: Option<PlexItem>,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Clone)]
 pub struct Series {
   item_id: String,
-  pub seasons: Vec<Season>
+  pub seasons: Vec<Season>,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Clone)]
 pub struct Season {
   pub item: PlexItem,
-  pub episodes: Vec<PlexItem>
+  pub episodes: Vec<PlexItem>,
 }
 
 impl ToStringAdv for PlexItem {
@@ -198,7 +256,7 @@ impl ToStringAdv for PlexItem {
     let mut name: String;
     match self.r#type.as_str() {
       "season" | "episode" => name = self.parentTitle.clone().unwrap_or(String::from("???")),
-      _ => name = self.title.clone()
+      _ => name = self.title.clone(),
     }
     if name.contains('(') {
       let re = Regex::new(r" \(\d{4}\)").unwrap();
@@ -213,21 +271,22 @@ impl ToStringAdv for PlexItem {
         vec![
           self.to_string(),
           format!("{} {}", name, time),
-          self.title.clone()
+          self.title.clone(),
         ]
       },
       "episode" => {
         vec![
           self.to_string(),
           format!("{} {}", name, time),
-          format!("S{:02}E{:02} ({})",
+          format!(
+            "S{:02}E{:02} ({})",
             self.parentIndex.unwrap_or(0),
             self.index.unwrap_or(0),
             self.title
-          )
+          ),
         ]
       },
-      _ => vec![format!("{} {} (unknown media type)", self.title, time)]
+      _ => vec![format!("{} {} (unknown media type)", self.title, time)],
     }
   }
 
@@ -235,7 +294,11 @@ impl ToStringAdv for PlexItem {
     let full = self.to_string_full();
     if let Some(offset) = self.viewOffset {
       if let Some(duration) = self.duration {
-        return format!("{} {}%", full, ((offset as f64 / duration as f64) * 100.0).round());
+        return format!(
+          "{} {}%",
+          full,
+          ((offset as f64 / duration as f64) * 100.0).round()
+        );
       }
     }
     full
@@ -253,7 +316,7 @@ impl ToStringAdv for PlexItem {
         }
       }
     } else if let Some(viewCount) = self.viewCount {
-      if viewCount > 0  {
+      if viewCount > 0 {
         played_status = format!(" - {}", "(Played)".green());
       }
     }
@@ -275,26 +338,23 @@ impl ToString for PlexItem {
     match self.r#type.as_str() {
       "season" => name = self.parentTitle.clone().unwrap_or(String::from("???")),
       "episode" => name = self.grandparentTitle.clone().unwrap_or(String::from("???")),
-      _ => name = self.title.clone()
+      _ => name = self.title.clone(),
     }
     if name.contains('(') {
       let re = Regex::new(r" \(\d{4}\)").unwrap();
       name = re.replace_all(&name, "").to_string();
     }
-    
+
     match self.r#type.as_str() {
       "movie" | "show" => {
         format!("{} {}", name, time)
       },
       "season" => {
-        format!("{} {} - {}",
-          name,
-          time,
-          self.title.clone()
-        )
+        format!("{} {} - {}", name, time, self.title.clone())
       },
       "episode" => {
-        format!("{} {} - S{:02}E{:02} - {}",
+        format!(
+          "{} {} - S{:02}E{:02} - {}",
           name,
           time,
           self.parentIndex.unwrap_or(0),
@@ -302,7 +362,7 @@ impl ToString for PlexItem {
           self.title
         )
       },
-      _ => format!("{} {} (unknown media type)", self.title, time)
+      _ => format!("{} {} (unknown media type)", self.title, time),
     }
   }
 }
@@ -311,27 +371,29 @@ impl MediaCenter for PlexServer {
   fn new(mut config: Config, settings: PuddlerSettings) -> Self {
     PlexServer {
       config_handle: config.clone(),
-      headers: vec![
-        (
-          String::from("Authorization"),
-          format!("Emby UserId=\"\", Client=Emby Theater, Device={}, DeviceId={}, Version={}, Token=\"\"",
-          APPNAME, config.get_device_id(), VERSION)
-        )
-      ],
+      headers: vec![(
+        String::from("Authorization"),
+        format!(
+          "Emby UserId=\"\", Client=Emby Theater, Device={}, DeviceId={}, Version={}, Token=\"\"",
+          APPNAME,
+          config.get_device_id(),
+          VERSION
+        ),
+      )],
       session_id: None,
       settings,
-      playback_info: None
+      playback_info: None,
     }
   }
 
   fn get_settings(&mut self) -> &mut PuddlerSettings {
     &mut self.settings
   }
-  
+
   fn get_config_handle(&mut self) -> &mut Config {
     &mut self.config_handle
   }
-    
+
   fn get_headers(&mut self) -> Vec<(String, String)> {
     self.headers.clone()
   }
@@ -345,11 +407,13 @@ impl MediaCenter for PlexServer {
         if self.headers.len() == 3 {
           self.headers = vec![self.headers[0].clone()];
         }
-        self.headers.append(&mut vec![serde_json::from_str::<(String, String)>(&value).unwrap()])
+        self.headers.append(&mut vec![
+          serde_json::from_str::<(String, String)>(&value).unwrap()
+        ])
       },
       MediaCenterValues::PlaybackInfo => {
         self.playback_info = Some(serde_json::from_str(&value).unwrap());
-      }
+      },
     }
   }
 
@@ -358,7 +422,10 @@ impl MediaCenter for PlexServer {
   }
 
   fn get_session_id(&mut self) -> Option<String> {
-    self.session_id.as_ref().map(|session_id| session_id.to_string())
+    self
+      .session_id
+      .as_ref()
+      .map(|session_id| session_id.to_string())
   }
 
   fn update_player(&mut self, player: &mut Player) {
@@ -383,22 +450,18 @@ impl MediaCenter for PlexServer {
 
     let mut total: Vec<PlexItem> = vec![];
     let mut options: Vec<InteractiveOption> = vec![];
-    if let Ok(mut items) = self.get_items(
-      "library/recentlyAdded".to_string(), false
-    ) {
+    if let Ok(mut items) = self.get_items("library/recentlyAdded".to_string(), false) {
       items.drain(20..);
       if !items.is_empty() {
-        options.append(&mut vec![
-          InteractiveOption {
-            text: String::from("Recently Added:"),
-            option_type: InteractiveOptionType::Header
-          }
-        ]);
+        options.append(&mut vec![InteractiveOption {
+          text: String::from("Recently Added:"),
+          option_type: InteractiveOptionType::Header,
+        }]);
       }
       for item in items.clone() {
         options.append(&mut vec![InteractiveOption {
           text: item.to_string_ext(),
-          option_type: InteractiveOptionType::Button
+          option_type: InteractiveOptionType::Button,
         }]);
       }
       total.extend(items);
@@ -409,16 +472,16 @@ impl MediaCenter for PlexServer {
     options.append(&mut vec![
       InteractiveOption {
         text: String::from(""),
-        option_type: InteractiveOptionType::Header
+        option_type: InteractiveOptionType::Header,
       },
       InteractiveOption {
         text: String::from("Search"),
-        option_type: InteractiveOptionType::TextInput
+        option_type: InteractiveOptionType::TextInput,
       },
       InteractiveOption {
         text: format!("Return to {} Menu", APPNAME),
-        option_type: InteractiveOptionType::Special
-      }
+        option_type: InteractiveOptionType::Special,
+      },
     ]);
 
     let menu = options.clone();
@@ -434,28 +497,29 @@ impl MediaCenter for PlexServer {
         (_, Some(mut search), InteractiveOptionType::TextInput) => {
           search = search.trim().to_owned();
           if let Ok(items) = self.get_items(
-            format!("hubs/search?query={}", urlencoding::encode(&search)), true
+            format!("hubs/search?query={}", urlencoding::encode(&search)),
+            true,
           ) {
             options.clear();
             options.append(&mut vec![InteractiveOption {
               text: format!("Search-Result for \"{}\":", search.cyan()),
-              option_type: InteractiveOptionType::Header
+              option_type: InteractiveOptionType::Header,
             }]);
             for item in items.clone() {
               options.append(&mut vec![InteractiveOption {
                 text: item.to_string_ext(),
-                option_type: InteractiveOptionType::Button
+                option_type: InteractiveOptionType::Button,
               }]);
             }
             options.append(&mut vec![
               InteractiveOption {
                 text: String::from("Back"),
-                option_type: InteractiveOptionType::Special
+                option_type: InteractiveOptionType::Special,
               },
               InteractiveOption {
                 text: format!("Return to {} Menu", APPNAME),
-                option_type: InteractiveOptionType::Special
-              }
+                option_type: InteractiveOptionType::Special,
+              },
             ]);
             current_items = items;
           } else {
@@ -470,7 +534,7 @@ impl MediaCenter for PlexServer {
             return;
           }
         },
-        _ => panic!("UNKOWN OPTION TYPE")
+        _ => panic!("UNKOWN OPTION TYPE"),
       }
     }
   }
@@ -482,13 +546,20 @@ impl MediaCenter for PlexServer {
     } else if !url.ends_with('&') {
       url.push('&')
     }
-    let url = format!("{}{}X-Plex-Token={}&X-Plex-Client-Identifier={}", self.get_address(), url, user.access_token, self.config_handle.get_device_id());
+    let url = format!(
+      "{}{}X-Plex-Token={}&X-Plex-Client-Identifier={}",
+      self.get_address(),
+      url,
+      user.access_token,
+      self.config_handle.get_device_id()
+    );
     let request = Request::get(url.clone())
       .timeout(Duration::from_secs(15))
       .header("Content-Type", "application/json")
       .header("accept", "application/json")
-      .body(()).unwrap()
-    .send();
+      .body(())
+      .unwrap()
+      .send();
 
     let response = if let Err(res) = request {
       print_message(PrintMessageType::Error, res.to_string().as_str());
@@ -498,16 +569,13 @@ impl MediaCenter for PlexServer {
     };
 
     match response.status() {
-      StatusCode::OK => {
-        Ok(response)
-      },
-      _ => {
-        Err(response)
-      }
+      StatusCode::OK => Ok(response),
+      _ => Err(response),
     }
   }
 
-  fn report_playback(&mut self,
+  fn report_playback(
+    &mut self,
     item_id: String,
     playbackpositionticks: u64,
     time_pos: f64,
@@ -516,14 +584,10 @@ impl MediaCenter for PlexServer {
     paused: bool,
     _muted: bool,
     _volume_level: u32,
-    _socket: &mut UnboundedSender<String>
+    _socket: &mut UnboundedSender<String>,
   ) {
     let playback_info = self.get_plex_playback_info();
-    let state: &str = if paused {
-      "paused"
-    } else {
-      "playing"
-    };
+    let state: &str = if paused { "paused" } else { "playing" };
 
     let actual_time_position = if self.config_handle.config.transcoding {
       (playbackpositionticks as f64 * 1000.0 + time_pos * 1000.0) as u64
@@ -532,32 +596,43 @@ impl MediaCenter for PlexServer {
     };
 
     let mut url = ":/timeline".to_string();
-    url += &format!("?X-Plex-Platform={}", urlencoding::encode("Plex Home Theater")); // bad request if this is missing
+    url += &format!(
+      "?X-Plex-Platform={}",
+      urlencoding::encode("Plex Home Theater")
+    ); // bad request if this is missing
     url += &format!("&ratingKey={}", item_id);
-    url += &format!("&key={}{}", urlencoding::encode("/library/metadata/"), item_id);
+    url += &format!(
+      "&key={}{}",
+      urlencoding::encode("/library/metadata/"),
+      item_id
+    );
     url += &format!("&state={}", state);
     url += &format!("&time={}", actual_time_position);
-    url += &format!("&duration={}", playback_info.Media.unwrap()[0].Part[0].duration);
+    url += &format!(
+      "&duration={}",
+      playback_info.Media.unwrap()[0].Part[0].duration
+    );
     url += &format!("&X-Plex-Product={}&X-Plex-Device-Name={}", APPNAME, VERSION);
     url += "&hasMDE=1";
 
     if let Err(err) = self.get(url) {
-      print_message(PrintMessageType::Error, format!("Failed to report PlaySession: {}", err.status()).as_str());
+      print_message(
+        PrintMessageType::Error,
+        format!("Failed to report PlaySession: {}", err.status()).as_str(),
+      );
     }
   }
 
-  fn start_playback(&mut self,
-    _item_id: String,
-    _playbackpositionticks: u64
-  ) {
+  fn start_playback(&mut self, _item_id: String, _playbackpositionticks: u64) {
     // yea I don't think this is necessary at all for plex.
   }
 
-  fn stop_playback(&mut self, 
+  fn stop_playback(
+    &mut self,
     item_id: String,
     playbackpositionticks: u64,
     total_runtime: u64,
-    time_pos: f64
+    time_pos: f64,
   ) -> bool {
     let playback_info = self.get_plex_playback_info();
     let mut time_position = (time_pos * 1000.0).round() as u64;
@@ -569,36 +644,55 @@ impl MediaCenter for PlexServer {
     };
 
     let mut url = ":/timeline".to_string();
-    url += &format!("?X-Plex-Platform={}", urlencoding::encode("Plex Home Theater")); // bad request if this is missing
+    url += &format!(
+      "?X-Plex-Platform={}",
+      urlencoding::encode("Plex Home Theater")
+    ); // bad request if this is missing
     url += &format!("&ratingKey={}", item_id);
-    url += &format!("&key={}{}", urlencoding::encode("/library/metadata/"), item_id);
+    url += &format!(
+      "&key={}{}",
+      urlencoding::encode("/library/metadata/"),
+      item_id
+    );
     url += &format!("&time={}", time_position);
-    url += &format!("&duration={}", playback_info.Media.unwrap()[0].Part[0].duration);
+    url += &format!(
+      "&duration={}",
+      playback_info.Media.unwrap()[0].Part[0].duration
+    );
     url += &format!("&X-Plex-Product={}&X-Plex-Device-Name={}", APPNAME, VERSION);
     url += "&state=stopped";
     url += "&hasMDE=1";
-    
+
     if let Err(err) = self.get(url) {
-      print_message(PrintMessageType::Error, format!("Failed to report PlaySession as stopped: {}", err.status()).as_str());
+      print_message(
+        PrintMessageType::Error,
+        format!("Failed to report PlaySession as stopped: {}", err.status()).as_str(),
+      );
     }
 
     let success_message: String;
-    let difference = (((total_runtime  * 1000) as f64) - time_position as f64) / ((total_runtime * 1000) as f64);
-    if difference < 0.15 { // watched more than 75%
+    let difference =
+      (((total_runtime * 1000) as f64) - time_position as f64) / ((total_runtime * 1000) as f64);
+    if difference < 0.15 {
+      // watched more than 75%
       self.item_set_playstate(playback_info.ratingKey, true);
       // yeah I guess it could fail but who cares.
       print_message(PrintMessageType::Success, "Marked item as [Played].");
       return true;
-    } else if difference < 0.85 { // watched more than 15%
+    } else if difference < 0.85 {
+      // watched more than 15%
       let formatted: String = if time_as_secs > 60.0 {
         if (time_as_secs / 60.0) > 60.0 {
-          format!("{:02}:{:02}:{:02}",
+          format!(
+            "{:02}:{:02}:{:02}",
             ((time_as_secs / 60.0) / 60.0).trunc(),
-            ((((time_as_secs / 60.0) / 60.0) - ((time_as_secs / 60.0) / 60.).trunc()) * 60.0).trunc(),
+            ((((time_as_secs / 60.0) / 60.0) - ((time_as_secs / 60.0) / 60.).trunc()) * 60.0)
+              .trunc(),
             (((time_as_secs / 60.0) - (time_as_secs / 60.0).trunc()) * 60.0).trunc()
           )
         } else {
-          format!("00:{:02}:{:02}",
+          format!(
+            "00:{:02}:{:02}",
             (time_as_secs / 60.0).trunc(),
             (((time_as_secs / 60.0) - (time_as_secs / 60.0).trunc()) * 60.0).trunc()
           )
@@ -606,7 +700,10 @@ impl MediaCenter for PlexServer {
       } else {
         time_as_secs.to_string()
       };
-      success_message = format!("Playback progress ({}) has been sent to your server.", formatted)
+      success_message = format!(
+        "Playback progress ({}) has been sent to your server.",
+        formatted
+      )
     } else {
       self.item_set_playstate(playback_info.ratingKey, false);
       success_message = "Playback progress of this item has not been changed.".to_string();
@@ -616,11 +713,7 @@ impl MediaCenter for PlexServer {
   }
 
   fn item_set_playstate(&mut self, key: String, played: bool) {
-    let status_str = if played {
-      "Played"
-    } else {
-      "Un-Played"
-    };
+    let status_str = if played { "Played" } else { "Un-Played" };
     let mut url = if played {
       String::from(":/scrobble")
     } else {
@@ -628,7 +721,10 @@ impl MediaCenter for PlexServer {
     };
     url += &format!("?identifier=com.plexapp.plugins.library&key={}", key);
     if let Err(err) = self.get(url) {
-      print_message(PrintMessageType::Error, format!("Failed to mark item as {}: {}", status_str, err.status()).as_str());
+      print_message(
+        PrintMessageType::Error,
+        format!("Failed to mark item as {}: {}", status_str, err.status()).as_str(),
+      );
     }
   }
 }
@@ -679,18 +775,21 @@ impl PlexServer {
         let series = self.resolve_series(item);
         playlist = self.choose_from_series(series);
       },
-      _ => ()
+      _ => (),
     }
     if playlist.is_empty() {
       return;
     }
-    
+
     let handle = self.get_config_handle();
     let user = handle.get_active_user().unwrap();
     let device_id = handle.get_device_id();
-    let auth = format!("X-Plex-Token={}&X-Plex-Client-Identifier={}", user.access_token, device_id);
+    let auth = format!(
+      "X-Plex-Token={}&X-Plex-Client-Identifier={}",
+      user.access_token, device_id
+    );
     let server_address = self.get_address();
-    
+
     let settings = self.get_settings().clone();
     let mut player = Player::new(self.get_config_handle().clone(), settings.clone());
 
@@ -701,10 +800,21 @@ impl PlexServer {
       let item = playlist[index].clone();
       let mut next_index = index + 1;
       let mut streamable_item = item.clone();
-      if self.create_transcoding_info(&mut streamable_item, &mut transcoding_settings).is_ok() {
-        self.insert_value(MediaCenterValues::PlaybackInfo, serde_json::to_string(&streamable_item).unwrap());
+      if self
+        .create_transcoding_info(&mut streamable_item, &mut transcoding_settings)
+        .is_ok()
+      {
+        self.insert_value(
+          MediaCenterValues::PlaybackInfo,
+          serde_json::to_string(&streamable_item).unwrap(),
+        );
         self.update_player(&mut player);
-        player.set_plex_video(streamable_item, server_address.clone(), auth.clone(), &mut transcoding_settings);
+        player.set_plex_video(
+          streamable_item,
+          server_address.clone(),
+          auth.clone(),
+          &mut transcoding_settings,
+        );
         let ret = player.play();
         if let Some((_, ref mut audio, ref mut subtitle, ..)) = transcoding_settings.as_mut() {
           *audio = ret.preferred_audio_track;
@@ -717,43 +827,53 @@ impl PlexServer {
             if let Ok(updated_item) = self.get_item(item.ratingKey.clone()) {
               playlist[index] = updated_item;
             } else {
-              print_message(PrintMessageType::Error, format!("Failed to get updated information for {}.", item.to_string()).as_str())
+              print_message(
+                PrintMessageType::Error,
+                format!(
+                  "Failed to get updated information for {}.",
+                  item.to_string()
+                )
+                .as_str(),
+              )
             }
             options.append(&mut vec![
               InteractiveOption {
                 text: format!("Finish: {}", item.to_string_ext()),
-                option_type: InteractiveOptionType::Button
+                option_type: InteractiveOptionType::Button,
               },
               InteractiveOption {
                 text: format!("Mark as played: {}", item.to_string_ext()),
-                option_type: InteractiveOptionType::Button
-              }
+                option_type: InteractiveOptionType::Button,
+              },
             ]);
           }
-          while let Some(next_item) = playlist.get(index+1) { 
-                  // skip every item that has been played already
-                  // (might want to use unmark in the menu before watching a series again)
+          while let Some(next_item) = playlist.get(index + 1) {
+            // skip every item that has been played already
+            // (might want to use unmark in the menu before watching a series again)
             if next_item.viewCount.is_none() {
               options.push(InteractiveOption {
                 text: format!("Continue with: {}", next_item.to_string_ext()),
-                option_type: InteractiveOptionType::Button5s
+                option_type: InteractiveOptionType::Button5s,
               });
               break;
             }
             next_index += 1;
           }
           if options.is_empty() {
-            print_message(PrintMessageType::Warning, "Playlist done. Returning to menu.");
+            print_message(
+              PrintMessageType::Warning,
+              "Playlist done. Returning to menu.",
+            );
             return;
           }
           options.append(&mut vec![
             InteractiveOption {
               text: "Back to Menu".to_string(),
-              option_type: InteractiveOptionType::Special
+              option_type: InteractiveOptionType::Special,
             },
             InteractiveOption {
               text: "Exit Application".to_string(),
-              option_type: InteractiveOptionType::Special
+              option_type: InteractiveOptionType::Special,
             },
           ]);
           match interactive_select(options) {
@@ -769,19 +889,17 @@ impl PlexServer {
                 break 'playback_done;
               }
             },
-            ((_, _), Some(text), InteractiveOptionType::Special) => {
-              match text.as_str() {
-                "Back to Menu" => {
-                  execute!(stdout, EnableLineWrap).unwrap();
-                  return;
-                },
-                _ => {
-                  execute!(stdout, EnableLineWrap).unwrap();
-                  exit(0)
-                }
-              }
+            ((_, _), Some(text), InteractiveOptionType::Special) => match text.as_str() {
+              "Back to Menu" => {
+                execute!(stdout, EnableLineWrap).unwrap();
+                return;
+              },
+              _ => {
+                execute!(stdout, EnableLineWrap).unwrap();
+                exit(0)
+              },
             },
-            _ => ()
+            _ => (),
           }
           execute!(stdout, EnableLineWrap).unwrap();
         }
@@ -801,13 +919,20 @@ impl PlexServer {
         }
       },
       Err(err) => {
-        print_message(PrintMessageType::Error, format!("Failed to get user information: {}", err.status()).as_str());
+        print_message(
+          PrintMessageType::Error,
+          format!("Failed to get user information: {}", err.status()).as_str(),
+        );
         Err(err.status())
-      }
+      },
     }
   }
 
-  fn create_transcoding_info(&mut self, item: &mut PlexItem, previous_settings: &mut Option<(bool, Option<u32>, Option<u32>, String)>) -> Result<(), ()> {
+  fn create_transcoding_info(
+    &mut self,
+    item: &mut PlexItem,
+    previous_settings: &mut Option<(bool, Option<u32>, Option<u32>, String)>,
+  ) -> Result<(), ()> {
     let handle = self.get_config_handle();
     let user = handle.get_active_user().unwrap();
     let mut stdout = stdout();
@@ -815,12 +940,16 @@ impl PlexServer {
     let mut mbps = String::new();
     let mut audio_track_index: u32 = 0;
     let mut subtitle_track_index: u32 = 0;
-    
+
     let metadata_key = &item.ratingKey;
     let media_part_id;
     let mut media_file_index = 0;
     let mut media_file_list: Vec<PlexMediaFile> = if let Some(media_files) = &item.Media {
-      media_files.iter().filter(|f| f.deletedAt.is_none()).cloned().collect()
+      media_files
+        .iter()
+        .filter(|f| f.deletedAt.is_none())
+        .cloned()
+        .collect()
     } else {
       return Err(());
     };
@@ -829,19 +958,30 @@ impl PlexServer {
     if media_file_list.len() > 1 {
       let mut options: Vec<InteractiveOption> = vec![InteractiveOption {
         text: "\nPlease select from the following files:".to_string(),
-        option_type: InteractiveOptionType::Header
+        option_type: InteractiveOptionType::Header,
       }];
       for media_file in media_file_list.clone() {
         options.push(InteractiveOption {
-          text: media_file.Part[0].file.split_terminator('/').last().unwrap().to_string(),
-          option_type: InteractiveOptionType::Button
+          text: media_file.Part[0]
+            .file
+            .split_terminator('/')
+            .last()
+            .unwrap()
+            .to_string(),
+          option_type: InteractiveOptionType::Button,
         });
       }
       let ((index, _), ..) = interactive_select(options);
       media_file_index = index;
       media_part_id = media_file_list[index].Part[0].id;
       enable_raw_mode().unwrap();
-      execute!(stdout, RestorePosition, MoveToColumn(0), Clear(ClearType::FromCursorDown)).unwrap();
+      execute!(
+        stdout,
+        RestorePosition,
+        MoveToColumn(0),
+        Clear(ClearType::FromCursorDown)
+      )
+      .unwrap();
       disable_raw_mode().unwrap();
     } else {
       media_part_id = media_file_list[0].Part[0].id;
@@ -852,19 +992,25 @@ impl PlexServer {
         Ok(plex_user) => {
           let mut audio_streams: Vec<PlexStream> = vec![];
           let mut subtitle_streams: Vec<PlexStream> = vec![];
-          let audio_language = if let Ok(lang) = LanguageCode::from_str(&plex_user.profile.defaultAudioLanguage) {
-            Some(lang)
-          } else {
-            None
-          };
-          let subtitle_language = if let Ok(lang) = LanguageCode::from_str(&plex_user.profile.defaultSubtitleLanguage) {
-            Some(lang)
-          } else {
-            None
-          };
+          let audio_language =
+            if let Ok(lang) = LanguageCode::from_str(&plex_user.profile.defaultAudioLanguage) {
+              Some(lang)
+            } else {
+              None
+            };
+          let subtitle_language =
+            if let Ok(lang) = LanguageCode::from_str(&plex_user.profile.defaultSubtitleLanguage) {
+              Some(lang)
+            } else {
+              None
+            };
           let mut audio_track = None;
           let mut subtitle_track = None;
-          for stream in media_file_list[media_file_index].Part[0].Stream.clone().unwrap() {
+          for stream in media_file_list[media_file_index].Part[0]
+            .Stream
+            .clone()
+            .unwrap()
+          {
             if stream.streamType == 2 {
               audio_streams.push(stream.clone());
             } else if stream.streamType == 3 {
@@ -898,8 +1044,11 @@ impl PlexServer {
           *previous_settings = Some((false, audio_track, subtitle_track, String::new()));
         },
         Err(err) => {
-          print_message(PrintMessageType::Error, format!("Failed to get user prefences: {}", err).as_str());
-        }
+          print_message(
+            PrintMessageType::Error,
+            format!("Failed to get user prefences: {}", err).as_str(),
+          );
+        },
       }
     }
 
@@ -908,19 +1057,31 @@ impl PlexServer {
       let time = (item.viewOffset.unwrap_or(0) as f64) / 1000.0;
       let formated: String = if time > 60.0 {
         if (time / 60.0) > 60.0 {
-          format!("{:02}:{:02}:{:02}",
+          format!(
+            "{:02}:{:02}:{:02}",
             ((time / 60.0) / 60.0).trunc(),
             ((((time / 60.0) / 60.0) - ((time / 60.0) / 60.).trunc()) * 60.0).trunc(),
             (((time / 60.0) - (time / 60.0).trunc()) * 60.0).trunc()
           )
         } else {
-          format!("00:{:02}:{:02}", (time / 60.0).trunc(), (((time / 60.0) - (time / 60.0).trunc()) * 60.0).trunc())
+          format!(
+            "00:{:02}:{:02}",
+            (time / 60.0).trunc(),
+            (((time / 60.0) - (time / 60.0).trunc()) * 60.0).trunc()
+          )
         }
       } else {
         time.to_string()
       };
-      if !previous_settings.clone().unwrap_or((false, Some(0), Some(0), String::new())).0 {
-        print!("\nDo you want to start at: {}?\n  (Y)es | (N)o", formated.cyan().bold());
+      if !previous_settings
+        .clone()
+        .unwrap_or((false, Some(0), Some(0), String::new()))
+        .0
+      {
+        print!(
+          "\nDo you want to start at: {}?\n  (Y)es | (N)o",
+          formated.cyan().bold()
+        );
         match getch("YyNn") {
           'N' | 'n' => {
             print!("Please enter a playback position in minutes: ");
@@ -932,23 +1093,41 @@ impl PlexServer {
               if input.trim().parse::<f64>().is_err() {
                 print!("\nInvalid input, please try again.\n: ");
               } else if input.contains('.') {
-                if input.split('.').collect::<Vec<&str>>().get(1).unwrap().len() > 8 {
+                if input
+                  .split('.')
+                  .collect::<Vec<&str>>()
+                  .get(1)
+                  .unwrap()
+                  .len()
+                  > 8
+                {
                   print!("\nInvalid input, please lower the amount of decimal places.\n: ");
                 } else {
-                  break
+                  break;
                 }
               } else {
-                break
+                break;
               }
             }
-            item.viewOffset = Some((input.trim().parse::<f64>().unwrap() * 60.0 * 1000.0).to_string().parse::<u64>().unwrap());
+            item.viewOffset = Some(
+              (input.trim().parse::<f64>().unwrap() * 60.0 * 1000.0)
+                .to_string()
+                .parse::<u64>()
+                .unwrap(),
+            );
           },
-          _ => ()
+          _ => (),
         }
       }
 
       enable_raw_mode().unwrap();
-      execute!(stdout, RestorePosition, MoveToColumn(0), Clear(ClearType::FromCursorDown)).unwrap();
+      execute!(
+        stdout,
+        RestorePosition,
+        MoveToColumn(0),
+        Clear(ClearType::FromCursorDown)
+      )
+      .unwrap();
       disable_raw_mode().unwrap();
 
       if let Some((_, _, _, speed)) = previous_settings {
@@ -961,15 +1140,22 @@ impl PlexServer {
           if !mbps.trim().is_numeric() {
             print!("\nInvalid input! Enter something like \"25\" equal to ~3MB/s.\n: ")
           } else {
-            break
+            break;
           }
-        };
+        }
       }
 
       enable_raw_mode().unwrap();
-      execute!(stdout, RestorePosition, MoveToColumn(0), Clear(ClearType::FromCursorDown), EnterAlternateScreen).unwrap();
+      execute!(
+        stdout,
+        RestorePosition,
+        MoveToColumn(0),
+        Clear(ClearType::FromCursorDown),
+        EnterAlternateScreen
+      )
+      .unwrap();
       disable_raw_mode().unwrap();
-      
+
       let mut audio_tracks: Vec<PlexStream> = vec![];
       let mut subtitle_tracks: Vec<PlexStream> = vec![];
       println!();
@@ -979,7 +1165,7 @@ impl PlexServer {
           match media_stream.streamType {
             2 => audio_tracks.push(media_stream.clone()),
             3 => subtitle_tracks.push(media_stream.clone()),
-            _ => ()
+            _ => (),
           }
         }
       } else {
@@ -997,16 +1183,14 @@ impl PlexServer {
           }
         }
         if !skip {
-          let mut options: Vec<InteractiveOption> = vec![
-            InteractiveOption {
-              text: "Please choose which audio track to use:".to_string(),
-              option_type: InteractiveOptionType::Header
-            }
-          ];
+          let mut options: Vec<InteractiveOption> = vec![InteractiveOption {
+            text: "Please choose which audio track to use:".to_string(),
+            option_type: InteractiveOptionType::Header,
+          }];
           for track in audio_tracks.clone() {
             options.push(InteractiveOption {
               text: track.to_string(),
-              option_type: InteractiveOptionType::Button
+              option_type: InteractiveOptionType::Button,
             });
           }
           if let ((ind, _), _, InteractiveOptionType::Button) = interactive_select(options) {
@@ -1026,16 +1210,14 @@ impl PlexServer {
           }
         }
         if !skip {
-          let mut options: Vec<InteractiveOption> = vec![
-            InteractiveOption {
-              text: "Please choose which subtitle track to use:".to_string(),
-              option_type: InteractiveOptionType::Header
-            }
-          ];
+          let mut options: Vec<InteractiveOption> = vec![InteractiveOption {
+            text: "Please choose which subtitle track to use:".to_string(),
+            option_type: InteractiveOptionType::Header,
+          }];
           for track in subtitle_tracks.clone() {
             options.push(InteractiveOption {
               text: track.to_string(),
-              option_type: InteractiveOptionType::Button
+              option_type: InteractiveOptionType::Button,
             });
           }
           if let ((ind, _), _, InteractiveOptionType::Button) = interactive_select(options) {
@@ -1043,27 +1225,47 @@ impl PlexServer {
           }
         }
       }
-  
+
       let mut selected_tracks = format!("library/parts/{}?allParts=1", media_part_id);
       if !audio_tracks.is_empty() {
-        selected_tracks += &format!("&audioStreamID={}", audio_tracks[audio_track_index as usize].id);
+        selected_tracks += &format!(
+          "&audioStreamID={}",
+          audio_tracks[audio_track_index as usize].id
+        );
       }
       if !subtitle_tracks.is_empty() {
-        selected_tracks += &format!("&subtitleStreamID={}", subtitle_tracks[subtitle_track_index as usize].id);
+        selected_tracks += &format!(
+          "&subtitleStreamID={}",
+          subtitle_tracks[subtitle_track_index as usize].id
+        );
       }
-  
+
       if let Err(err) = self.put(selected_tracks) {
-        print_message(PrintMessageType::Error, format!("Failed to set audio/subtitle tracks: {}", err.status()).as_str());
+        print_message(
+          PrintMessageType::Error,
+          format!("Failed to set audio/subtitle tracks: {}", err.status()).as_str(),
+        );
         return Err(());
       }
 
       enable_raw_mode().unwrap();
-      execute!(stdout, RestorePosition, MoveToColumn(0), Clear(ClearType::FromCursorDown), LeaveAlternateScreen).unwrap();
+      execute!(
+        stdout,
+        RestorePosition,
+        MoveToColumn(0),
+        Clear(ClearType::FromCursorDown),
+        LeaveAlternateScreen
+      )
+      .unwrap();
       disable_raw_mode().unwrap();
 
-      *previous_settings = Some((false, Some(audio_track_index), Some(subtitle_track_index), mbps.clone()));
+      *previous_settings = Some((
+        false,
+        Some(audio_track_index),
+        Some(subtitle_track_index),
+        mbps.clone(),
+      ));
     }
-
 
     let id_to_keep = media_file_list[media_file_index].id;
     media_file_list.retain(|file| file.id == id_to_keep);
@@ -1091,7 +1293,10 @@ impl PlexServer {
     decision_url += "&hasMDE=1";
     decision_url += "&mediaIndex=0";
     decision_url += "&partIndex=0";
-    decision_url += &format!("&X-Plex-Platform={}", urlencoding::encode("Plex Home Theater")); // bad request if this is missing
+    decision_url += &format!(
+      "&X-Plex-Platform={}",
+      urlencoding::encode("Plex Home Theater")
+    ); // bad request if this is missing
     decision_url += "&X-Plex-Client-Profile-Extra=";
     decision_url += &urlencoding::encode(&PLEX_CLIENT_PROFILES.replace('\n', ""));
 
@@ -1099,7 +1304,14 @@ impl PlexServer {
     decision_url += &urlencoding::encode(&format!("/library/metadata/{}", metadata_key));
 
     if let Err(mut err) = self.get(decision_url) {
-      print_message(PrintMessageType::Error, format!("Failed to post playback information: {}", err.text().unwrap()).as_str());
+      print_message(
+        PrintMessageType::Error,
+        format!(
+          "Failed to post playback information: {}",
+          err.text().unwrap()
+        )
+        .as_str(),
+      );
       return Err(());
     }
     Ok(())
@@ -1112,13 +1324,20 @@ impl PlexServer {
     } else if !url.ends_with('&') {
       url.push('&')
     }
-    let url = format!("{}{}X-Plex-Token={}&X-Plex-Client-Identifier={}", self.get_address(), url, user.access_token, self.config_handle.get_device_id());
+    let url = format!(
+      "{}{}X-Plex-Token={}&X-Plex-Client-Identifier={}",
+      self.get_address(),
+      url,
+      user.access_token,
+      self.config_handle.get_device_id()
+    );
     let request = Request::put(url)
       .timeout(Duration::from_secs(15))
       .header("Content-Type", "application/json")
       .header("accept", "application/json")
-      .body(()).unwrap()
-    .send();
+      .body(())
+      .unwrap()
+      .send();
 
     let response = if let Err(res) = request {
       print_message(PrintMessageType::Error, res.to_string().as_str());
@@ -1128,12 +1347,8 @@ impl PlexServer {
     };
 
     match response.status() {
-      StatusCode::OK => {
-        Ok(response)
-      },
-      _ => {
-        Err(response)
-      }
+      StatusCode::OK => Ok(response),
+      _ => Err(response),
     }
   }
 
@@ -1144,9 +1359,7 @@ impl PlexServer {
 
     let full_size = {
       let mut size = 0;
-      series.seasons.iter().for_each(|s| {
-        size += s.episodes.len()
-      });
+      series.seasons.iter().for_each(|s| size += s.episodes.len());
       size
     };
     let zero_pad_amount = (full_size as f64).log10().floor() as usize + 1;
@@ -1175,7 +1388,9 @@ impl PlexServer {
         }
         line.push_str(format!("[{:0zero_pad_amount$}] ", index).as_str());
         let terminal_size = terminal::size().unwrap().0 as usize;
-        if 13 + zero_pad_amount + index.to_string().len() + episode.to_string_ext().len() > terminal_size {
+        if 13 + zero_pad_amount + index.to_string().len() + episode.to_string_ext().len()
+          > terminal_size
+        {
           line.push_str(format!("{}...", episode.to_string_ext()).as_str());
           just_text.push(line.clone());
           line.clear();
@@ -1210,7 +1425,7 @@ impl PlexServer {
           series = self.resolve_series(series.seasons[0].episodes[0].clone());
           continue;
         },
-        _ => panic!("What?!")
+        _ => panic!("What?!"),
       }
       let mut items: Vec<PlexItem> = vec![];
       let mut record = false;
@@ -1240,22 +1455,22 @@ impl PlexServer {
     let series_id: String = match item.r#type.as_str() {
       "season" | "episode" => item.parentRatingKey.unwrap(),
       "show" => item.ratingKey,
-      _ => panic!("This object cannot be part of a series.")
+      _ => panic!("This object cannot be part of a series."),
     };
 
     let mut series = Series {
       item_id: series_id,
-      seasons: vec![]
+      seasons: vec![],
     };
 
     if let Ok(items) = self.get_items(
       format!("library/metadata/{}/children", series.item_id),
-      false
+      false,
     ) {
       for season in items {
         series.seasons.append(&mut vec![Season {
           item: season,
-          episodes: vec![]
+          episodes: vec![],
         }]);
       }
     } else {
@@ -1266,19 +1481,20 @@ impl PlexServer {
     for (season_index, season) in series.seasons.clone().iter().enumerate() {
       if let Ok(items) = self.get_items(
         format!("library/metadata/{}/children", season.item.ratingKey),
-        false
+        false,
       ) {
         for episode in items {
           if !episode_ids.contains(&episode.ratingKey) {
             episode_ids.push(episode.ratingKey.clone());
-            series.seasons[season_index].episodes.append(&mut vec![episode]);
+            series.seasons[season_index]
+              .episodes
+              .append(&mut vec![episode]);
           }
         }
 
         if series.seasons[season_index].episodes.is_empty() {
           series.seasons.remove(season_index);
         }
-
       } else {
         exit(1);
       };
@@ -1295,12 +1511,23 @@ impl PlexServer {
             return Ok(items[0].clone());
           }
         } else {
-          print_message(PrintMessageType::Error, "The message returned from the server could not be processed.");
+          print_message(
+            PrintMessageType::Error,
+            "The message returned from the server could not be processed.",
+          );
         }
       },
       Err(mut e) => {
-        print_message(PrintMessageType::Error, format!("Failed to get item list at \"{}\"\n{}\n", url, e.text().unwrap()).as_str());
-      }
+        print_message(
+          PrintMessageType::Error,
+          format!(
+            "Failed to get item list at \"{}\"\n{}\n",
+            url,
+            e.text().unwrap()
+          )
+          .as_str(),
+        );
+      },
     }
     Err(())
   }
@@ -1319,7 +1546,7 @@ impl PlexServer {
                       all_items.extend(items);
                     }
                   },
-                  _ => ()
+                  _ => (),
                 }
               }
             }
@@ -1328,12 +1555,23 @@ impl PlexServer {
             return Ok(items);
           }
         } else {
-          print_message(PrintMessageType::Error, "The message returned from the server could not be processed.");
+          print_message(
+            PrintMessageType::Error,
+            "The message returned from the server could not be processed.",
+          );
         }
       },
       Err(mut e) => {
-        print_message(PrintMessageType::Error, format!("Failed to get item list at \"{}\"\n{}\n", url, e.text().unwrap()).as_str());
-      }
+        print_message(
+          PrintMessageType::Error,
+          format!(
+            "Failed to get item list at \"{}\"\n{}\n",
+            url,
+            e.text().unwrap()
+          )
+          .as_str(),
+        );
+      },
     }
     Err(())
   }
@@ -1341,7 +1579,10 @@ impl PlexServer {
   fn create_plex_user(&mut self) -> String {
     let (pin_sender, pin_receiver) = mpsc::channel();
     let device_id = self.get_config_handle().get_device_id();
-    let queries = format!("?X-Plex-Client-Identifier={}&X-Plex-Device-Name={}", device_id, APPNAME);
+    let queries = format!(
+      "?X-Plex-Client-Identifier={}&X-Plex-Device-Name={}",
+      device_id, APPNAME
+    );
     thread::spawn(move || {
       let mut pin: Option<PlexCreatePin> = None;
       loop {
@@ -1357,7 +1598,9 @@ impl PlexServer {
         match req {
           Ok(mut response) => {
             let json = serde_json::from_str::<Value>(&response.text().unwrap()).unwrap();
-            if let Ok(res_pin) = serde_json::from_value::<PlexCreatePin>(json.get("pin").unwrap().clone()) {
+            if let Ok(res_pin) =
+              serde_json::from_value::<PlexCreatePin>(json.get("pin").unwrap().clone())
+            {
               new_pin = res_pin;
             } else {
               sleep(Duration::from_secs(5));
@@ -1367,7 +1610,7 @@ impl PlexServer {
           Err(_err) => {
             sleep(Duration::from_secs(5));
             continue;
-          }
+          },
         }
         if Some(new_pin.clone()) != pin {
           pin_sender.send(new_pin.clone()).unwrap();
@@ -1389,12 +1632,24 @@ impl PlexServer {
           access_token = auth.to_owned();
           break;
         }
-        execute!(stdout, MoveToColumn(0), Clear(ClearType::FromCursorDown), Hide).unwrap();
-        print!("To link your Plex account visit: {} from a web browser and enter the code: {}", "https://plex.tv/link".cyan().underlined(), pins.code.cyan().bold());
+        execute!(
+          stdout,
+          MoveToColumn(0),
+          Clear(ClearType::FromCursorDown),
+          Hide
+        )
+        .unwrap();
+        print!(
+          "To link your Plex account visit: {} from a web browser and enter the code: {}",
+          "https://plex.tv/link".cyan().underlined(),
+          pins.code.cyan().bold()
+        );
         stdout.flush().unwrap();
       }
     }
-    self.get_config_handle().insert_specific_value(Objective::DeviceID, device_id);
+    self
+      .get_config_handle()
+      .insert_specific_value(Objective::DeviceID, device_id);
     execute!(stdout, Show).unwrap();
     access_token
   }
@@ -1409,19 +1664,19 @@ impl PlexServer {
         if let Ok(json) = serde_json::from_str::<Vec<PlexResources>>(&response.text().unwrap()) {
           let mut options: Vec<InteractiveOption> = vec![InteractiveOption {
             text: "Please choose which server you want to use (don't forget ports):".to_string(),
-            option_type: InteractiveOptionType::Header
+            option_type: InteractiveOptionType::Header,
           }];
           for device in json.clone() {
             if device.provides == "server" {
               options.push(InteractiveOption {
                 text: format!("{} - {}", device.name, device.publicAddress),
-                option_type: InteractiveOptionType::Button
+                option_type: InteractiveOptionType::Button,
               })
             }
           }
           options.push(InteractiveOption {
             text: r#"Enter "{NAME},{ADDRESS}""#.to_string(),
-            option_type: InteractiveOptionType::TextInput
+            option_type: InteractiveOptionType::TextInput,
           });
           loop {
             match interactive_select(options.clone()) {
@@ -1439,19 +1694,25 @@ impl PlexServer {
                   address = split[1].to_string();
                   break;
                 }
-              }
-              _ => ()
+              },
+              _ => (),
             }
           }
         } else {
-          print_message(PrintMessageType::Error, "Failed to serialize server list of user.");
+          print_message(
+            PrintMessageType::Error,
+            "Failed to serialize server list of user.",
+          );
           exit(1);
         }
       },
       Err(err) => {
-        print_message(PrintMessageType::Error, format!("Failed to get server list of user: {}", err.status()).as_str());
+        print_message(
+          PrintMessageType::Error,
+          format!("Failed to get server list of user: {}", err.status()).as_str(),
+        );
         exit(1);
-      }
+      },
     }
     let handle = self.get_config_handle();
     handle.config.server_name = server_name;
@@ -1459,21 +1720,29 @@ impl PlexServer {
     // handle.save();
   }
 
-  fn check_token_valid(&mut self) -> bool { // WTF IS THIS. use the local media server to check if the token is valid
+  fn check_token_valid(&mut self) -> bool {
+    // WTF IS THIS. use the local media server to check if the token is valid
     let device_id = self.get_config_handle().get_device_id();
     let user = self.get_config_handle().get_active_user().unwrap();
     let url = "api/v2/user".to_string();
-    print!("Logging in with {} on {} ", user.clone().username.cyan(), self.get_config_handle().config.server_name.clone().cyan());
+    print!(
+      "Logging in with {} on {} ",
+      user.clone().username.cyan(),
+      self.get_config_handle().config.server_name.clone().cyan()
+    );
     match plex_tv(RequestType::Get, Some(user), device_id, url) {
       Ok(_) => {
         println!("{}\n", "🗸".green());
         true
-      }
+      },
       Err(err) => {
         println!("{}", "𐄂".red());
-        print_message(PrintMessageType::Error, format!("Failed to login: {}", err.status()).as_str());
+        print_message(
+          PrintMessageType::Error,
+          format!("Failed to login: {}", err.status()).as_str(),
+        );
         false
-      }
+      },
     }
   }
 
@@ -1483,7 +1752,7 @@ impl PlexServer {
         let user = UserConfig {
           access_token,
           username: json.username,
-          user_id: json.id.to_string()
+          user_id: json.id.to_string(),
         };
         let config = self.get_config_handle();
         config.insert_specific_value(Objective::User, serde_json::to_string(&user).unwrap());
@@ -1494,7 +1763,12 @@ impl PlexServer {
             let file_name = take_string_input(vec![]);
             config.config.server_name = config.config.server_name.replace(' ', "_");
             let config_path = dirs::config_dir().unwrap();
-            let config_file_path = format!("{}/{}/media-center/{}.json", &config_path.display().to_string(), APPNAME.to_lowercase(), file_name);
+            let config_file_path = format!(
+              "{}/{}/media-center/{}.json",
+              &config_path.display().to_string(),
+              APPNAME.to_lowercase(),
+              file_name
+            );
             config.path = config_file_path;
             if !config.check_existing_config() {
               break;
@@ -1504,8 +1778,11 @@ impl PlexServer {
         config.save();
       },
       Err(err) => {
-        print_message(PrintMessageType::Error, format!("Failed to get user information: {}", err).as_str());
-      }
+        print_message(
+          PrintMessageType::Error,
+          format!("Failed to get user information: {}", err).as_str(),
+        );
+      },
     }
   }
 }
@@ -1513,18 +1790,23 @@ impl PlexServer {
 #[derive(PartialEq)]
 enum RequestType {
   Get,
-  Post
+  Post,
 }
 
 /// Function to access the public api at plex.tv. NOT FOR INDIVIDUAL INSTANCES!
-fn plex_tv(request_type: RequestType, user: Option<UserConfig>, device_id: String, url: String) -> Result<Response<Body>, Response<Body>> {
+fn plex_tv(
+  request_type: RequestType,
+  user: Option<UserConfig>,
+  device_id: String,
+  url: String,
+) -> Result<Response<Body>, Response<Body>> {
   let mut modded_url = format!("https://plex.tv/{}", url);
   if modded_url.contains('?') {
     modded_url += "&";
   } else {
     modded_url += "?";
   }
-  
+
   modded_url += format!("X-Plex-Client-Identifier={}", device_id).as_str();
 
   if let Some(user) = user {
@@ -1542,8 +1824,9 @@ fn plex_tv(request_type: RequestType, user: Option<UserConfig>, device_id: Strin
     .header("Content-Type", "application/json")
     .header("accept", "application/json")
     .header("User-Agent", APPNAME)
-    .body(()).unwrap()
-  .send();
+    .body(())
+    .unwrap()
+    .send();
 
   let response = if let Err(res) = request {
     print_message(PrintMessageType::Error, res.to_string().as_str());
@@ -1553,11 +1836,7 @@ fn plex_tv(request_type: RequestType, user: Option<UserConfig>, device_id: Strin
   };
 
   match response.status() {
-    StatusCode::OK | StatusCode::CREATED => {
-      Ok(response)
-    },
-    _ => {
-      Err(response)
-    }
+    StatusCode::OK | StatusCode::CREATED => Ok(response),
+    _ => Err(response),
   }
 }

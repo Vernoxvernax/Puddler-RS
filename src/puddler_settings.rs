@@ -2,15 +2,21 @@
 
 use colored::Colorize;
 use config::{Config, File};
+use serde_derive::{Deserialize, Serialize};
 use std::{
   fs,
   io::prelude::*,
-  path::{Path, PathBuf}
+  path::{Path, PathBuf},
 };
-use serde_derive::{Deserialize,Serialize};
 
-use crate::{error::PuddlerSettingsError, input::{getch, take_string_input}, media_config::get_mediacenter_folder, printing::print_message, APPNAME};
 use crate::printing::PrintMessageType;
+use crate::{
+  error::PuddlerSettingsError,
+  input::{getch, take_string_input},
+  media_config::get_mediacenter_folder,
+  printing::print_message,
+  APPNAME,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PuddlerSettings {
@@ -20,7 +26,7 @@ pub struct PuddlerSettings {
   pub gpu: bool,
   pub glsl_shaders: Vec<String>,
   pub mpv_config_location: Option<String>,
-  pub mpv_debug_log: bool
+  pub mpv_debug_log: bool,
 }
 
 #[derive(Clone)]
@@ -31,7 +37,7 @@ enum PuddlerSettingType {
   GPU,
   GLSL_Shaders,
   MPV_Config_Location,
-  MPV_Debug
+  MPV_Debug,
 }
 
 impl ToString for PuddlerSettingType {
@@ -57,14 +63,19 @@ impl PuddlerSettingType {
       PuddlerSettingType::GPU,
       PuddlerSettingType::GLSL_Shaders,
       PuddlerSettingType::MPV_Config_Location,
-      PuddlerSettingType::MPV_Debug
+      PuddlerSettingType::MPV_Debug,
     ]
   }
 }
 
 pub fn get_config_path() -> PathBuf {
   let config_path = dirs::config_dir().unwrap();
-  let mut config_file_path = format!("{}/{}/{}.toml", &config_path.display().to_string(), APPNAME.to_lowercase(), APPNAME);
+  let mut config_file_path = format!(
+    "{}/{}/{}.toml",
+    &config_path.display().to_string(),
+    APPNAME.to_lowercase(),
+    APPNAME
+  );
   if cfg!(windows) {
     config_file_path = config_file_path.replace('/', "\\");
   }
@@ -79,7 +90,10 @@ impl PuddlerSettings {
     let config_file_path = get_config_path();
     if config_file_path.exists() {
       loop {
-        let settings_file_raw = Config::builder().add_source(File::from(config_file_path.clone())).build().unwrap();
+        let settings_file_raw = Config::builder()
+          .add_source(File::from(config_file_path.clone()))
+          .build()
+          .unwrap();
         let serialized = settings_file_raw.try_deserialize::<PuddlerSettings>();
         match serialized {
           Ok(settings) => {
@@ -87,11 +101,18 @@ impl PuddlerSettings {
           },
           Err(e) => {
             if e.to_string().contains("missing field") {
-              print_message(PrintMessageType::Warning, "Settings file is corrupt. Attempting to fix it ...");
-              let mut settings_file = fs::OpenOptions::new().append(true).open(&config_file_path).unwrap();
+              print_message(
+                PrintMessageType::Warning,
+                "Settings file is corrupt. Attempting to fix it ...",
+              );
+              let mut settings_file = fs::OpenOptions::new()
+                .append(true)
+                .open(&config_file_path)
+                .unwrap();
               match &e.to_string()[e.to_string().find('`').unwrap() + 1..e.to_string().len() - 1] {
                 "discord_presence" => {
-                  let discord_presence = Self::ask_for_setting(PuddlerSettingType::DiscordPresence).discord_presence;
+                  let discord_presence =
+                    Self::ask_for_setting(PuddlerSettingType::DiscordPresence).discord_presence;
                   writeln!(settings_file, "discord_presence = {discord_presence}").unwrap();
                   continue;
                 },
@@ -106,26 +127,34 @@ impl PuddlerSettings {
                   continue;
                 },
                 "glsl_shaders" => {
-                  let glsl_shaders = Self::ask_for_setting(PuddlerSettingType::GLSL_Shaders).glsl_shaders;
+                  let glsl_shaders =
+                    Self::ask_for_setting(PuddlerSettingType::GLSL_Shaders).glsl_shaders;
                   writeln!(settings_file, "glsl_shaders = {glsl_shaders:?}").unwrap();
                   continue;
                 },
                 "mpv_debug_log" => {
-                  let mpv_debug_log = Self::ask_for_setting(PuddlerSettingType::MPV_Debug).mpv_debug_log;
+                  let mpv_debug_log =
+                    Self::ask_for_setting(PuddlerSettingType::MPV_Debug).mpv_debug_log;
                   writeln!(settings_file, "mpv_debug_log = {mpv_debug_log}").unwrap();
                   continue;
                 },
                 something => {
-                  print_message(PrintMessageType::Error, format!("Failed to fix because of {}.", something).as_str());
+                  print_message(
+                    PrintMessageType::Error,
+                    format!("Failed to fix because of {}.", something).as_str(),
+                  );
                   return Err(PuddlerSettingsError::Corrupt);
-                }
+                },
               }
             }
-          }
+          },
         }
       }
     } else {
-      print_message(PrintMessageType::Warning, "No settings file found!\nBuilding default settings ...\n");
+      print_message(
+        PrintMessageType::Warning,
+        "No settings file found!\nBuilding default settings ...\n",
+      );
       let mut config = Self::ask_for_everything();
       config.write();
       Ok(config)
@@ -149,7 +178,12 @@ impl PuddlerSettings {
       let mut allowed = String::new();
       println!("Which settings do you want to change?");
       for (index, setting_type) in PuddlerSettingType::all_types().iter().enumerate() {
-        println!("  [{}] {}: {}", index, setting_type.to_string(), self.get_setting_value(setting_type.clone()).underline());
+        println!(
+          "  [{}] {}: {}",
+          index,
+          setting_type.to_string(),
+          self.get_setting_value(setting_type.clone()).underline()
+        );
         allowed.push_str(&index.to_string());
       }
       print!(" [S] Save and return to the menu.");
@@ -161,32 +195,43 @@ impl PuddlerSettings {
         break;
       }
       let selection: usize = input.to_digit(10).unwrap() as usize;
-      self.change_setting(PuddlerSettingType::all_types().get(selection).unwrap().clone());
+      self.change_setting(
+        PuddlerSettingType::all_types()
+          .get(selection)
+          .unwrap()
+          .clone(),
+      );
     }
   }
 
   fn change_setting(&mut self, setting: PuddlerSettingType) {
     let change = Self::ask_for_setting(setting.clone());
     match setting {
-      PuddlerSettingType::DefaultMediaServer => self.default_media_server = change.default_media_server,
+      PuddlerSettingType::DefaultMediaServer => {
+        self.default_media_server = change.default_media_server
+      },
       PuddlerSettingType::DiscordPresence => self.discord_presence = change.discord_presence,
       PuddlerSettingType::Fullscreen => self.fullscreen = change.fullscreen,
       PuddlerSettingType::GPU => self.gpu = change.gpu,
       PuddlerSettingType::GLSL_Shaders => self.glsl_shaders = change.glsl_shaders,
-      PuddlerSettingType::MPV_Config_Location => self.mpv_config_location = change.mpv_config_location,
+      PuddlerSettingType::MPV_Config_Location => {
+        self.mpv_config_location = change.mpv_config_location
+      },
       PuddlerSettingType::MPV_Debug => self.mpv_debug_log = change.mpv_debug_log,
     }
   }
 
   fn ask_for_everything() -> Self {
     PuddlerSettings {
-      default_media_server: Self::ask_for_setting(PuddlerSettingType::DefaultMediaServer).default_media_server,
+      default_media_server: Self::ask_for_setting(PuddlerSettingType::DefaultMediaServer)
+        .default_media_server,
       discord_presence: Self::ask_for_setting(PuddlerSettingType::DiscordPresence).discord_presence,
       fullscreen: Self::ask_for_setting(PuddlerSettingType::Fullscreen).fullscreen,
       gpu: Self::ask_for_setting(PuddlerSettingType::GPU).gpu,
       glsl_shaders: Self::ask_for_setting(PuddlerSettingType::GLSL_Shaders).glsl_shaders,
-      mpv_config_location: Self::ask_for_setting(PuddlerSettingType::MPV_Config_Location).mpv_config_location,
-      mpv_debug_log: Self::ask_for_setting(PuddlerSettingType::MPV_Debug).mpv_debug_log
+      mpv_config_location: Self::ask_for_setting(PuddlerSettingType::MPV_Config_Location)
+        .mpv_config_location,
+      mpv_debug_log: Self::ask_for_setting(PuddlerSettingType::MPV_Debug).mpv_debug_log,
     }
   }
 
@@ -199,22 +244,31 @@ impl PuddlerSettings {
       gpu: false,
       glsl_shaders: vec![],
       mpv_config_location: None,
-      mpv_debug_log: false
+      mpv_debug_log: false,
     };
     match setting {
       PuddlerSettingType::DefaultMediaServer => {
-        println!("Searching in \"{}\" for configuration files ...", &media_center_path.to_str().unwrap());
-        let path: Vec<_> = fs::read_dir(media_center_path).unwrap().map(|r| r.unwrap()).collect();
+        println!(
+          "Searching in \"{}\" for configuration files ...",
+          &media_center_path.to_str().unwrap()
+        );
+        let path: Vec<_> = fs::read_dir(media_center_path)
+          .unwrap()
+          .map(|r| r.unwrap())
+          .collect();
         let mut files: Vec<String> = vec![];
         for file in &path {
           if file.path().is_dir() {
-            let depth2: Vec<_> = fs::read_dir(&file.path()).unwrap().map(|r| r.unwrap()).collect();
+            let depth2: Vec<_> = fs::read_dir(&file.path())
+              .unwrap()
+              .map(|r| r.unwrap())
+              .collect();
             for stuff in depth2 {
               let file_path: String = stuff.path().display().to_string();
               if file_path.contains(".json") {
-                files.append(&mut [file_path].to_vec());  
+                files.append(&mut [file_path].to_vec());
               } else {
-                continue
+                continue;
               }
             }
           }
@@ -222,9 +276,9 @@ impl PuddlerSettings {
           if file_path.contains(".json") {
             files.append(&mut [file_path].to_vec());
           } else {
-            continue
+            continue;
           }
-        };
+        }
         let mut file_selection: Vec<String> = vec![];
         if files.is_empty() {
           println!("No configuration has been found.\n");
@@ -243,37 +297,34 @@ impl PuddlerSettings {
           return temp;
         }
         let num_selection: usize = selection.trim().parse().unwrap();
-        println!("\nYou've picked {}.", format!("{:?}", files[num_selection]).green());
+        println!(
+          "\nYou've picked {}.",
+          format!("{:?}", files[num_selection]).green()
+        );
         temp.default_media_server = Some(files.get(num_selection).unwrap().to_string());
       },
       PuddlerSettingType::DiscordPresence => {
         print!("Do you want to activate Discord-Presence by default?\n (Y)es / (N)o");
         let presence = getch("YyNn");
         temp.discord_presence = match presence {
-          'Y' | 'y' => {
-            true
-          }
-          _ => false
+          'Y' | 'y' => true,
+          _ => false,
         };
       },
       PuddlerSettingType::Fullscreen => {
         print!("Do you want mpv to start in fullscreen-mode?\n (Y)es / (N)o");
         let fullscreen = getch("YyNn");
         temp.fullscreen = match fullscreen {
-          'Y' | 'y' => {
-            true
-          }
-          _ => false
+          'Y' | 'y' => true,
+          _ => false,
         };
       },
       PuddlerSettingType::GPU => {
         print!("Do you want to enable hardware decoding for MPV?\n(Using \"auto-safe\" api)\n (Y)es / (N)o");
         let gpu = getch("YyNn");
         temp.gpu = match gpu {
-          'Y' | 'y' => {
-            true
-          }
-          _ => false
+          'Y' | 'y' => true,
+          _ => false,
         };
       },
       PuddlerSettingType::GLSL_Shaders => {
@@ -299,12 +350,10 @@ impl PuddlerSettings {
         print!("Do you want MPV to debug-log to \"./mpv.log\"?\n (Y)es / (N)o");
         let debug = getch("YyNn");
         temp.mpv_debug_log = match debug {
-          'Y' | 'y' => {
-            true
-          },
-          _ => false
+          'Y' | 'y' => true,
+          _ => false,
         };
-      }
+      },
     }
     println!();
     temp
@@ -313,6 +362,9 @@ impl PuddlerSettings {
   fn write(&mut self) {
     let pretty_string = toml::to_string_pretty(&self).unwrap();
     fs::write(get_config_path(), pretty_string).expect("Saving settings failed.");
-    print_message(PrintMessageType::Success, "Saved changes to \"Puddler.toml\".");
-  } 
+    print_message(
+      PrintMessageType::Success,
+      "Saved changes to \"Puddler.toml\".",
+    );
+  }
 }
