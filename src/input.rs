@@ -712,13 +712,8 @@ pub fn interactive_select(
                 && terminal::size().unwrap().0 as usize
                   > inputs[selection.0].chars().count() + options[selection.0].text.len() + 11
               {
-                if !inputs[selection.0].is_empty() {
-                  inputs[selection.0].insert_char(selection.1, ch);
-                  selection.1 += 1;
-                } else {
-                  inputs[selection.0].insert_char(selection.1, ch);
-                  selection.1 += 1;
-                }
+                inputs[selection.0].insert_char(selection.1, ch);
+                selection.1 += 1;
               }
             } else if code == KeyCode::Backspace {
               if !inputs[selection.0].is_empty() && selection.1 != 0 {
