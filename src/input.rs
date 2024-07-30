@@ -16,6 +16,8 @@ use crate::{media_center::Series, printing::INVALID_INPUT, MenuOptions};
 
 trait CSplit {
   fn take_chars(&self, start: usize, end: usize) -> String;
+  fn insert_char(&mut self, char_index: usize, ch: char);
+  fn remove_char(&mut self, char_index: usize);
 }
 
 impl CSplit for String {
@@ -36,6 +38,26 @@ impl CSplit for String {
       }
     }
     collector
+  }
+
+  fn insert_char(&mut self, char_index: usize, ch: char) {
+    let byte_index = self
+      .char_indices()
+      .nth(char_index)
+      .map(|(i, _)| i)
+      .unwrap_or_else(|| self.len());
+
+    self.insert(byte_index, ch);
+  }
+
+  fn remove_char(&mut self, char_index: usize) {
+    let byte_index = self
+      .char_indices()
+      .nth(char_index)
+      .map(|(i, _)| i)
+      .unwrap_or_else(|| self.len());
+
+    self.remove(byte_index);
   }
 }
 
@@ -359,10 +381,21 @@ fn display_options(options: &[InteractiveOption], selected_index: (usize, usize)
       InteractiveOptionType::TextInput => {
         let input = inputs.get(index).unwrap();
         let mut text = if !input.is_empty() {
-          format!("{}{}{}",
-          input.get(..(selected_index.1 as i16 - 1) as usize).unwrap_or(""),
-          input.get((selected_index.1 as i16 - 1) as usize..selected_index.1).unwrap_or(" ").underlined(),
-          input.get(selected_index.1..).unwrap_or(""))
+          let prefix = if selected_index.1 != 0 {
+            input.take_chars(0, selected_index.1 - 1)
+          } else {
+            String::new()
+          };
+          format!(
+            "{}{}{}",
+            prefix,
+            input
+              .chars()
+              .nth(selected_index.1)
+              .unwrap_or(' ')
+              .underlined(),
+            input.take_chars(selected_index.1 + 1, input.chars().count())
+          )
         } else {
           String::new()
         };
@@ -560,21 +593,23 @@ pub fn interactive_select(options: Vec<InteractiveOption>) -> ((usize, usize), O
               } else {
                 selection.1 = options[selection.0].text.split_terminator(':').count() - 1;
               }
-            } else if options[selection.0].option_type == InteractiveOptionType::TextInput && !inputs[selection.0].is_empty() {
-              if selection.1 > 1 {
+            } else if options[selection.0].option_type == InteractiveOptionType::TextInput
+              && !inputs[selection.0].is_empty()
+            {
+              if selection.1 >= 1 {
                 selection.1 -= 1;
               } else {
-                selection.1 = inputs[selection.0].len() + 1;
+                selection.1 = inputs[selection.0].chars().count();
               }
             }
           },
           KeyCode::Right => {
             if options[selection.0].option_type == InteractiveOptionType::TextInput {
               if !inputs[selection.0].is_empty() {
-                if selection.1 < inputs[selection.0].len() + 1 {
+                if selection.1 < inputs[selection.0].chars().count() {
                   selection.1 += 1;
                 } else {
-                  selection.1 = 1;
+                  selection.1 = 0;
                 }
               }
             } else if selection.1 < options[selection.0].text.split_terminator(':').count() - 1 {
@@ -591,32 +626,29 @@ pub fn interactive_select(options: Vec<InteractiveOption>) -> ((usize, usize), O
               execute!(stdout, Show).unwrap();
               disable_raw_mode().unwrap();
               exit(1);
-            } 
-            else if let KeyCode::Char(ch) = code {
-              if ch.is_ascii() &&
-                terminal::size().unwrap().0 as usize > inputs[selection.0].len() + options[selection.0].text.len() + 11 {
+            } else if let KeyCode::Char(ch) = code {
+              if (ch.is_ascii() || ch.is_alphabetic())
+                && terminal::size().unwrap().0 as usize
+                  > inputs[selection.0].chars().count() + options[selection.0].text.len() + 11
+              {
                 if !inputs[selection.0].is_empty() {
-                  inputs[selection.0].insert(selection.1-1, ch);
+                  inputs[selection.0].insert_char(selection.1, ch);
                   selection.1 += 1;
                 } else {
-                  inputs[selection.0].insert(selection.1, ch);
-                  selection.1 += 2;
+                  inputs[selection.0].insert_char(selection.1, ch);
+                  selection.1 += 1;
                 }
               }
             } else if code == KeyCode::Backspace {
-              if !inputs[selection.0].is_empty() && selection.1 != 1 {
-                inputs[selection.0].remove(selection.1-2);
+              if !inputs[selection.0].is_empty() && selection.1 != 0 {
+                inputs[selection.0].remove_char(selection.1 - 1);
                 selection.1 -= 1;
               }
-              if !inputs[selection.0].is_empty() {
-                if selection.1 == 0 {
-                  selection.1 += 1;
-                }
-              } else {
+              if inputs[selection.0].is_empty() {
                 selection.1 = 0;
               }
             }
-          }
+          },
         };
         update = true;
       } else {
