@@ -907,7 +907,7 @@ pub fn take_string_input(allowed: Vec<String>) -> String {
     if allowed.contains(&input) || allowed.is_empty() {
       return input;
     } else if input.is_empty() {
-      return allowed.get(0).unwrap().to_string();
+      return allowed.first().unwrap().to_string();
     } else {
       println!("{}", INVALID_INPUT);
     }

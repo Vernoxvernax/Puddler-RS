@@ -608,7 +608,7 @@ pub trait MediaCenter {
             option_type: InteractiveOptionType::Header,
           }]);
         }
-        items.retain(|i| !total.contains(&i));
+        items.retain(|i| !total.contains(i));
         for item in items.clone() {
           options.append(&mut vec![InteractiveOption {
             text: item.to_string_ext(),
