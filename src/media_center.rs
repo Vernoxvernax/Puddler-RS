@@ -311,8 +311,8 @@ pub struct UserDto {
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct UserConfiguration {
   PlayDefaultAudioTrack: bool,
-  AudioLanguagePreference: String,
-  SubtitleLanguagePreference: String,
+  AudioLanguagePreference: Option<String>,
+  SubtitleLanguagePreference: Option<String>,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Clone)]
@@ -977,16 +977,22 @@ pub trait MediaCenter {
           let user = serde_json::from_str::<UserDto>(&res.text().unwrap()).unwrap();
           let mut audio_streams: Vec<MediaStream> = vec![];
           let mut subtitle_streams: Vec<MediaStream> = vec![];
-          let audio_language =
-            if let Ok(lang) = LanguageCode::from_str(&user.Configuration.AudioLanguagePreference) {
+          let audio_language = if let Some(pref) = user.Configuration.AudioLanguagePreference {
+            if let Ok(lang) = LanguageCode::from_str(&pref) {
               Some(lang)
             } else {
               None
-            };
-          let subtitle_language = if let Ok(lang) =
-            LanguageCode::from_str(&user.Configuration.SubtitleLanguagePreference)
+            }
+          } else {
+            None
+          };
+          let subtitle_language = if let Some(pref) = user.Configuration.SubtitleLanguagePreference
           {
-            Some(lang)
+            if let Ok(lang) = LanguageCode::from_str(&pref) {
+              Some(lang)
+            } else {
+              None
+            }
           } else {
             None
           };
