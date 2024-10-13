@@ -797,7 +797,15 @@ impl PlexServer {
     let mut index = 0;
     let mut stdout = stdout();
     while index < playlist.len() {
-      let item = playlist[index].clone();
+      let item = if let Ok(full_item) = self.get_item(playlist[index].clone().ratingKey) {
+        full_item
+      } else {
+        print_message(
+          PrintMessageType::Error,
+          "Failed to retrieve item metadata. Please make sure this item still exists.",
+        );
+        return;
+      };
       let mut next_index = index + 1;
       let mut streamable_item = item.clone();
       if self
