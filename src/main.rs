@@ -141,7 +141,6 @@ fn main() -> ExitCode {
       MenuOptions::Choose => {
         if let Ok(configs) = handle.new() {
           if configs.is_empty() {
-            // print_message(PrintMessageType::Error, "No pre-existing config file found. Please add a new media-center.\n");
             continue;
           }
           let mut configs_str: Vec<InteractiveOption> = vec![];
