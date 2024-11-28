@@ -3,7 +3,7 @@ use serde_derive::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
   fmt::Debug,
-  fs,
+  fs::{self, remove_file},
   path::{Path, PathBuf},
   result::Result,
 };
@@ -45,6 +45,7 @@ pub struct MediaCenterConfig {
 pub struct Config {
   pub config: MediaCenterConfig,
   pub path: String,
+  pub old_path: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -98,6 +99,7 @@ impl Config {
   pub fn default() -> Self {
     Config {
       path: String::new(),
+      old_path: None,
       config: MediaCenterConfig {
         media_center_type: MediaCenterType::Emby,
         server_name: String::new(),
@@ -132,6 +134,7 @@ impl Config {
           files.append(&mut vec![Config {
             path: file_path,
             config: serialized,
+            old_path: None,
           }]);
         }
       }
@@ -261,7 +264,23 @@ impl Config {
       self.path.clone(),
       serde_json::to_string_pretty(&self.config).unwrap(),
     ) {
-      Ok(()) => print_message(PrintMessageType::Warning, "Saved media-center config."),
+      Ok(()) => {
+        print_message(PrintMessageType::Warning, "Saved media-center config.");
+        if let Some(old_path) = &self.old_path {
+          if remove_file(old_path).is_ok() {
+            print_message(
+              PrintMessageType::Warning,
+              "Deleted old media-center config.",
+            );
+            self.old_path = None;
+          } else {
+            print_message(
+              PrintMessageType::Error,
+              "Failed to delete old media-center config.",
+            );
+          }
+        }
+      },
       Err(e) => print_message(
         PrintMessageType::Error,
         format!("Failed to save config file: {}", e).as_str(),
@@ -390,21 +409,19 @@ impl Config {
         return;
       },
       Objective::ServerName => {
+        self.old_path = Some(self.path.clone());
         println!("How do you want to name this media-center?");
-        self.config.server_name = take_string_input(vec![]);
         loop {
+          self.config.server_name = take_string_input(vec![]).replace(' ', "_");
+          let config_path = dirs::config_dir().unwrap();
+          self.path = format!(
+            "{}/{}/media-center/{}.json",
+            &config_path.display().to_string(),
+            APPNAME.to_lowercase(),
+            self.config.server_name
+          );
           if self.check_existing_config() {
-            print_message(PrintMessageType::Error, "A media-center configuration with that file name already exists.\nPlease choose a different file name.");
-            let file_name = take_string_input(vec![]);
-            self.config.server_name = self.config.server_name.replace(' ', "_");
-            let config_path = dirs::config_dir().unwrap();
-            let config_file_path = format!(
-              "{}/{}/media-center/{}.json",
-              &config_path.display().to_string(),
-              APPNAME.to_lowercase(),
-              file_name
-            );
-            self.path = config_file_path;
+            print_message(PrintMessageType::Error, "A media-center configuration with that name already exists.\nPlease choose a different name.");
           } else {
             break;
           }

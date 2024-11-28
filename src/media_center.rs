@@ -517,6 +517,10 @@ pub trait MediaCenter {
           option_type: InteractiveOptionType::ListButtons,
         },
         InteractiveOption {
+          text: String::from("Change Name"),
+          option_type: InteractiveOptionType::Button,
+        },
+        InteractiveOption {
           text: format!("{}", "Save".green()),
           option_type: InteractiveOptionType::Button,
         },
@@ -551,8 +555,13 @@ pub trait MediaCenter {
           if i1 == 1 {
             self.login();
           } else if i1 == 4 {
-            handle.save();
+            self
+              .get_config_handle()
+              .ask_for_setting(Objective::ServerName);
+            self.get_config_handle().save();
           } else if i1 == 5 {
+            handle.save();
+          } else if i1 == 6 {
             handle.delete();
             break;
           }
