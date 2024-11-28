@@ -1,6 +1,7 @@
 use std::{
   sync::{Arc, Mutex},
   thread,
+  time::SystemTime,
 };
 
 use crate::media_config::MediaCenterType;
@@ -41,8 +42,22 @@ impl DiscordClient {
     media_center_type: MediaCenterType,
     details: String,
     state: String,
-    time_left: f64,
+    total_runtime: f64,
+    current_time: f64,
   ) {
+    let start = SystemTime::now()
+      .duration_since(SystemTime::UNIX_EPOCH)
+      .unwrap()
+      .as_secs_f64()
+      - current_time;
+
+    let end = SystemTime::now()
+      .duration_since(SystemTime::UNIX_EPOCH)
+      .unwrap()
+      .as_secs_f64()
+      + total_runtime
+      - current_time;
+
     let media_server_name = media_center_type.to_string().to_lowercase();
     let discord_clone = Arc::clone(&self.discord_client);
     thread::spawn(move || {
@@ -50,15 +65,17 @@ impl DiscordClient {
         if details == *"" {
           let _ = discord_client.set_activity(|a| {
             a.assets(|ass| ass.small_image(media_server_name))
-              .timestamps(|time| time.end(time_left.round() as u64))
+              .timestamps(|time| time.start(start.round() as u64).end(end.round() as u64))
               .state(&state)
+              ._type(discord_presence::models::ActivityType::Watching)
           });
         } else {
           let _ = discord_client.set_activity(|a| {
             a.assets(|ass| ass.small_image(media_server_name))
-              .timestamps(|time| time.end(time_left.round() as u64))
+              .timestamps(|time| time.start(start.round() as u64).end(end.round() as u64))
               .details(&details)
               .state(&state)
+              ._type(discord_presence::models::ActivityType::Watching)
           });
         }
       }

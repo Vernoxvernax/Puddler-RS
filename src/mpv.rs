@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
   thread::{self},
-  time::{Duration, SystemTime},
+  time::Duration,
 };
 use tokio::{net::TcpStream, sync::mpsc};
 use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
@@ -498,24 +498,16 @@ impl Player {
                 config.media_center_type,
                 "".to_string(),
                 video.title[0].clone(),
-                SystemTime::now()
-                  .duration_since(SystemTime::UNIX_EPOCH)
-                  .unwrap()
-                  .as_secs_f64()
-                  + total_runtime
-                  - current_time,
+                total_runtime,
+                current_time,
               );
             } else {
               discord.update_presence(
                 config.media_center_type,
                 video.title[1].clone(),
                 video.title[2].clone(),
-                SystemTime::now()
-                  .duration_since(SystemTime::UNIX_EPOCH)
-                  .unwrap()
-                  .as_secs_f64()
-                  + total_runtime
-                  - current_time,
+                total_runtime,
+                current_time,
               );
             }
           }
