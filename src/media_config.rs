@@ -141,15 +141,18 @@ impl Config {
   }
 
   pub fn read(&mut self) -> Result<(), MediaCenterConfigError> {
-    let content = fs::read_to_string(self.path.clone()).unwrap();
-    if let Ok(serialized) = serde_json::from_str::<MediaCenterConfig>(&content) {
-      self.config.media_center_type = serialized.media_center_type;
-      self.config.server_name = serialized.server_name;
-      self.config.transcoding = serialized.transcoding;
-      self.config.specific_values = serialized.specific_values;
-      return Ok(());
+    if let Ok(content) = fs::read_to_string(self.path.clone()) {
+      if let Ok(serialized) = serde_json::from_str::<MediaCenterConfig>(&content) {
+        self.config.media_center_type = serialized.media_center_type;
+        self.config.server_name = serialized.server_name;
+        self.config.transcoding = serialized.transcoding;
+        self.config.specific_values = serialized.specific_values;
+        return Ok(());
+      }
+      Err(MediaCenterConfigError::Corrupt)
+    } else {
+      Err(MediaCenterConfigError::MissingFile)
     }
-    Err(MediaCenterConfigError::Corrupt)
   }
 
   pub fn remove_specific_value(&mut self, setting: Objective, value: String) {

@@ -28,7 +28,7 @@ mod puddler_settings;
 
 #[derive(Debug, Clone)]
 pub enum MenuOptions {
-  Default,
+  Default(String),
   Choose,
   Setup,
   Setting,
@@ -38,7 +38,13 @@ pub enum MenuOptions {
 impl ToString for MenuOptions {
   fn to_string(&self) -> String {
     match self {
-      MenuOptions::Default => String::from("Stream from default Media-Center"),
+      MenuOptions::Default(message) => {
+        if message.is_empty() {
+          String::from("Stream from default Media-Center")
+        } else {
+          message.clone()
+        }
+      },
       MenuOptions::Choose => String::from("View Media-Centers"),
       MenuOptions::Setup => String::from("Add new Media-Center"),
       MenuOptions::Setting => String::from("Settings"),
@@ -85,8 +91,16 @@ fn main() -> ExitCode {
 
   let mut options: Vec<MenuOptions> = vec![];
 
-  if settings.default_media_server.is_some() {
-    options.append(&mut vec![MenuOptions::Default]);
+  if let Some(ref default_server) = settings.default_media_server {
+    let mut handle = Config::default();
+    handle.path = default_server.to_string();
+    if let Ok(()) = handle.read() {
+      options.append(&mut vec![MenuOptions::Default(format!(
+        "{} - {}",
+        handle.config.server_name,
+        handle.config.media_center_type.to_string()
+      ))]);
+    }
   }
 
   options.append(&mut vec![
@@ -113,7 +127,7 @@ fn main() -> ExitCode {
     let path: String;
     let mut center: Box<dyn MediaCenter>;
     match interactive_menuoption(options.clone()) {
-      MenuOptions::Default => {
+      MenuOptions::Default(_) => {
         path = settings.default_media_server.clone().unwrap();
         handle.path = path;
         if let Err(e) = handle.read() {
