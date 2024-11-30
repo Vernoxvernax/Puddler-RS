@@ -636,7 +636,7 @@ impl MediaCenter for PlexServer {
   ) -> bool {
     let playback_info = self.get_plex_playback_info();
     let mut time_position = (time_pos * 1000.0).round() as u64;
-    let mut time_as_secs = time_pos / 1000.0;
+    let mut time_as_secs = time_pos;
 
     if self.get_config_handle().config.transcoding {
       time_position += playbackpositionticks * 1000;
