@@ -582,7 +582,10 @@ pub trait MediaCenter {
     let mut total: Vec<Item> = vec![];
     let mut options: Vec<InteractiveOption> = vec![];
     if let Ok(items) = self.get_items(
-      format!("Users/{}/Items/Resume?Limit=15", user.user_id),
+      format!(
+        "Users/{}/Items/Resume?Limit=15&MediaTypes=Video",
+        user.user_id
+      ),
       false,
     ) {
       if !items.is_empty() {
