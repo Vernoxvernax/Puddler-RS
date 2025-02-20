@@ -9,11 +9,11 @@ use std::{
 };
 
 use crate::{
+  APPNAME,
   error::MediaCenterConfigError,
   input::{getch, take_string_input},
   media_center::broadcast_search,
-  printing::{print_message, PrintMessageType},
-  APPNAME,
+  printing::{PrintMessageType, print_message},
 };
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Copy)]
@@ -370,7 +370,9 @@ impl Config {
   pub fn ask_for_setting(&mut self, setting: Objective) {
     match setting {
       Objective::MediaCenterType => {
-        print!("Which kind of server do you want to stream from?\n  [1] Jellyfin\n  [2] Emby\n  [3] Plex");
+        print!(
+          "Which kind of server do you want to stream from?\n  [1] Jellyfin\n  [2] Emby\n  [3] Plex"
+        );
         self.config.media_center_type = match getch("123") {
           '1' => MediaCenterType::Jellyfin,
           '2' => MediaCenterType::Emby,
@@ -421,7 +423,10 @@ impl Config {
             self.config.server_name
           );
           if self.check_existing_config() {
-            print_message(PrintMessageType::Error, "A media-center configuration with that name already exists.\nPlease choose a different name.");
+            print_message(
+              PrintMessageType::Error,
+              "A media-center configuration with that name already exists.\nPlease choose a different name.",
+            );
           } else {
             break;
           }

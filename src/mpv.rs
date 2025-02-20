@@ -1,18 +1,18 @@
 use crate::{
+  APPNAME,
   discord::DiscordClient,
   input::clear_stdin,
   media_center::{Item, MediaCenter, PlaybackInfo},
   media_config::MediaCenterType,
-  printing::{print_message, PrintMessageType},
+  printing::{PrintMessageType, print_message},
   puddler_settings::PuddlerSettings,
-  APPNAME,
 };
 use crate::{media_center::ToStringAdv, media_config::Config, plex::PlexItem};
 use futures::{
-  stream::{SplitSink, SplitStream},
   SinkExt, StreamExt,
+  stream::{SplitSink, SplitStream},
 };
-use libmpv::{events::Event, Mpv};
+use libmpv::{Mpv, events::Event};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
@@ -20,7 +20,10 @@ use std::{
   time::Duration,
 };
 use tokio::{net::TcpStream, sync::mpsc};
-use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
+use tokio_tungstenite::{
+  MaybeTlsStream, WebSocketStream, connect_async,
+  tungstenite::{Message, Utf8Bytes},
+};
 
 #[derive(Clone, PartialEq)]
 pub enum VideoType {
@@ -84,8 +87,12 @@ impl Player {
     let stream_url = if handle.config.transcoding {
       format!(
         "{}video/:/transcode/universal/start.mkv?{}&path={}&subtitles=embedded&directPlay=0&directStream=1&session={}&protocol=http&X-Plex-Platform={}&fastSeek=1&offset={}",
-        server_address, auth, urlencoding::encode(format!("/library/metadata/{}", item.ratingKey).as_str()),
-        handle.get_device_id(), urlencoding::encode("Plex Home Theater"), item.viewOffset.unwrap_or(0)/1000
+        server_address,
+        auth,
+        urlencoding::encode(format!("/library/metadata/{}", item.ratingKey).as_str()),
+        handle.get_device_id(),
+        urlencoding::encode("Plex Home Theater"),
+        item.viewOffset.unwrap_or(0) / 1000
       )
     } else {
       format!(
@@ -593,7 +600,7 @@ async fn _websocket_send(
         socket.close().await.unwrap();
         return;
       }
-      if let Err(err) = socket.send(Message::Text(msg)).await {
+      if let Err(err) = socket.send(Message::Text(Utf8Bytes::from(msg))).await {
         print_message(
           PrintMessageType::Error,
           format!("Failed to send message through websocket: {}", err).as_str(),

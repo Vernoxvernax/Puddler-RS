@@ -1,29 +1,29 @@
 use crate::{
+  APPNAME, VERSION,
   emby::EmbyServer,
   input::{
-    hidden_string_input, interactive_select, jelly_series_select, take_string_input,
-    InteractiveOption, InteractiveOptionType, SeriesOptions,
+    InteractiveOption, InteractiveOptionType, SeriesOptions, hidden_string_input,
+    interactive_select, jelly_series_select, take_string_input,
   },
   jellyfin::JellyfinServer,
   media_config::{Config, MediaCenterType, Objective, UserConfig},
   mpv::Player,
   plex::PlexServer,
-  printing::{print_message, PrintMessageType},
+  printing::{PrintMessageType, print_message},
   puddler_settings::PuddlerSettings,
-  APPNAME, VERSION,
 };
 use crossterm::{
   cursor::{EnableBlinking, Hide, MoveToColumn, RestorePosition, SavePosition, Show},
-  event::{poll, read, Event, KeyCode, KeyEvent, KeyModifiers},
+  event::{Event, KeyCode, KeyEvent, KeyModifiers, poll, read},
   execute,
   style::Stylize,
   terminal::{
-    self, disable_raw_mode, enable_raw_mode, Clear, ClearType, DisableLineWrap, EnableLineWrap,
-    EnterAlternateScreen, LeaveAlternateScreen,
+    self, Clear, ClearType, DisableLineWrap, EnableLineWrap, EnterAlternateScreen,
+    LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
   },
 };
 use isahc::{
-  config::Configurable, http::StatusCode, Body, ReadResponseExt, Request, RequestExt, Response,
+  Body, ReadResponseExt, Request, RequestExt, Response, config::Configurable, http::StatusCode,
 };
 use isolanguage_1::LanguageCode;
 use regex::Regex;
@@ -34,10 +34,10 @@ use tokio::sync::mpsc::UnboundedSender;
 use crate::input::getch;
 use std::{
   fmt,
-  io::{stdin, stdout, Write},
+  io::{Write, stdin, stdout},
   net::UdpSocket,
   process::exit,
-  str::{from_utf8, FromStr},
+  str::{FromStr, from_utf8},
   sync::{Arc, Mutex},
   thread,
   time::Duration,
@@ -842,7 +842,7 @@ pub trait MediaCenter {
           &mut transcoding_settings,
         );
         let ret = player.play();
-        if let Some((_, ref mut audio, ref mut subtitle, ..)) = transcoding_settings.as_mut() {
+        if let Some((_, audio, subtitle, ..)) = transcoding_settings.as_mut() {
           *audio = ret.preferred_audio_track;
           *subtitle = ret.preferred_subtitle_track
         }
@@ -1558,7 +1558,8 @@ pub trait MediaCenter {
   fn get_item(&mut self, item_id: String) -> Result<Item, ()> {
     let url = format!(
       "Users/{}/Items/{}?Fields=PremiereDate,MediaSources,Status,ProductionYear&collapseBoxSetItems=False&IsMissing=False",
-      self.get_config_handle().get_active_user().unwrap().user_id, item_id
+      self.get_config_handle().get_active_user().unwrap().user_id,
+      item_id
     );
     match self.get(url.clone()) {
       Ok(mut result) => {
@@ -1594,7 +1595,10 @@ pub trait MediaCenter {
     } else if !url.ends_with('&') {
       url.push('&')
     }
-    let modded_url = format!("{}Fields=PremiereDate,MediaSources,Status,ProductionYear&collapseBoxSetItems=False&IsMissing=False", url);
+    let modded_url = format!(
+      "{}Fields=PremiereDate,MediaSources,Status,ProductionYear&collapseBoxSetItems=False&IsMissing=False",
+      url
+    );
     match self.get(modded_url.clone()) {
       Ok(mut result) => {
         if let Ok(mut json) = serde_json::from_str::<Value>(&result.text().unwrap()) {
@@ -2207,7 +2211,9 @@ pub fn broadcast_search(media_center_type: MediaCenterType) -> Option<UDPAnswer>
     "who is EmbyServer?"
   };
 
-  print!("Searching for local media-centers (5s timeout).\nPress any key to interrupt and for manual input.");
+  print!(
+    "Searching for local media-centers (5s timeout).\nPress any key to interrupt and for manual input."
+  );
   let handle = thread::spawn({
     let address_clone = Arc::clone(&address);
     move || {

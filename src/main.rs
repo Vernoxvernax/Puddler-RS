@@ -2,13 +2,13 @@
 use clap::{Arg, ArgAction, Command};
 use colored::Colorize;
 use puddler_settings::PuddlerSettings;
-use std::process::{exit, ExitCode};
+use std::process::{ExitCode, exit};
 
 use crate::{
-  input::{interactive_menuoption, interactive_select, InteractiveOption, InteractiveOptionType},
-  media_center::{set_config, MediaCenter},
+  input::{InteractiveOption, InteractiveOptionType, interactive_menuoption, interactive_select},
+  media_center::{MediaCenter, set_config},
   media_config::{Config, MediaCenterType, Objective},
-  printing::{print_message, PrintMessageType},
+  printing::{PrintMessageType, print_message},
 };
 
 const APPNAME: &str = "Puddler";

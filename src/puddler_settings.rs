@@ -11,11 +11,11 @@ use std::{
 
 use crate::printing::PrintMessageType;
 use crate::{
+  APPNAME,
   error::PuddlerSettingsError,
   input::{getch, take_string_input},
   media_config::get_mediacenter_folder,
   printing::print_message,
-  APPNAME,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -290,7 +290,9 @@ impl PuddlerSettings {
           }
         }
         file_selection.append(&mut vec!["None".to_string()]);
-        println!("Select which one of the above server configs should be used by default. Skip this option with \"None\".");
+        println!(
+          "Select which one of the above server configs should be used by default. Skip this option with \"None\"."
+        );
         let selection = take_string_input(file_selection);
         if selection.trim() == "None" {
           println!("Skipped default-server option.\n");
@@ -320,7 +322,9 @@ impl PuddlerSettings {
         };
       },
       PuddlerSettingType::GPU => {
-        print!("Do you want to enable hardware decoding for MPV?\n(Using \"auto-safe\" api)\n (Y)es / (N)o");
+        print!(
+          "Do you want to enable hardware decoding for MPV?\n(Using \"auto-safe\" api)\n (Y)es / (N)o"
+        );
         let gpu = getch("YyNn");
         temp.gpu = match gpu {
           'Y' | 'y' => true,
@@ -328,7 +332,9 @@ impl PuddlerSettings {
         };
       },
       PuddlerSettingType::GLSL_Shaders => {
-        println!("Do you want to configure any GLSL-Shaders for MPV?\n(Multiple paths can be added whilst confirming with ENTER; to finish, enter nothing)");
+        println!(
+          "Do you want to configure any GLSL-Shaders for MPV?\n(Multiple paths can be added whilst confirming with ENTER; to finish, enter nothing)"
+        );
         let mut glsl_shaders: Vec<String> = vec![];
         loop {
           let path = take_string_input(vec![]);
@@ -340,7 +346,9 @@ impl PuddlerSettings {
         temp.glsl_shaders = glsl_shaders;
       },
       PuddlerSettingType::MPV_Config_Location => {
-        println!("Do you want to load an mpv-config?\n(Type the path to the config-directory. f.e. \"~/.config/mpv\"| <Empty input for no>)");
+        println!(
+          "Do you want to load an mpv-config?\n(Type the path to the config-directory. f.e. \"~/.config/mpv\"| <Empty input for no>)"
+        );
         let path = take_string_input(vec![]);
         if !path.trim().is_empty() {
           temp.mpv_config_location = Some(path);

@@ -1,15 +1,15 @@
-use crate::{media_center::Series, printing::INVALID_INPUT, MenuOptions};
+use crate::{MenuOptions, media_center::Series, printing::INVALID_INPUT};
 use crossterm::{
   cursor::{
     EnableBlinking, Hide, MoveLeft, MoveTo, MoveToColumn, MoveToNextLine, MoveToPreviousLine,
     RestorePosition, SavePosition, Show,
   },
-  event::{poll, read, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
+  event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, poll, read},
   execute,
   style::{Print, Stylize},
   terminal::{
-    self, disable_raw_mode, enable_raw_mode, Clear, ClearType, DisableLineWrap, EnableLineWrap,
-    EnterAlternateScreen, LeaveAlternateScreen,
+    self, Clear, ClearType, DisableLineWrap, EnableLineWrap, EnterAlternateScreen,
+    LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
   },
 };
 use std::{
@@ -382,7 +382,7 @@ pub fn interactive_menuoption(options: Vec<MenuOptions>) -> MenuOptions {
   }
 
   let selection = interactive_select(choices);
-  return options.get(selection.0 .0).unwrap().clone();
+  return options.get(selection.0.0).unwrap().clone();
 }
 
 fn display_options(

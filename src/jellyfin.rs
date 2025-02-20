@@ -1,9 +1,9 @@
 use crate::{
+  APPNAME, VERSION,
   media_center::{MediaCenter, MediaCenterValues, PlaybackInfo},
   media_config::Config,
   mpv::Player,
   puddler_settings::PuddlerSettings,
-  APPNAME, VERSION,
 };
 
 #[derive(Clone)]
@@ -56,7 +56,7 @@ impl MediaCenter for JellyfinServer {
           self.headers = vec![self.headers[0].clone()];
         }
         self.headers.append(&mut vec![
-          serde_json::from_str::<(String, String)>(&value).unwrap()
+          serde_json::from_str::<(String, String)>(&value).unwrap(),
         ])
       },
       MediaCenterValues::PlaybackInfo => {

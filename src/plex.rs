@@ -4,12 +4,12 @@ use crossterm::{
   execute,
   style::Stylize,
   terminal::{
-    self, disable_raw_mode, enable_raw_mode, Clear, ClearType, DisableLineWrap, EnableLineWrap,
-    EnterAlternateScreen, LeaveAlternateScreen,
+    self, Clear, ClearType, DisableLineWrap, EnableLineWrap, EnterAlternateScreen,
+    LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
   },
 };
 use isahc::{
-  config::Configurable, http::StatusCode, Body, ReadResponseExt, Request, RequestExt, Response,
+  Body, ReadResponseExt, Request, RequestExt, Response, config::Configurable, http::StatusCode,
 };
 use isolanguage_1::LanguageCode;
 use regex::Regex;
@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
   fmt,
-  io::{stdin, stdout, Write},
+  io::{Write, stdin, stdout},
   process::exit,
   str::FromStr,
   sync::mpsc,
@@ -27,16 +27,16 @@ use std::{
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
+  APPNAME, VERSION,
   input::{
-    getch, interactive_select, plex_series_select, take_string_input, InteractiveOption,
-    InteractiveOptionType, SeriesOptions,
+    InteractiveOption, InteractiveOptionType, SeriesOptions, getch, interactive_select,
+    plex_series_select, take_string_input,
   },
   media_center::{IsNumeric, MediaCenter, MediaCenterValues, ToStringAdv},
   media_config::{Config, Objective, UserConfig},
   mpv::Player,
-  printing::{print_message, PrintMessageType},
+  printing::{PrintMessageType, print_message},
   puddler_settings::PuddlerSettings,
-  APPNAME, VERSION,
 };
 
 const PLEX_CLIENT_PROFILES: &str = "add-direct-play-profile(
@@ -408,7 +408,7 @@ impl MediaCenter for PlexServer {
           self.headers = vec![self.headers[0].clone()];
         }
         self.headers.append(&mut vec![
-          serde_json::from_str::<(String, String)>(&value).unwrap()
+          serde_json::from_str::<(String, String)>(&value).unwrap(),
         ])
       },
       MediaCenterValues::PlaybackInfo => {
@@ -824,7 +824,7 @@ impl PlexServer {
           &mut transcoding_settings,
         );
         let ret = player.play();
-        if let Some((_, ref mut audio, ref mut subtitle, ..)) = transcoding_settings.as_mut() {
+        if let Some((_, audio, subtitle, ..)) = transcoding_settings.as_mut() {
           *audio = ret.preferred_audio_track;
           *subtitle = ret.preferred_subtitle_track
         }
@@ -1664,7 +1664,10 @@ impl PlexServer {
 
   fn choose_servers(&mut self, access_token: String) {
     let device_id = self.get_config_handle().get_device_id();
-    let url = format!("api/v2/resources?includeHttps=1&includeRelay=1&X-Plex-Features=external-media&X-Plex-Language=en&X-Plex-Token={}", access_token);
+    let url = format!(
+      "api/v2/resources?includeHttps=1&includeRelay=1&X-Plex-Features=external-media&X-Plex-Language=en&X-Plex-Token={}",
+      access_token
+    );
     let server_name: String;
     let address: String;
     match plex_tv(RequestType::Get, None, device_id, url) {
@@ -1767,7 +1770,10 @@ impl PlexServer {
         config.set_active_user(user.access_token);
         if config.check_existing_config() {
           loop {
-            print_message(PrintMessageType::Error, "A media-center configuration with that file name already exists.\nPlease choose a different file name.");
+            print_message(
+              PrintMessageType::Error,
+              "A media-center configuration with that file name already exists.\nPlease choose a different file name.",
+            );
             let file_name = take_string_input(vec![]);
             config.config.server_name = config.config.server_name.replace(' ', "_");
             let config_path = dirs::config_dir().unwrap();
