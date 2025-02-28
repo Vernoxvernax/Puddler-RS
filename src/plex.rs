@@ -438,8 +438,18 @@ impl MediaCenter for PlexServer {
       return;
     }
     let access_token = self.create_plex_user();
-    self.choose_servers(access_token.clone());
-    self.get_username(access_token);
+    let config = self.get_config_handle();
+    if config.get_address().is_none() {
+      self.choose_servers(access_token.clone());
+      self.get_username(access_token);
+    } else {
+      let mut user = config.get_active_user().unwrap();
+      config.remove_specific_value(Objective::User, serde_json::to_string(&user).unwrap());
+      user.access_token = access_token;
+      config.insert_specific_value(Objective::User, serde_json::to_string(&user).unwrap());
+      config.set_active_user(user.access_token);
+      config.save();
+    }
   }
 
   fn menu(&mut self) {
@@ -1728,7 +1738,6 @@ impl PlexServer {
     let handle = self.get_config_handle();
     handle.config.server_name = server_name;
     handle.insert_specific_value(Objective::Address, address);
-    // handle.save();
   }
 
   fn check_token_valid(&mut self) -> bool {

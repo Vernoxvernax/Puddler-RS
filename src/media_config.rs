@@ -159,57 +159,50 @@ impl Config {
   }
 
   pub fn remove_specific_value(&mut self, setting: Objective, value: String) {
-    match self.config.media_center_type {
-      MediaCenterType::Plex => {
-        eprintln!("Not yet implemented.");
+    let address = if let Some(address) = self.config.specific_values.get("address") {
+      address.as_str().unwrap().to_string()
+    } else {
+      String::new()
+    };
+    let device_id = if let Some(device_id) = self.config.specific_values.get("device_id") {
+      device_id.as_str().unwrap().to_string()
+    } else {
+      String::new()
+    };
+    let users = if let Some(users) = self.config.specific_values.get("users") {
+      serde_json::from_value::<Vec<UserConfig>>(users.clone()).unwrap()
+    } else {
+      vec![]
+    };
+    let mut temp = ServerConfig {
+      address,
+      device_id,
+      users,
+    };
+    match setting {
+      Objective::DeviceID => {
+        temp.device_id = value;
       },
-      _ => {
-        let address = if let Some(address) = self.config.specific_values.get("address") {
-          address.as_str().unwrap().to_string()
-        } else {
-          String::new()
-        };
-        let device_id = if let Some(device_id) = self.config.specific_values.get("device_id") {
-          device_id.as_str().unwrap().to_string()
-        } else {
-          String::new()
-        };
-        let users = if let Some(users) = self.config.specific_values.get("users") {
-          serde_json::from_value::<Vec<UserConfig>>(users.clone()).unwrap()
-        } else {
-          vec![]
-        };
-        let mut temp = ServerConfig {
-          address,
-          device_id,
-          users,
-        };
-        match setting {
-          Objective::DeviceID => {
-            temp.device_id = value;
-          },
-          Objective::Address => {
-            temp.address = value;
-            if !temp.address.ends_with('/') {
-              temp.address.push('/');
-            }
-            if !temp.address.starts_with("http://") && !temp.address.starts_with("https://") {
-              temp.address = format!("http://{}", temp.address);
-            }
-          },
-          Objective::User => {
-            let user_index = temp
-              .users
-              .iter()
-              .position(|u| u.access_token == value)
-              .unwrap();
-            temp.users.remove(user_index);
-          },
-          _ => eprintln!("THAT is not a specific config setting."),
+      Objective::Address => {
+        temp.address = value;
+        if !temp.address.ends_with('/') {
+          temp.address.push('/');
         }
-        self.config.specific_values = serde_json::to_value(temp).unwrap();
+        if !temp.address.starts_with("http://") && !temp.address.starts_with("https://") {
+          temp.address = format!("http://{}", temp.address);
+        }
       },
+      Objective::User => {
+        let user_index = temp
+          .users
+          .iter()
+          .position(|u| u.access_token == value)
+          .unwrap();
+        temp.users.remove(user_index);
+      },
+      _ => eprintln!("THAT is not a specific config setting."),
     }
+    self.config.specific_values = serde_json::to_value(temp).unwrap();
   }
 
   pub fn insert_specific_value(&mut self, setting: Objective, value: String) {
