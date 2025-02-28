@@ -9,3 +9,10 @@
 * Puddler Menu: show the media-center name instead of "Stream from default Media-Center"
 * Media-Center Settings: add the option to change the name
 * Discord API change: discord presence now shows a progress bar instead of the remaining time
+* Fix for emby api change
+* Fix for time formatting when interrupting a plex session
+* Chores: switch to rust 2024; bump dependencies; cargo fmt (not check lol)
+* Fix(plex): don't try to configure new media-server when being forced to re-authenticate
+* Fix: avoid empty lines when the options list is very small (temporary)
+* Fix(plex): make toggling the watching status of series items functional
+* Fix: the old deprecated config file
