@@ -576,6 +576,13 @@ pub fn interactive_select(
     Clear(ClearType::FromCursorDown)
   )
   .unwrap();
+
+  let first_line = if options.len() > 3 {
+    (options.len() - 1) as u16
+  } else {
+    (options.len()) as u16
+  };
+
   let mut selection = (0, 0);
   loop {
     match options[selection.0].option_type {
@@ -747,7 +754,7 @@ pub fn interactive_select(
       if options.len() != 1 {
         execute!(
           stdout,
-          MoveToPreviousLine((options.len() - 1) as u16),
+          MoveToPreviousLine(first_line),
           Clear(ClearType::FromCursorDown)
         )
         .unwrap();
@@ -769,7 +776,7 @@ pub fn interactive_select(
   } else {
     execute!(
       stdout,
-      MoveToPreviousLine((options.len() - 1) as u16),
+      MoveToPreviousLine(first_line),
       Clear(ClearType::FromCursorDown),
       Show
     )
