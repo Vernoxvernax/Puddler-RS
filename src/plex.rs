@@ -90,6 +90,7 @@ pub struct PlexItem {
   pub parentRatingKey: Option<String>,
   pub parentTitle: Option<String>,
   pub grandparentTitle: Option<String>,
+  grandparentRatingKey: Option<String>,
   pub parentIndex: Option<u32>,
   pub viewCount: Option<u32>,
   pub guid: String,
@@ -152,7 +153,7 @@ impl fmt::Display for PlexStream {
         self
           .title
           .as_ref()
-          .unwrap_or(self.displayTitle.as_ref().unwrap_or(&"".to_string())),
+          .unwrap_or(self.displayTitle.as_ref().unwrap_or(&String::new())),
         self.language.as_ref().unwrap_or(
           self
             .languageCode
@@ -173,7 +174,7 @@ impl fmt::Display for PlexStream {
         self
           .title
           .as_ref()
-          .unwrap_or(self.displayTitle.as_ref().unwrap_or(&"".to_string())),
+          .unwrap_or(self.displayTitle.as_ref().unwrap_or(&String::new())),
         self.language.as_ref().unwrap_or(
           self
             .languageCode
@@ -481,7 +482,7 @@ impl MediaCenter for PlexServer {
 
     options.append(&mut vec![
       InteractiveOption {
-        text: String::from(""),
+        text: String::new(),
         option_type: InteractiveOptionType::Header,
       },
       InteractiveOption {
@@ -1471,7 +1472,8 @@ impl PlexServer {
 
   fn resolve_series(&mut self, item: PlexItem) -> Series {
     let series_id: String = match item.r#type.as_str() {
-      "season" | "episode" => item.parentRatingKey.unwrap(),
+      "episode" => item.grandparentRatingKey.unwrap(),
+      "season" => item.parentRatingKey.unwrap(),
       "show" => item.ratingKey,
       _ => panic!("This object cannot be part of a series."),
     };

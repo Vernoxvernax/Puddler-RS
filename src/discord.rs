@@ -62,7 +62,7 @@ impl DiscordClient {
     let discord_clone = Arc::clone(&self.discord_client);
     thread::spawn(move || {
       if let Ok(mut discord_client) = discord_clone.lock() {
-        if details == *"" {
+        if details.is_empty() {
           let _ = discord_client.set_activity(|a| {
             a.assets(|ass| ass.small_image(media_server_name))
               .timestamps(|time| time.start(start.round() as u64).end(end.round() as u64))
@@ -87,7 +87,7 @@ impl DiscordClient {
     let discord_clone = Arc::clone(&self.discord_client);
     thread::spawn(move || {
       if let Ok(mut discord_client) = discord_clone.lock() {
-        if details == *"" {
+        if details.is_empty() {
           discord_client
             .set_activity(|a| {
               a.assets(|ass| ass.large_image(media_server_name).small_image("pause2"))

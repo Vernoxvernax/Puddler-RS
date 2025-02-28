@@ -190,7 +190,7 @@ impl fmt::Display for MediaStream {
         self
           .Title
           .as_ref()
-          .unwrap_or(self.DisplayTitle.as_ref().unwrap_or(&"".to_string())),
+          .unwrap_or(self.DisplayTitle.as_ref().unwrap_or(&String::new())),
         self
           .DisplayLanguage
           .as_ref()
@@ -209,7 +209,7 @@ impl fmt::Display for MediaStream {
         self
           .Title
           .as_ref()
-          .unwrap_or(self.DisplayTitle.as_ref().unwrap_or(&"".to_string())),
+          .unwrap_or(self.DisplayTitle.as_ref().unwrap_or(&String::new())),
         self
           .DisplayLanguage
           .as_ref()
@@ -361,7 +361,7 @@ impl ToStringAdv for Item {
     }
     if name.contains('(') {
       let re = Regex::new(r" \(\d{4}\)").unwrap();
-      name = re.replace_all(&name, "").to_string();
+      name = re.replace_all(&name, String::new()).to_string();
     }
 
     match self.Type.as_str() {
@@ -434,7 +434,7 @@ impl ToString for Item {
     }
     if name.contains('(') {
       let re = Regex::new(r" \(\d{4}\)").unwrap();
-      name = re.replace_all(&name, "").to_string();
+      name = re.replace_all(&name, String::new()).to_string();
     }
 
     match self.Type.as_str() {
@@ -648,7 +648,7 @@ pub trait MediaCenter {
     ) {
       if !total.is_empty() {
         options.append(&mut vec![InteractiveOption {
-          text: String::from(""),
+          text: String::new(),
           option_type: InteractiveOptionType::Header,
         }]);
       }
@@ -706,7 +706,7 @@ pub trait MediaCenter {
 
     options.append(&mut vec![
       InteractiveOption {
-        text: String::from(""),
+        text: String::new(),
         option_type: InteractiveOptionType::Header,
       },
       InteractiveOption {

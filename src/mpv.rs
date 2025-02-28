@@ -503,7 +503,7 @@ impl Player {
             if video.video_type == VideoType::Movie {
               discord.update_presence(
                 config.media_center_type,
-                "".to_string(),
+                String::new(),
                 video.title[0].clone(),
                 total_runtime,
                 current_time,
@@ -539,7 +539,7 @@ impl Player {
             if video.video_type == VideoType::Movie {
               discord.pause(
                 config.media_center_type,
-                "".to_string(),
+                String::new(),
                 video.title[0].clone(),
               );
             } else {
