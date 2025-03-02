@@ -577,11 +577,7 @@ pub fn interactive_select(
   )
   .unwrap();
 
-  let first_line = if options.len() > 3 {
-    (options.len() - 1) as u16
-  } else {
-    (options.len()) as u16
-  };
+  let first_line = (options.len() - 1) as u16;
 
   let mut selection = (0, 0);
   loop {

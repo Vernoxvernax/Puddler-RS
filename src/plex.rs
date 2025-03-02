@@ -256,7 +256,8 @@ impl ToStringAdv for PlexItem {
 
     let mut name: String;
     match self.r#type.as_str() {
-      "season" | "episode" => name = self.parentTitle.clone().unwrap_or(String::from("???")),
+      "episode" => name = self.grandparentTitle.clone().unwrap_or(String::from("???")),
+      "season" => name = self.parentTitle.clone().unwrap_or(String::from("???")),
       _ => name = self.title.clone(),
     }
     if name.contains('(') {
