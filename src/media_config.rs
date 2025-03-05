@@ -404,7 +404,9 @@ impl Config {
         return;
       },
       Objective::ServerName => {
-        self.old_path = Some(self.path.clone());
+        if !self.path.is_empty() {
+          self.old_path = Some(self.path.clone());
+        }
         println!("How do you want to name this media-center?");
         loop {
           self.config.server_name = take_string_input(vec![]).replace(' ', "_");
