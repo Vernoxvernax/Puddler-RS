@@ -1,17 +1,4 @@
-use crate::{
-  APPNAME, VERSION,
-  emby::EmbyServer,
-  input::{
-    InteractiveOption, InteractiveOptionType, SeriesOptions, hidden_string_input,
-    interactive_select, jelly_series_select, take_string_input,
-  },
-  jellyfin::JellyfinServer,
-  media_config::{Config, MediaCenterType, Objective, UserConfig},
-  mpv::Player,
-  plex::PlexServer,
-  printing::{PrintMessageType, print_message},
-  puddler_settings::PuddlerSettings,
-};
+use async_trait::async_trait;
 use crossterm::{
   cursor::{EnableBlinking, Hide, MoveToColumn, RestorePosition, SavePosition, Show},
   event::{Event, KeyCode, KeyEvent, KeyModifiers, poll, read},
@@ -22,16 +9,14 @@ use crossterm::{
     LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
   },
 };
-use isahc::{
-  Body, ReadResponseExt, Request, RequestExt, Response, config::Configurable, http::StatusCode,
-};
 use isolanguage_1::LanguageCode;
 use regex::Regex;
+use reqwest::{
+  StatusCode,
+  blocking::{Client, Response},
+};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
-use tokio::sync::mpsc::UnboundedSender;
-
-use crate::input::getch;
+use serde_json::{Value, json};
 use std::{
   fmt,
   io::{Write, stdin, stdout},
@@ -41,6 +26,22 @@ use std::{
   sync::{Arc, Mutex},
   thread,
   time::Duration,
+};
+use tokio::sync::mpsc::UnboundedSender;
+
+use crate::{
+  APPNAME, VERSION,
+  emby::EmbyServer,
+  input::{
+    InteractiveOption, InteractiveOptionType, SeriesOptions, getch, hidden_string_input,
+    interactive_select, jelly_series_select, take_string_input,
+  },
+  jellyfin::JellyfinServer,
+  media_config::{Config, MediaCenterType, Objective, UserConfig},
+  mpv::Player,
+  plex::PlexServer,
+  printing::{PrintMessageType, print_message},
+  puddler_settings::PuddlerSettings,
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -497,7 +498,8 @@ pub fn set_config(handle: Config, settings: PuddlerSettings) -> Box<dyn MediaCen
 }
 
 // Defaulting to a Jellyfin/Emby instance. Other API's need to re-implement several if not all traits and structs for full functionality.
-pub trait MediaCenter {
+#[async_trait]
+pub trait MediaCenter: Send {
   fn new(config: Config, settings: PuddlerSettings) -> Self
   where
     Self: Sized;
@@ -1014,7 +1016,7 @@ pub trait MediaCenter {
     if previous_settings.is_none() && !handle.config.transcoding {
       let url = format!("Users/{}", user_id);
       match self.get(url) {
-        Ok(mut res) => {
+        Ok(res) => {
           let user = serde_json::from_str::<UserDto>(&res.text().unwrap()).unwrap();
           let mut audio_streams: Vec<MediaStream> = vec![];
           let mut subtitle_streams: Vec<MediaStream> = vec![];
@@ -1360,7 +1362,7 @@ pub trait MediaCenter {
 
       let url = format!("Items/{}/PlaybackInfo?UserId={}", item.Id, user_id);
       match self.post(url, serde_json::to_string(&session_capabilities).unwrap()) {
-        Ok(mut res) => {
+        Ok(res) => {
           let search_text: &String = &res.text().unwrap();
           Ok(serde_json::from_str::<PlaybackInfo>(search_text).unwrap())
         },
@@ -1375,11 +1377,11 @@ pub trait MediaCenter {
     } else {
       let url = format!("Items/{}/PlaybackInfo?UserId={}", item.Id, user_id);
       match self.get(url) {
-        Ok(mut res) => {
+        Ok(res) => {
           let search_text: &String = &res.text().unwrap();
           Ok(serde_json::from_str::<PlaybackInfo>(search_text).unwrap())
         },
-        Err(mut err) => {
+        Err(err) => {
           print_message(
             PrintMessageType::Error,
             format!(
@@ -1591,7 +1593,7 @@ pub trait MediaCenter {
       item_id
     );
     match self.get(url.clone()) {
-      Ok(mut result) => {
+      Ok(result) => {
         if let Ok(json) = serde_json::from_str::<Value>(&result.text().unwrap()) {
           if let Ok(item_list) = serde_json::from_value::<Item>(json) {
             return Ok(item_list);
@@ -1608,7 +1610,7 @@ pub trait MediaCenter {
           );
         }
       },
-      Err(mut e) => {
+      Err(e) => {
         print_message(
           PrintMessageType::Error,
           format!("Failed to get item at \"{}\"\n{}\n", url, e.text().unwrap()).as_str(),
@@ -1629,7 +1631,7 @@ pub trait MediaCenter {
       url
     );
     match self.get(modded_url.clone()) {
-      Ok(mut result) => {
+      Ok(result) => {
         if let Ok(mut json) = serde_json::from_str::<Value>(&result.text().unwrap()) {
           if !raw {
             json = json.get("Items").unwrap().clone();
@@ -1649,7 +1651,7 @@ pub trait MediaCenter {
           );
         }
       },
-      Err(mut e) => {
+      Err(e) => {
         print_message(
           PrintMessageType::Error,
           format!(
@@ -1664,7 +1666,7 @@ pub trait MediaCenter {
     Err(())
   }
 
-  fn stop_playback(
+  async fn stop_playback(
     &mut self,
     item_id: String,
     playbackpositionticks: u64,
@@ -1689,7 +1691,7 @@ pub trait MediaCenter {
     if difference < 0.15 {
       // watched more than 75%
       let url = format!("Users/{}/PlayedItems/{}", user.user_id, item_id);
-      match self.post(url, String::new()) {
+      match self.async_post(url, String::new()).await {
         Ok(_) => {
           print_message(PrintMessageType::Success, "Marked item as [Played].");
         },
@@ -1746,7 +1748,10 @@ pub trait MediaCenter {
       success_message = "Playback progress of this item has not been changed.".to_string();
     }
     let url = "Sessions/Playing/Stopped".to_string();
-    match self.post(url, serde_json::to_string(&finished_obj).unwrap()) {
+    match self
+      .async_post(url, serde_json::to_string(&finished_obj).unwrap())
+      .await
+    {
       Ok(_) => {
         print_message(PrintMessageType::Success, &success_message);
         false
@@ -1763,7 +1768,7 @@ pub trait MediaCenter {
 
   fn get_playback_info(&mut self) -> PlaybackInfo;
 
-  fn report_playback(
+  async fn report_playback(
     &mut self,
     item_id: String,
     playbackpositionticks: u64,
@@ -1810,7 +1815,10 @@ pub trait MediaCenter {
     };
 
     let url = "Sessions/Playing/Progress".to_string();
-    if let Err(err) = self.post(url, serde_json::to_string(&update_object).unwrap()) {
+    if let Err(err) = self
+      .async_post(url, serde_json::to_string(&update_object).unwrap())
+      .await
+    {
       print_message(
         PrintMessageType::Error,
         format!("Failed to report PlaySession as started: {}", err).as_str(),
@@ -1818,7 +1826,7 @@ pub trait MediaCenter {
     }
   }
 
-  fn start_playback(&mut self, item_id: String, playbackpositionticks: u64) {
+  async fn start_playback(&mut self, item_id: String, playbackpositionticks: u64) {
     let playback_info = self.get_playback_info();
     let session_id = self.get_session_id().expect("This shouldn't be a None!");
     let playmethod = if self.get_config_handle().config.transcoding {
@@ -1876,7 +1884,10 @@ pub trait MediaCenter {
     };
 
     let url = "Sessions/Playing".to_string();
-    if let Err(err) = self.post(url, serde_json::to_string(&playing_object).unwrap()) {
+    if let Err(err) = self
+      .async_post(url, serde_json::to_string(&playing_object).unwrap())
+      .await
+    {
       print_message(
         PrintMessageType::Error,
         format!("Failed to start playsession!: {}", err).as_str(),
@@ -1934,7 +1945,7 @@ pub trait MediaCenter {
         let url = format!("Sessions?DeviceId={}", config.get_device_id());
         self.write_headers();
         match self.get(url) {
-          Ok(mut response) => {
+          Ok(response) => {
             let json_response = serde_json::from_str::<Value>(&response.text().unwrap()).unwrap();
             if let Some(id) = json_response[0].get("Id") {
               println!("{}\n", "🗸".green());
@@ -1960,7 +1971,7 @@ pub trait MediaCenter {
               self.get_config_handle().remove_user(user.access_token);
             }
           },
-          Err(mut e) => {
+          Err(e) => {
             println!("{}", "𐄂".red());
             if e.status() == StatusCode::UNAUTHORIZED {
               print_message(
@@ -2032,9 +2043,9 @@ pub trait MediaCenter {
         server_name.clone().cyan()
       );
       match self.post(url.clone(), body.clone()) {
-        Ok(mut res) => {
+        Ok(res) => {
           println!("{}", "🗸".green());
-          let json_response = res.json::<Value>().unwrap();
+          let json_response = json!(&res.text().unwrap());
           let session_obj = json_response.get("SessionInfo").unwrap();
           let user = UserConfig {
             access_token: json_response["AccessToken"].as_str().unwrap().to_string(),
@@ -2128,7 +2139,7 @@ pub trait MediaCenter {
     }
   }
 
-  fn get(&mut self, url: String) -> Result<Response<Body>, Response<Body>> {
+  fn get(&mut self, url: String) -> Result<Response, Response> {
     let url = format!("{}{}", self.get_address(), url);
     let headers = self.get_headers();
     let authorization_2 = if let Some(header) = headers.get(1) {
@@ -2141,14 +2152,14 @@ pub trait MediaCenter {
     } else {
       panic!("Request header missing!! Make sure you are running write_headers().");
     };
-    let request = Request::get(url)
+    let client = Client::new();
+    let request = client
+      .get(url)
       .timeout(Duration::from_secs(15))
       .header(authorization_2.clone().0, authorization_2.clone().1)
       .header(String::from("X-Application"), request_headers.clone().0)
       .header(String::from("X-Emby-Token"), request_headers.clone().1)
       .header("Content-Type", "application/json")
-      .body(())
-      .unwrap()
       .send();
 
     let response = if let Err(res) = request {
@@ -2164,10 +2175,11 @@ pub trait MediaCenter {
     }
   }
 
-  fn delete(&mut self, url: String, body: String) -> Result<Response<Body>, String> {
+  fn delete(&mut self, url: String, body: String) -> Result<Response, String> {
     let url = format!("{}{}", self.get_address(), url);
     let headers = self.get_headers();
-    let mut builder = Request::delete(url).timeout(Duration::from_secs(15));
+    let client = Client::new();
+    let mut builder = client.delete(url).timeout(Duration::from_secs(15));
     if headers.len() == 1 {
       let authorization_1 = headers.get(0).unwrap();
       builder = builder.header(authorization_1.clone().0, authorization_1.clone().1);
@@ -2181,10 +2193,9 @@ pub trait MediaCenter {
     let request = builder
       .header("Content-Type", "application/json")
       .body(body)
-      .unwrap()
       .send();
 
-    let mut response = if let Err(res) = request {
+    let response = if let Err(res) = request {
       print_message(PrintMessageType::Error, res.to_string().as_str());
       exit(1);
     } else {
@@ -2197,10 +2208,11 @@ pub trait MediaCenter {
     }
   }
 
-  fn post(&mut self, url: String, body: String) -> Result<Response<Body>, String> {
+  fn post(&mut self, url: String, body: String) -> Result<Response, String> {
     let url = format!("{}{}", self.get_address(), url);
     let headers = self.get_headers();
-    let mut builder = Request::post(url).timeout(Duration::from_secs(15));
+    let client = Client::new();
+    let mut builder = client.post(url).timeout(Duration::from_secs(15));
     if headers.len() == 1 {
       let authorization_1 = headers.get(0).unwrap();
       builder = builder.header(authorization_1.clone().0, authorization_1.clone().1);
@@ -2214,10 +2226,9 @@ pub trait MediaCenter {
     let request = builder
       .header("Content-Type", "application/json")
       .body(body)
-      .unwrap()
       .send();
 
-    let mut response = if let Err(res) = request {
+    let response = if let Err(res) = request {
       return Err(res.to_string());
     } else {
       request.unwrap()
@@ -2226,6 +2237,40 @@ pub trait MediaCenter {
     match response.status() {
       StatusCode::OK | StatusCode::NO_CONTENT => Ok(response),
       _ => Err(response.text().unwrap()),
+    }
+  }
+
+  // Since reqwest::blocking::client isn't allowed in an asynchronous context >~<
+  async fn async_post(&mut self, url: String, body: String) -> Result<reqwest::Response, String> {
+    let url = format!("{}{}", self.get_address(), url);
+    let headers = self.get_headers();
+    let client = reqwest::Client::new();
+    let mut builder = client.post(url).timeout(Duration::from_secs(15));
+    if headers.len() == 1 {
+      let authorization_1 = headers.get(0).unwrap();
+      builder = builder.header(authorization_1.clone().0, authorization_1.clone().1);
+    } else {
+      let authorization_2 = headers.get(1).unwrap();
+      let request_headers = headers.get(2).unwrap();
+      builder = builder.header(authorization_2.clone().0, authorization_2.clone().1);
+      builder = builder.header(String::from("X-Application"), request_headers.clone().0);
+      builder = builder.header(String::from("X-Emby-Token"), request_headers.clone().1);
+    }
+    let request = builder
+      .header("Content-Type", "application/json")
+      .body(body)
+      .send()
+      .await;
+
+    let response = if let Err(res) = request {
+      return Err(res.to_string());
+    } else {
+      request.unwrap()
+    };
+
+    match response.status() {
+      StatusCode::OK | StatusCode::NO_CONTENT => Ok(response),
+      _ => Err(response.text().await.unwrap()),
     }
   }
 

@@ -1,13 +1,3 @@
-use crate::{
-  APPNAME,
-  discord::DiscordClient,
-  input::clear_stdin,
-  media_center::{Item, MediaCenter, PlaybackInfo},
-  media_config::MediaCenterType,
-  printing::{PrintMessageType, print_message},
-  puddler_settings::PuddlerSettings,
-};
-use crate::{media_center::ToStringAdv, media_config::Config, plex::PlexItem};
 use futures::{
   SinkExt, StreamExt,
   stream::{SplitSink, SplitStream},
@@ -23,6 +13,19 @@ use tokio::{net::TcpStream, sync::mpsc};
 use tokio_tungstenite::{
   MaybeTlsStream, WebSocketStream, connect_async,
   tungstenite::{Message, Utf8Bytes},
+};
+
+use crate::{
+  APPNAME,
+  discord::DiscordClient,
+  input::clear_stdin,
+  media_center::ToStringAdv,
+  media_center::{Item, MediaCenter, PlaybackInfo},
+  media_config::Config,
+  media_config::MediaCenterType,
+  plex::PlexItem,
+  printing::{PrintMessageType, print_message},
+  puddler_settings::PuddlerSettings,
 };
 
 #[derive(Clone, PartialEq)]
@@ -361,7 +364,9 @@ impl Player {
       .command("loadfile", &[&video.stream_url])
       .expect("Failed to load file.");
 
-    media_center.start_playback(video.clone().id, video.playback_position);
+    media_center
+      .start_playback(video.clone().id, video.playback_position)
+      .await;
 
     for shader in &self.settings.glsl_shaders {
       mpv
@@ -441,12 +446,14 @@ impl Player {
             }
           },
           Event::Shutdown | Event::EndFile(_) => {
-            video.played = media_center.stop_playback(
-              video.clone().id,
-              video.clone().playback_position,
-              video.clone().total_runtime,
-              old_pos,
-            );
+            video.played = media_center
+              .stop_playback(
+                video.clone().id,
+                video.clone().playback_position,
+                video.clone().total_runtime,
+                old_pos,
+              )
+              .await;
             if self.settings.discord_presence {
               discord.stop();
             }
@@ -488,17 +495,19 @@ impl Player {
           if paused {
             paused = false;
           }
-          media_center.report_playback(
-            video.clone().id,
-            video.playback_position,
-            current_time,
-            audio_track,
-            sub_track,
-            paused,
-            muted,
-            volume_level,
-            &mut input,
-          );
+          media_center
+            .report_playback(
+              video.clone().id,
+              video.playback_position,
+              current_time,
+              audio_track,
+              sub_track,
+              paused,
+              muted,
+              volume_level,
+              &mut input,
+            )
+            .await;
           if self.settings.discord_presence {
             if video.video_type == VideoType::Movie {
               discord.update_presence(
@@ -524,17 +533,19 @@ impl Player {
             continue;
           }
           paused = true;
-          media_center.report_playback(
-            video.clone().id,
-            video.playback_position,
-            current_time,
-            audio_track,
-            sub_track,
-            paused,
-            muted,
-            volume_level,
-            &mut input,
-          );
+          media_center
+            .report_playback(
+              video.clone().id,
+              video.playback_position,
+              current_time,
+              audio_track,
+              sub_track,
+              paused,
+              muted,
+              volume_level,
+              &mut input,
+            )
+            .await;
           if self.settings.discord_presence {
             if video.video_type == VideoType::Movie {
               discord.pause(

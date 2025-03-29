@@ -1,9 +1,8 @@
-use std::io::{stderr, stdout};
-
 use crossterm::{
   execute,
   style::{Attribute, Color, Colors, Print, ResetColor, SetAttribute, SetColors},
 };
+use std::io::{stderr, stdout};
 
 pub enum PrintMessageType {
   Warning,

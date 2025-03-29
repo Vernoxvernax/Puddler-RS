@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use crossterm::{
   cursor::{Hide, MoveToColumn, RestorePosition, SavePosition, Show},
@@ -8,11 +9,12 @@ use crossterm::{
     LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
   },
 };
-use isahc::{
-  Body, ReadResponseExt, Request, RequestExt, Response, config::Configurable, http::StatusCode,
-};
 use isolanguage_1::LanguageCode;
 use regex::Regex;
+use reqwest::{
+  StatusCode,
+  blocking::{Client, Response},
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
@@ -369,6 +371,7 @@ impl ToString for PlexItem {
   }
 }
 
+#[async_trait]
 impl MediaCenter for PlexServer {
   fn new(mut config: Config, settings: PuddlerSettings) -> Self {
     PlexServer {
@@ -551,7 +554,7 @@ impl MediaCenter for PlexServer {
     }
   }
 
-  fn get(&mut self, mut url: String) -> Result<Response<Body>, Response<Body>> {
+  fn get(&mut self, mut url: String) -> Result<Response, Response> {
     let user = self.get_config_handle().get_active_user().unwrap();
     if !url.contains('?') {
       url.push('?')
@@ -565,12 +568,12 @@ impl MediaCenter for PlexServer {
       user.access_token,
       self.config_handle.get_device_id()
     );
-    let request = Request::get(url.clone())
+    let client = Client::new();
+    let request = client
+      .get(url.clone())
       .timeout(Duration::from_secs(15))
       .header("Content-Type", "application/json")
       .header("accept", "application/json")
-      .body(())
-      .unwrap()
       .send();
 
     let response = if let Err(res) = request {
@@ -586,7 +589,7 @@ impl MediaCenter for PlexServer {
     }
   }
 
-  fn report_playback(
+  async fn report_playback(
     &mut self,
     item_id: String,
     playbackpositionticks: u64,
@@ -635,11 +638,11 @@ impl MediaCenter for PlexServer {
     }
   }
 
-  fn start_playback(&mut self, _item_id: String, _playbackpositionticks: u64) {
+  async fn start_playback(&mut self, _item_id: String, _playbackpositionticks: u64) {
     // yea I don't think this is necessary at all for plex.
   }
 
-  fn stop_playback(
+  async fn stop_playback(
     &mut self,
     item_id: String,
     playbackpositionticks: u64,
@@ -675,7 +678,7 @@ impl MediaCenter for PlexServer {
     url += "&state=stopped";
     url += "&hasMDE=1";
 
-    if let Err(err) = self.get(url) {
+    if let Err(err) = self.async_get(url).await {
       print_message(
         PrintMessageType::Error,
         format!("Failed to report PlaySession as stopped: {}", err.status()).as_str(),
@@ -687,7 +690,9 @@ impl MediaCenter for PlexServer {
       (((total_runtime * 1000) as f64) - time_position as f64) / ((total_runtime * 1000) as f64);
     if difference < 0.15 {
       // watched more than 75%
-      self.item_set_playstate(playback_info.ratingKey, true);
+      self
+        .async_item_set_playstate(playback_info.ratingKey, true)
+        .await;
       // yeah I guess it could fail but who cares.
       print_message(PrintMessageType::Success, "Marked item as [Played].");
       return true;
@@ -717,7 +722,9 @@ impl MediaCenter for PlexServer {
         formatted
       )
     } else {
-      self.item_set_playstate(playback_info.ratingKey, false);
+      self
+        .async_item_set_playstate(playback_info.ratingKey, false)
+        .await;
       success_message = "Playback progress of this item has not been changed.".to_string();
     }
     print_message(PrintMessageType::Success, &success_message);
@@ -751,6 +758,59 @@ impl PlexServer {
         }
         index += 1;
       }
+    }
+  }
+
+  // Just like `async_post`. reqwest::blocking::client isn't allowed in an asynchronous context -_-
+  async fn async_get(&mut self, mut url: String) -> Result<reqwest::Response, reqwest::Response> {
+    let user = self.get_config_handle().get_active_user().unwrap();
+    if !url.contains('?') {
+      url.push('?')
+    } else if !url.ends_with('&') {
+      url.push('&')
+    }
+    let url = format!(
+      "{}{}X-Plex-Token={}&X-Plex-Client-Identifier={}",
+      self.get_address(),
+      url,
+      user.access_token,
+      self.config_handle.get_device_id()
+    );
+    let client = reqwest::Client::new();
+    let request = client
+      .get(url.clone())
+      .timeout(Duration::from_secs(15))
+      .header("Content-Type", "application/json")
+      .header("accept", "application/json")
+      .send()
+      .await;
+
+    let response = if let Err(res) = request {
+      print_message(PrintMessageType::Error, res.to_string().as_str());
+      exit(1);
+    } else {
+      request.unwrap()
+    };
+
+    match response.status() {
+      StatusCode::OK => Ok(response),
+      _ => Err(response),
+    }
+  }
+
+  async fn async_item_set_playstate(&mut self, key: String, played: bool) {
+    let status_str = if played { "Played" } else { "Un-Played" };
+    let mut url = if played {
+      String::from(":/scrobble")
+    } else {
+      String::from(":/unscrobble")
+    };
+    url += &format!("?identifier=com.plexapp.plugins.library&key={}", key);
+    if let Err(err) = self.async_get(url).await {
+      print_message(
+        PrintMessageType::Error,
+        format!("Failed to mark item as {}: {}", status_str, err.status()).as_str(),
+      );
     }
   }
 
@@ -931,7 +991,7 @@ impl PlexServer {
     let device_id = self.get_config_handle().get_device_id();
     let url = format!("api/v2/user?X-Plex-Token={}", access_token);
     match plex_tv(RequestType::Get, None, device_id, url) {
-      Ok(mut req) => {
+      Ok(req) => {
         if let Ok(json) = serde_json::from_str::<PlexTVUser>(&req.text().unwrap()) {
           Ok(json)
         } else {
@@ -1323,7 +1383,7 @@ impl PlexServer {
     decision_url += "&path=";
     decision_url += &urlencoding::encode(&format!("/library/metadata/{}", metadata_key));
 
-    if let Err(mut err) = self.get(decision_url) {
+    if let Err(err) = self.get(decision_url) {
       print_message(
         PrintMessageType::Error,
         format!(
@@ -1337,7 +1397,7 @@ impl PlexServer {
     Ok(())
   }
 
-  fn put(&mut self, mut url: String) -> Result<Response<Body>, Response<Body>> {
+  fn put(&mut self, mut url: String) -> Result<Response, Response> {
     let user = self.get_config_handle().get_active_user().unwrap();
     if !url.contains('?') {
       url.push('?')
@@ -1351,12 +1411,12 @@ impl PlexServer {
       user.access_token,
       self.config_handle.get_device_id()
     );
-    let request = Request::put(url)
+    let client = Client::new();
+    let request = client
+      .put(url)
       .timeout(Duration::from_secs(15))
       .header("Content-Type", "application/json")
       .header("accept", "application/json")
-      .body(())
-      .unwrap()
       .send();
 
     let response = if let Err(res) = request {
@@ -1526,7 +1586,7 @@ impl PlexServer {
   fn get_item(&mut self, ratingKey: String) -> Result<PlexItem, ()> {
     let url = format!("library/metadata/{}", ratingKey);
     match self.get(url.clone()) {
-      Ok(mut result) => {
+      Ok(result) => {
         if let Ok(library) = serde_json::from_str::<PlexLibrary>(&result.text().unwrap()) {
           if let Some(items) = library.MediaContainer.Metadata {
             return Ok(items[0].clone());
@@ -1538,7 +1598,7 @@ impl PlexServer {
           );
         }
       },
-      Err(mut e) => {
+      Err(e) => {
         print_message(
           PrintMessageType::Error,
           format!(
@@ -1555,7 +1615,7 @@ impl PlexServer {
 
   fn get_items(&mut self, url: String, hubs: bool) -> Result<Vec<PlexItem>, ()> {
     match self.get(url.clone()) {
-      Ok(mut result) => {
+      Ok(result) => {
         if let Ok(library) = serde_json::from_str::<PlexLibrary>(&result.text().unwrap()) {
           if hubs {
             let mut all_items: Vec<PlexItem> = vec![];
@@ -1582,7 +1642,7 @@ impl PlexServer {
           );
         }
       },
-      Err(mut e) => {
+      Err(e) => {
         print_message(
           PrintMessageType::Error,
           format!(
@@ -1607,7 +1667,7 @@ impl PlexServer {
     thread::spawn(move || {
       let mut pin: Option<PlexCreatePin> = None;
       loop {
-        let req: Result<Response<Body>, Response<Body>>;
+        let req: Result<Response, Response>;
         if let Some(ref old_pin) = pin {
           let get_url = format!("pins/{}.json{}", old_pin.id, queries);
           req = plex_tv(RequestType::Get, None, device_id.clone(), get_url);
@@ -1617,7 +1677,7 @@ impl PlexServer {
         }
         let new_pin: PlexCreatePin;
         match req {
-          Ok(mut response) => {
+          Ok(response) => {
             let json = serde_json::from_str::<Value>(&response.text().unwrap()).unwrap();
             if let Ok(res_pin) =
               serde_json::from_value::<PlexCreatePin>(json.get("pin").unwrap().clone())
@@ -1684,7 +1744,7 @@ impl PlexServer {
     let server_name: String;
     let address: String;
     match plex_tv(RequestType::Get, None, device_id, url) {
-      Ok(mut response) => {
+      Ok(response) => {
         if let Ok(json) = serde_json::from_str::<Vec<PlexResources>>(&response.text().unwrap()) {
           let mut options: Vec<InteractiveOption> = vec![InteractiveOption {
             text: "Please choose which server you want to use (don't forget ports):".to_string(),
@@ -1825,7 +1885,7 @@ fn plex_tv(
   user: Option<UserConfig>,
   device_id: String,
   url: String,
-) -> Result<Response<Body>, Response<Body>> {
+) -> Result<Response, Response> {
   let mut modded_url = format!("https://plex.tv/{}", url);
   if modded_url.contains('?') {
     modded_url += "&";
@@ -1839,10 +1899,11 @@ fn plex_tv(
     modded_url += format!("&X-Plex-Token={}", user.access_token).as_str()
   }
 
+  let client = Client::new();
   let builder = if request_type == RequestType::Get {
-    Request::get(modded_url)
+    client.get(modded_url)
   } else {
-    Request::post(modded_url)
+    client.post(modded_url)
   };
 
   let request = builder
@@ -1850,8 +1911,6 @@ fn plex_tv(
     .header("Content-Type", "application/json")
     .header("accept", "application/json")
     .header("User-Agent", APPNAME)
-    .body(())
-    .unwrap()
     .send();
 
   let response = if let Err(res) = request {

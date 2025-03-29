@@ -9,12 +9,12 @@ use std::{
   path::{Path, PathBuf},
 };
 
-use crate::printing::PrintMessageType;
 use crate::{
   APPNAME,
   error::PuddlerSettingsError,
   input::{getch, take_string_input},
   media_config::get_mediacenter_folder,
+  printing::PrintMessageType,
   printing::print_message,
 };
 
