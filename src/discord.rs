@@ -92,6 +92,7 @@ impl DiscordClient {
             .set_activity(|a| {
               a.assets(|ass| ass.large_image(media_server_name).small_image("pause2"))
                 .details(&state)
+                ._type(discord_presence::models::ActivityType::Watching)
             })
             .ok();
         } else {
@@ -100,6 +101,7 @@ impl DiscordClient {
               a.assets(|ass| ass.large_image(media_server_name).small_image("pause2"))
                 .details(&details)
                 .state(&state)
+                ._type(discord_presence::models::ActivityType::Watching)
             })
             .ok();
         }
