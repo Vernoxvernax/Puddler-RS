@@ -15,4 +15,8 @@
 * Fix(plex): don't try to configure new media-server when being forced to re-authenticate
 * Fix: avoid empty lines when the options list is very small (temporary)
 * Fix(plex): make toggling the watching status of series items functional
-* Fix: the old deprecated config file
+* Fix: the old deprecated rust `.config` file
+* Fix(jellyfin): add support for multi episode files (S01E01-02)
+* Fix(rpc): keep status type as watching while paused
+* Chore: replace unmaintained isahc with reqwest
+* Fix(plex): (re)authentication bug
