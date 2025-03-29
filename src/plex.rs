@@ -444,7 +444,7 @@ impl MediaCenter for PlexServer {
     }
     let access_token = self.create_plex_user();
     let config = self.get_config_handle();
-    if config.get_address().is_none() {
+    if config.get_address().unwrap().is_empty() {
       self.choose_servers(access_token.clone());
       self.get_username(access_token);
     } else {
