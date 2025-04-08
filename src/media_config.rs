@@ -428,9 +428,9 @@ impl Config {
         }
       },
       Objective::Address => {
-        println!("What's the IP-Adress/Domain to connect to the server?");
+        println!("Enter the IP-Adress/Domain to connect to the server (no .html!):");
         let address: String;
-        let reg = regex::Regex::new(r#"^(https?:\/\/)?((([0-9]{1,3}\.){3}([0-9]{1,3}))|([a-z]{3}\.)?([a-zA-Z]+)(\.([a-z]{2,}))+)(:[0-9]{1,5})?(\/[a-zA-Z0-9]+)*\/?$"#).unwrap();
+        let reg = regex::Regex::new(r#"^(https?:\/\/)?((([0-9]{1,3}\.){3}([0-9]{1,3})(\:[0-9]{1,5})?)|((([a-zA-Z-_])+\.)+[a-z]+))(\/([a-zA-Z0-9-_.~])*)*$"#).unwrap();
         loop {
           let temp = take_string_input(vec![]);
           if reg.is_match(&temp) {
