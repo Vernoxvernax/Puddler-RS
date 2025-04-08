@@ -16,7 +16,7 @@ use reqwest::{
   blocking::{Client, Response},
 };
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use serde_json::Value;
 use std::{
   fmt,
   io::{Write, stdin, stdout},
@@ -2045,7 +2045,7 @@ pub trait MediaCenter: Send {
       match self.post(url.clone(), body.clone()) {
         Ok(res) => {
           println!("{}", "🗸".green());
-          let json_response = json!(&res.text().unwrap());
+          let json_response = serde_json::from_str::<Value>(&res.text().unwrap()).unwrap();
           let session_obj = json_response.get("SessionInfo").unwrap();
           let user = UserConfig {
             access_token: json_response["AccessToken"].as_str().unwrap().to_string(),
