@@ -235,8 +235,18 @@ impl Config {
         if !temp.address.ends_with('/') {
           temp.address.push('/');
         }
+
+        // We assume that if the address doesn't include http or https, it's likely http for ip addresses and https for domains.
+        // Another option is maybe to just make a request and check for `301 Moved Permanently`.
         if !temp.address.starts_with("http://") && !temp.address.starts_with("https://") {
-          temp.address = format!("http://{}", temp.address);
+          // Check for an ip address since "192.168" is apparently a valid domain.
+          let reg =
+            regex::Regex::new(r#"^(([0-9]{1,3}\.){3}([0-9]{1,3})(\:[0-9]{1,5})?).*"#).unwrap();
+          if reg.is_match(&temp.address) {
+            temp.address = format!("http://{}", temp.address);
+          } else {
+            temp.address = format!("https://{}", temp.address);
+          }
         }
       },
       Objective::Users => {
@@ -428,9 +438,11 @@ impl Config {
         }
       },
       Objective::Address => {
-        println!("Enter the IP-Adress/Domain to connect to the server (no .html!):");
+        println!(
+          "Enter the IP-Adress/Domain to connect to the server (example: https://demo.jellyfin.org/; no .html!):"
+        );
         let address: String;
-        let reg = regex::Regex::new(r#"^(https?:\/\/)?((([0-9]{1,3}\.){3}([0-9]{1,3})(\:[0-9]{1,5})?)|((([a-zA-Z-_])+\.)+[a-z]+))(\/([a-zA-Z0-9-_.~])*)*$"#).unwrap();
+        let reg = regex::Regex::new(r#"^(https?:\/\/)?((([0-9]{1,3}\.){3}([0-9]{1,3}))|((([a-zA-Z-_0-9])+\.)+[a-zA-Z0-9-]+))(\:[0-9]{1,5})?(\/([a-zA-Z0-9-_.~])*)*$"#).unwrap();
         loop {
           let temp = take_string_input(vec![]);
           if reg.is_match(&temp) {

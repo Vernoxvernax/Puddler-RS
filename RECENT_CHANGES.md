@@ -20,3 +20,6 @@
 * Fix(rpc): keep status type as watching while paused
 * Chore: replace unmaintained isahc with reqwest
 * Fix(plex): (re)authentication bug
+* [#18]: fix: use from_str for json struct instead of json!
+* [#19]: fix: rewrite regex to support all domains and ip addresses the user could possibly present
+* fix: if missing, automatically add `http` in front of ip addresses and `https` infront of domains
