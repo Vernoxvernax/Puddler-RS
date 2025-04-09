@@ -343,7 +343,11 @@ pub trait ToStringAdv {
 impl ToStringAdv for Item {
   fn to_string_split(&self) -> Vec<String> {
     let time = if let (Some(start), Some(end)) = (self.PremiereDate.clone(), self.EndDate.clone()) {
-      format!("({}-{})", &start[0..4], &end[0..4])
+      if start[0..4] == end[0..4] {
+        format!("({})", &start[0..4])
+      } else {
+        format!("({}-{})", &start[0..4], &end[0..4])
+      }
     } else if self.Status == Some(String::from("Continuing")) {
       format!(
         "({}-)",
@@ -431,7 +435,11 @@ impl ToStringAdv for Item {
 impl ToString for Item {
   fn to_string(&self) -> String {
     let time = if let (Some(start), Some(end)) = (self.PremiereDate.clone(), self.EndDate.clone()) {
-      format!("({}-{})", &start[0..4], &end[0..4])
+      if start[0..4] == end[0..4] {
+        format!("({})", &start[0..4])
+      } else {
+        format!("({}-{})", &start[0..4], &end[0..4])
+      }
     } else if self.Status == Some(String::from("Continuing")) {
       format!(
         "({}-)",
