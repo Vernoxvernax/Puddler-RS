@@ -87,7 +87,7 @@ pub struct Item {
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct MediaSourceInfo {
   pub Id: String,
-  pub Path: String,
+  pub Path: Option<String>,
   pub SupportsTranscoding: bool,
   pub MediaStreams: Vec<MediaStream>,
   pub Bitrate: Option<u64>,
@@ -990,15 +990,12 @@ pub trait MediaCenter: Send {
         option_type: InteractiveOptionType::Header,
       }];
       for mediasource in mediasource_list.clone() {
-        options.push(InteractiveOption {
-          text: mediasource
-            .Path
-            .split_terminator('/')
-            .last()
-            .unwrap()
-            .to_string(),
-          option_type: InteractiveOptionType::Button,
-        });
+        if let Some(path) = mediasource.Path {
+          options.push(InteractiveOption {
+            text: path.split_terminator('/').last().unwrap().to_string(),
+            option_type: InteractiveOptionType::Button,
+          });
+        }
       }
       let ((index, _), ..) = interactive_select(options);
       mediasource_index = index;
