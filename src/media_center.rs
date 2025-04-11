@@ -993,8 +993,9 @@ pub trait MediaCenter: Send {
 
     // This is the only setting which isn't saved across the playlist. Don't really see the point in that tbh.
     if mediasource_list.len() > 1 {
+      print!("\n");
       let mut options: Vec<InteractiveOption> = vec![InteractiveOption {
-        text: "\nPlease select from the following files:".to_string(),
+        text: "Please select from the following files:".to_string(),
         option_type: InteractiveOptionType::Header,
       }];
       for mediasource in mediasource_list.clone() {
