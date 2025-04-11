@@ -177,7 +177,6 @@ impl Player {
     }
 
     let media_source = playback_info.MediaSources.first().unwrap();
-
     let stream_url = if let Some(transcoding_url) = &media_source.TranscodingUrl {
       format!(
         "{}{}",
@@ -187,7 +186,7 @@ impl Player {
     } else {
       format!(
         "{}Videos/{}/stream?Container=mkv&Static=true&api_key={}",
-        server_address, item.Id, auth_token
+        server_address, media_source.Id, auth_token
       )
     };
 

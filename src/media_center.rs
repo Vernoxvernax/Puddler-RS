@@ -1385,7 +1385,10 @@ pub trait MediaCenter: Send {
       match self.get(url) {
         Ok(res) => {
           let search_text: &String = &res.text().unwrap();
-          Ok(serde_json::from_str::<PlaybackInfo>(search_text).unwrap())
+          // Jellyfin/Emby have all Mediasources in the response. We have to make it so that only the selected one from before is inside.
+          let mut playbackinfo = serde_json::from_str::<PlaybackInfo>(search_text).unwrap();
+          playbackinfo.MediaSources = vec![playbackinfo.MediaSources[mediasource_index].clone()];
+          Ok(playbackinfo)
         },
         Err(err) => {
           print_message(
