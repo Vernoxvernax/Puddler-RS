@@ -115,8 +115,6 @@ pub struct PlexMediaFile {
   bitrate: u64,
   width: u64,
   height: u64,
-  audioChannels: u8,
-  audioCodec: String,
   videoCodec: String,
   deletedAt: Option<u64>,
   pub Part: Vec<PlexMediaPart>,
