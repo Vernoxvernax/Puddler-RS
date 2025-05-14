@@ -628,7 +628,7 @@ impl MediaCenter for PlexServer {
     url += &format!("&X-Plex-Product={}&X-Plex-Device-Name={}", APPNAME, VERSION);
     url += "&hasMDE=1";
 
-    if let Err(err) = self.get(url) {
+    if let Err(err) = self.async_get(url).await {
       print_message(
         PrintMessageType::Error,
         format!("Failed to report PlaySession: {}", err.status()).as_str(),
