@@ -49,7 +49,7 @@ pub struct Video {
 
 pub struct Player {
   media_center_config: Config,
-  media_center: Option<Box<(dyn MediaCenter)>>,
+  media_center: Option<Box<dyn MediaCenter>>,
   settings: PuddlerSettings,
   video: Option<Video>,
 }
