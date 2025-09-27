@@ -27,7 +27,6 @@ use std::{
   thread,
   time::Duration,
 };
-use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
   APPNAME, VERSION,
@@ -1695,9 +1694,9 @@ pub trait MediaCenter: Send {
 
     let finished_obj: PlaybackStopInfo;
     let success_message: String;
-    let difference = (((total_runtime * 10000000) as f64) - time_position as f64)
-      / ((total_runtime * 10000000) as f64);
-    if difference < 0.15 {
+    let remaining_time = ((total_runtime * 10000000) as f64) - time_position as f64; // 1585000000 would be ~2min 30
+    let difference = remaining_time / ((total_runtime * 10000000) as f64);
+    if difference < 0.15 || (remaining_time / 10000000.0) <= 60.0 * 5.0 {
       // watched more than 75%
       let url = format!("Users/{}/PlayedItems/{}", user.user_id, item_id);
       match self.async_post(url, String::new()).await {
@@ -1712,7 +1711,7 @@ pub trait MediaCenter: Send {
         },
       }
       return true;
-    } else if difference < 0.85 {
+    } else if difference < 0.85 || time_as_secs >= 60.0 * 4.0 {
       // watched more than 15%
       finished_obj = PlaybackStopInfo {
         ItemId: item_id,
@@ -1787,7 +1786,6 @@ pub trait MediaCenter: Send {
     paused: bool,
     muted: bool,
     volume_level: u32,
-    _socket: &mut UnboundedSender<String>,
   ) {
     let playback_info = self.get_playback_info();
     let session_id = self.get_session_id().expect("This shouldn't be None!");

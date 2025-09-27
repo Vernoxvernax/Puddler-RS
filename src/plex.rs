@@ -26,7 +26,6 @@ use std::{
   thread::{self, sleep},
   time::Duration,
 };
-use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
   APPNAME, VERSION,
@@ -597,7 +596,6 @@ impl MediaCenter for PlexServer {
     paused: bool,
     _muted: bool,
     _volume_level: u32,
-    _socket: &mut UnboundedSender<String>,
   ) {
     let playback_info = self.get_plex_playback_info();
     let state: &str = if paused { "paused" } else { "playing" };
