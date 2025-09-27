@@ -279,11 +279,6 @@ struct DeviceProfile {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-struct DirectPlayProfile {
-  Type: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
 struct TranscodingProfile {
   Container: String,
   Type: String,
