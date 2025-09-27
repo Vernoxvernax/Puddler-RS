@@ -6,10 +6,9 @@ use libmpv::{Mpv, events::Event};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
-  thread::{self},
   time::Duration,
 };
-use tokio::{net::TcpStream, sync::mpsc};
+use tokio::{net::TcpStream, sync::mpsc::{self}};
 use tokio_tungstenite::{
   MaybeTlsStream, WebSocketStream, connect_async,
   tungstenite::{Message, Utf8Bytes},
@@ -296,7 +295,7 @@ impl Player {
 
     let config = &handle.config;
 
-    let (mut input, _websocket_output) = mpsc::unbounded_channel();
+    let (input, _websocket_output) = mpsc::unbounded_channel::<String>();
     let (websocket_input, mut output) = mpsc::unbounded_channel();
     let websocket_read_handle = tokio::spawn(async move {
       websocket_read(websocket_reader, websocket_input).await;
@@ -504,7 +503,6 @@ impl Player {
               paused,
               muted,
               volume_level,
-              &mut input,
             )
             .await;
           if self.settings.discord_presence {
@@ -542,7 +540,6 @@ impl Player {
               paused,
               muted,
               volume_level,
-              &mut input,
             )
             .await;
           if self.settings.discord_presence {
@@ -564,7 +561,7 @@ impl Player {
         }
         last_time_update = current_time;
       }
-      thread::sleep(Duration::from_millis(500));
+      tokio::time::sleep(Duration::from_millis(500)).await;
     }
     if !input.is_closed() {
       input.send("stop".to_string()).unwrap()
