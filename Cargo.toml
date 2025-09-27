@@ -8,20 +8,20 @@ async-trait = "0.1.88"
 chrono = { version = "0.4.40", features = ["serde"] }
 clap = "4.5.35"
 colored = "3.0.0"
-config = "0.15.11"
+config = "0.15.17"
 crossterm = "0.29.0"
 dirs = "6.0.0"
-discord-presence = { version = "1.5.1", features = [ "activity_type" ] }
+discord-presence = "2.1.0"
 futures = "0.3.31"
 isolanguage-1 = { version = "0.2.3", git = "https://github.com/Vernoxvernax/isolanguage-1.git" }
 libmpv-sirno = "2.0.2-fork.1"
-regex = "1.11.1"
+regex = "1.11.3"
 reqwest = { version = "0.12.15", features = ["blocking"] }
 serde = "1.0.219"
-serde_derive = "1.0.219"
+serde_derive = "1.0.227"
 serde_json = "1.0.140"
 tokio = { version = "1.44.2", features = ["full"] }
-tokio-tungstenite = { version = "0.26.2", features = ["native-tls"] }
-toml = "0.8.20"
+tokio-tungstenite = { version = "0.28.0", features = ["native-tls"] }
+toml = "0.9.7"
 urlencoding = "2.1.3"
 uuid = { version = "1.16.0", features = ["v4"] }

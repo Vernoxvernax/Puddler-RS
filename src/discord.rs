@@ -67,7 +67,7 @@ impl DiscordClient {
             a.assets(|ass| ass.small_image(media_server_name))
               .timestamps(|time| time.start(start.round() as u64).end(end.round() as u64))
               .state(&state)
-              ._type(discord_presence::models::ActivityType::Watching)
+              .activity_type(discord_presence::models::ActivityType::Watching)
           });
         } else {
           let _ = discord_client.set_activity(|a| {
@@ -75,7 +75,7 @@ impl DiscordClient {
               .timestamps(|time| time.start(start.round() as u64).end(end.round() as u64))
               .details(&details)
               .state(&state)
-              ._type(discord_presence::models::ActivityType::Watching)
+              .activity_type(discord_presence::models::ActivityType::Watching)
           });
         }
       }
@@ -92,7 +92,7 @@ impl DiscordClient {
             .set_activity(|a| {
               a.assets(|ass| ass.large_image(media_server_name).small_image("pause2"))
                 .details(&state)
-                ._type(discord_presence::models::ActivityType::Watching)
+                .activity_type(discord_presence::models::ActivityType::Watching)
             })
             .ok();
         } else {
@@ -101,7 +101,7 @@ impl DiscordClient {
               a.assets(|ass| ass.large_image(media_server_name).small_image("pause2"))
                 .details(&details)
                 .state(&state)
-                ._type(discord_presence::models::ActivityType::Watching)
+                .activity_type(discord_presence::models::ActivityType::Watching)
             })
             .ok();
         }
