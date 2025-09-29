@@ -654,45 +654,21 @@ impl MediaCenter for PlexServer {
       time_as_secs += playbackpositionticks as f64;
     };
 
-    let mut url = ":/timeline".to_string();
-    url += &format!(
-      "?X-Plex-Platform={}",
-      urlencoding::encode("Plex Home Theater")
-    ); // bad request if this is missing
-    url += &format!("&ratingKey={}", item_id);
-    url += &format!(
-      "&key={}{}",
-      urlencoding::encode("/library/metadata/"),
-      item_id
-    );
-    url += &format!("&time={}", time_position);
-    url += &format!(
-      "&duration={}",
-      playback_info.Media.unwrap()[0].Part[0].duration
-    );
-    url += &format!("&X-Plex-Product={}&X-Plex-Device-Name={}", APPNAME, VERSION);
-    url += "&state=stopped";
-    url += "&hasMDE=1";
-
-    if let Err(err) = self.async_get(url).await {
-      print_message(
-        PrintMessageType::Error,
-        format!("Failed to report PlaySession as stopped: {}", err.status()).as_str(),
-      );
-    }
-
     let success_message: String;
     let difference =
       (((total_runtime * 1000) as f64) - time_position as f64) / ((total_runtime * 1000) as f64);
-    if difference < 0.15 {
+
+    let remaining_time = ((total_runtime * 1000) as f64) - time_position as f64; // 1585000000 would be ~2min 30
+    // let difference = remaining_time / ((total_runtime * 10000000) as f64);
+    if difference < 0.15 || (remaining_time / 1000.0) <= 60.0 * 5.0 {
       // watched more than 75%
       self
         .async_item_set_playstate(playback_info.ratingKey, true)
         .await;
       // yeah I guess it could fail but who cares.
       print_message(PrintMessageType::Success, "Marked item as [Played].");
-      return true;
-    } else if difference < 0.85 {
+      true
+    } else if difference < 0.85 || time_as_secs >= 60.0 * 4.0 {
       // watched more than 15%
       let formatted: String = if time_as_secs > 60.0 {
         if (time_as_secs / 60.0) > 60.0 {
@@ -713,18 +689,52 @@ impl MediaCenter for PlexServer {
       } else {
         time_as_secs.to_string()
       };
+
+      let mut url = ":/timeline".to_string();
+      url += &format!(
+        "?X-Plex-Platform={}",
+        urlencoding::encode("Plex Home Theater")
+      ); // bad request if this is missing
+      url += &format!("&ratingKey={}", item_id);
+      url += &format!(
+        "&key={}{}",
+        urlencoding::encode("/library/metadata/"),
+        item_id
+      );
+      url += &format!("&time={}", time_position);
+      url += &format!(
+        "&duration={}",
+        playback_info.Media.unwrap()[0].Part[0].duration
+      );
+      url += &format!("&X-Plex-Product={}&X-Plex-Device-Name={}", APPNAME, VERSION);
+      url += "&state=stopped";
+      url += "&hasMDE=1";
+
       success_message = format!(
         "Playback progress ({}) has been sent to your server.",
         formatted
-      )
+      );
+
+      match self.async_get(url).await {
+        Ok(_) => {
+          print_message(PrintMessageType::Success, &success_message);
+        },
+        Err(err) => {
+          print_message(
+            PrintMessageType::Error,
+            format!("Failed to log playback progress to your server: {}", err.status()).as_str(),
+          );
+        },
+      }
+      false
     } else {
       self
         .async_item_set_playstate(playback_info.ratingKey, false)
         .await;
       success_message = "Playback progress of this item has not been changed.".to_string();
+      print_message(PrintMessageType::Success, &success_message);
+      false
     }
-    print_message(PrintMessageType::Success, &success_message);
-    false
   }
 
   fn item_set_playstate(&mut self, key: String, played: bool) {
