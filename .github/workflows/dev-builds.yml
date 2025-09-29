@@ -29,7 +29,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt update
-        sudo apt install libmpv-dev gcc-mingw-w64 7z -y
+        sudo apt install libmpv-dev gcc-mingw-w64 7zip -y
         rustup target add x86_64-pc-windows-gnu
 
     - name: Get libmpv for the windows build
