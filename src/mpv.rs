@@ -2,7 +2,7 @@ use futures::{
   SinkExt, StreamExt,
   stream::{SplitSink, SplitStream},
 };
-use libmpv::{Mpv, events::Event};
+use libmpv2::{Mpv, events::Event};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
@@ -316,7 +316,7 @@ impl Player {
       config.media_center_type.to_string()
     );
 
-    let mpv = Mpv::new().expect("Failed to create mpv handle!");
+    let mut mpv = Mpv::new().expect("Failed to create mpv handle!");
 
     if let Some(path) = &self.settings.mpv_config_location {
       mpv.set_property("config-dir", path.clone()).unwrap();
@@ -353,8 +353,7 @@ impl Player {
       .set_property("title", mpv_title)
       .expect("Failed to configure title.");
 
-    let mut ctx = mpv.create_event_context();
-    ctx
+    mpv
       .disable_deprecated_events()
       .expect("Failed to disable deprecated events.");
 
@@ -400,11 +399,11 @@ impl Player {
             match json_message.Data.get("Command").unwrap().as_str().unwrap() {
               "PlayPause" => {
                 if paused {
-                  mpv.unpause().unwrap();
+                  mpv.set_property("pause", false).unwrap();
                   paused = false;
                   old_pos -= 16.0;
                 } else {
-                  mpv.pause().unwrap();
+                  mpv.set_property("pause", true).unwrap();
                   paused = true;
                 }
               },
@@ -416,7 +415,7 @@ impl Player {
           }
         }
       }
-      while let Some(event_res) = ctx.wait_event(0.0) {
+      while let Some(event_res) = mpv.wait_event(0.0) {
         let event = if let Ok(event) = event_res {
           event
         } else {
@@ -465,7 +464,7 @@ impl Player {
           },
         }
       }
-      let result: Result<f64, libmpv::Error> = mpv.get_property("time-pos");
+      let result: Result<f64, libmpv2::Error> = mpv.get_property("time-pos");
       if let Ok(current_time) = result {
         if let Ok(track) = mpv.get_property::<String>("current-tracks/audio/src-id") {
           audio_track = track.parse::<u32>().unwrap();

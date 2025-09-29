@@ -14,11 +14,11 @@ dirs = "6.0.0"
 discord-presence = "2.1.0"
 futures = "0.3.31"
 isolanguage-1 = { version = "0.2.3", git = "https://github.com/Vernoxvernax/isolanguage-1.git" }
-libmpv-sirno = "2.0.2-fork.1"
+libmpv2 = { git = "https://github.com/Vernoxvernax/libmpv2-rs.git", version = "5.0.1", features = ["build_libmpv"] }
 regex = "1.11.3"
 reqwest = { version = "0.12.15", features = ["blocking"] }
-serde = "1.0.219"
-serde_derive = "1.0.227"
+serde = "1.0.228"
+serde_derive = "1.0.228"
 serde_json = "1.0.140"
 tokio = { version = "1.44.2", features = ["full"] }
 tokio-tungstenite = { version = "0.28.0", features = ["native-tls"] }

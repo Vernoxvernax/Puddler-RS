@@ -11,8 +11,6 @@ on:
       - ".github/workflows/**.yml"
       - "src/**.rs"
       - "./Cargo.toml"
-      - "./mpv/**.lib" # Will hopefully soon be removed when I finally get to create the damn lib file in a CI
-      - ".cargo/**"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -31,14 +29,20 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt update
-        sudo apt install libmpv-dev gcc-mingw-w64 -y
+        sudo apt install libmpv-dev gcc-mingw-w64 7z -y
         rustup target add x86_64-pc-windows-gnu
-    
+
+    - name: Get libmpv for the windows build
+      run: |
+        wget https://downloads.sourceforge.net/project/mpv-player-windows/libmpv/mpv-dev-x86_64-20250928-git-db2b436.7z -O mpv.7z
+        7z e -y mpv.7z -o64
+
     - name: Build Linux and Windows bin
       run: |
+        export MPV_SOURCE="$(pwd)"
         cargo build --release
         cargo build --release --target=x86_64-pc-windows-gnu
-    
+
     - name: Rename artifacts
       run: |
         mv ./target/release/puddler puddler-${GITHUB_SHA::7}-dev
