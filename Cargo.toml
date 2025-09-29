@@ -14,7 +14,7 @@ dirs = "6.0.0"
 discord-presence = "2.1.0"
 futures = "0.3.31"
 isolanguage-1 = { version = "0.2.3", git = "https://github.com/Vernoxvernax/isolanguage-1.git" }
-libmpv2 = { git = "https://github.com/Vernoxvernax/libmpv2-rs.git", version = "5.0.1", features = ["build_libmpv"] }
+libmpv2 = { git = "https://github.com/Vernoxvernax/libmpv2-rs.git", version = "5.0.1" }
 regex = "1.11.3"
 reqwest = { version = "0.12.15", features = ["blocking"] }
 serde = "1.0.228"
@@ -25,3 +25,6 @@ tokio-tungstenite = { version = "0.28.0", features = ["native-tls"] }
 toml = "0.9.7"
 urlencoding = "2.1.3"
 uuid = { version = "1.16.0", features = ["v4"] }
+
+[target.'cfg(windows)'.dependencies]
+libmpv2 = { git = "https://github.com/Vernoxvernax/libmpv2-rs.git", version = "5.0.1", features = ["build_libmpv"] }
