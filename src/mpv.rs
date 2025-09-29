@@ -5,10 +5,11 @@ use futures::{
 use libmpv2::{Mpv, events::Event};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{
-  time::Duration,
+use std::time::Duration;
+use tokio::{
+  net::TcpStream,
+  sync::mpsc::{self},
 };
-use tokio::{net::TcpStream, sync::mpsc::{self}};
 use tokio_tungstenite::{
   MaybeTlsStream, WebSocketStream, connect_async,
   tungstenite::{Message, Utf8Bytes},

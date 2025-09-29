@@ -722,7 +722,11 @@ impl MediaCenter for PlexServer {
         Err(err) => {
           print_message(
             PrintMessageType::Error,
-            format!("Failed to log playback progress to your server: {}", err.status()).as_str(),
+            format!(
+              "Failed to log playback progress to your server: {}",
+              err.status()
+            )
+            .as_str(),
           );
         },
       }

@@ -6,7 +6,6 @@ on:
   push:
     branches:
       - dev
-      - "0.7.0"
     paths:
       - ".github/workflows/**.yml"
       - "src/**.rs"
