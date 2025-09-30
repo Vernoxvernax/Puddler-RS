@@ -9,10 +9,11 @@ use std::time::Duration;
 use tokio::{
   net::TcpStream,
   sync::mpsc::{self},
+  time::interval,
 };
 use tokio_tungstenite::{
   MaybeTlsStream, WebSocketStream, connect_async,
-  tungstenite::{Message, Utf8Bytes},
+  tungstenite::{Bytes, Message, Utf8Bytes},
 };
 
 use crate::{
@@ -263,7 +264,7 @@ impl Player {
     let media_center: &mut Box<dyn MediaCenter> = self.media_center.as_mut().unwrap();
 
     let mut websocket_reader = None;
-    let mut _websocket_sender = None;
+    let mut websocket_sender = None;
     if handle.config.media_center_type != MediaCenterType::Plex {
       let http_address = media_center.get_address();
       let protocol = if http_address.contains("https") {
@@ -289,7 +290,7 @@ impl Player {
       if let Ok((socket, _)) = connect_async(url).await {
         let (sender, reader) = socket.split();
         websocket_reader = Some(reader);
-        _websocket_sender = Some(sender);
+        websocket_sender = Some(sender);
       }
       // if this fails, remote control commands will not be available.
     }
@@ -304,6 +305,8 @@ impl Player {
     // let websocket_write_handle = tokio::spawn(async move {
     //   websocket_send(websocket_sender, websocket_output).await;
     // });
+
+    tokio::spawn(websocket_keepalive(websocket_sender));
 
     let media_title = format!(
       "{} | {}",
@@ -394,8 +397,7 @@ impl Player {
     let initial_preferences = (video.preferred_audio_track, video.preferred_subtitle_track);
     'main: loop {
       if let Ok(msg) = output.try_recv() {
-        let message = msg.to_string();
-        if let Ok(json_message) = serde_json::from_str::<WebSocketMessage>(&message.to_string()) {
+        if let Ok(json_message) = serde_json::from_str::<WebSocketMessage>(&msg) {
           if json_message.MessageType == "Playstate" {
             match json_message.Data.get("Command").unwrap().as_str().unwrap() {
               "PlayPause" => {
@@ -613,6 +615,21 @@ async fn _websocket_send(
           format!("Failed to send message through websocket: {}", err).as_str(),
         )
       };
+    }
+  }
+}
+
+async fn websocket_keepalive(
+  socket: Option<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>,
+) {
+  if let Some(mut sock) = socket {
+    let mut interv = interval(Duration::from_secs(60));
+    loop {
+      let _instant = interv.tick().await;
+      if let Err(e) = sock.send(Message::Ping(Bytes::new())).await {
+        eprintln!("Failed to send ping: {}", e);
+        break;
+      }
     }
   }
 }
