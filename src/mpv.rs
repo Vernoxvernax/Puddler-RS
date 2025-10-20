@@ -2,17 +2,18 @@ use futures::{
   SinkExt, StreamExt,
   stream::{SplitSink, SplitStream},
 };
-use libmpv::{Mpv, events::Event};
+use libmpv2::{Mpv, events::Event};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{
-  thread::{self},
-  time::Duration,
+use std::time::Duration;
+use tokio::{
+  net::TcpStream,
+  sync::mpsc::{self},
+  time::interval,
 };
-use tokio::{net::TcpStream, sync::mpsc};
 use tokio_tungstenite::{
   MaybeTlsStream, WebSocketStream, connect_async,
-  tungstenite::{Message, Utf8Bytes},
+  tungstenite::{Bytes, Message, Utf8Bytes},
 };
 
 use crate::{
@@ -50,7 +51,7 @@ pub struct Video {
 
 pub struct Player {
   media_center_config: Config,
-  media_center: Option<Box<(dyn MediaCenter)>>,
+  media_center: Option<Box<dyn MediaCenter>>,
   settings: PuddlerSettings,
   video: Option<Video>,
 }
@@ -263,7 +264,7 @@ impl Player {
     let media_center: &mut Box<dyn MediaCenter> = self.media_center.as_mut().unwrap();
 
     let mut websocket_reader = None;
-    let mut _websocket_sender = None;
+    let mut websocket_sender = None;
     if handle.config.media_center_type != MediaCenterType::Plex {
       let http_address = media_center.get_address();
       let protocol = if http_address.contains("https") {
@@ -289,14 +290,14 @@ impl Player {
       if let Ok((socket, _)) = connect_async(url).await {
         let (sender, reader) = socket.split();
         websocket_reader = Some(reader);
-        _websocket_sender = Some(sender);
+        websocket_sender = Some(sender);
       }
       // if this fails, remote control commands will not be available.
     }
 
     let config = &handle.config;
 
-    let (mut input, _websocket_output) = mpsc::unbounded_channel();
+    let (input, _websocket_output) = mpsc::unbounded_channel::<String>();
     let (websocket_input, mut output) = mpsc::unbounded_channel();
     let websocket_read_handle = tokio::spawn(async move {
       websocket_read(websocket_reader, websocket_input).await;
@@ -304,6 +305,8 @@ impl Player {
     // let websocket_write_handle = tokio::spawn(async move {
     //   websocket_send(websocket_sender, websocket_output).await;
     // });
+
+    tokio::spawn(websocket_keepalive(websocket_sender));
 
     let media_title = format!(
       "{} | {}",
@@ -317,7 +320,7 @@ impl Player {
       config.media_center_type.to_string()
     );
 
-    let mpv = Mpv::new().expect("Failed to create mpv handle!");
+    let mut mpv = Mpv::new().expect("Failed to create mpv handle!");
 
     if let Some(path) = &self.settings.mpv_config_location {
       mpv.set_property("config-dir", path.clone()).unwrap();
@@ -354,8 +357,7 @@ impl Player {
       .set_property("title", mpv_title)
       .expect("Failed to configure title.");
 
-    let mut ctx = mpv.create_event_context();
-    ctx
+    mpv
       .disable_deprecated_events()
       .expect("Failed to disable deprecated events.");
 
@@ -395,17 +397,16 @@ impl Player {
     let initial_preferences = (video.preferred_audio_track, video.preferred_subtitle_track);
     'main: loop {
       if let Ok(msg) = output.try_recv() {
-        let message = msg.to_string();
-        if let Ok(json_message) = serde_json::from_str::<WebSocketMessage>(&message.to_string()) {
+        if let Ok(json_message) = serde_json::from_str::<WebSocketMessage>(&msg) {
           if json_message.MessageType == "Playstate" {
             match json_message.Data.get("Command").unwrap().as_str().unwrap() {
               "PlayPause" => {
                 if paused {
-                  mpv.unpause().unwrap();
+                  mpv.set_property("pause", false).unwrap();
                   paused = false;
                   old_pos -= 16.0;
                 } else {
-                  mpv.pause().unwrap();
+                  mpv.set_property("pause", true).unwrap();
                   paused = true;
                 }
               },
@@ -417,7 +418,7 @@ impl Player {
           }
         }
       }
-      while let Some(event_res) = ctx.wait_event(0.0) {
+      while let Some(event_res) = mpv.wait_event(0.0) {
         let event = if let Ok(event) = event_res {
           event
         } else {
@@ -466,7 +467,7 @@ impl Player {
           },
         }
       }
-      let result: Result<f64, libmpv::Error> = mpv.get_property("time-pos");
+      let result: Result<f64, libmpv2::Error> = mpv.get_property("time-pos");
       if let Ok(current_time) = result {
         if let Ok(track) = mpv.get_property::<String>("current-tracks/audio/src-id") {
           audio_track = track.parse::<u32>().unwrap();
@@ -504,7 +505,6 @@ impl Player {
               paused,
               muted,
               volume_level,
-              &mut input,
             )
             .await;
           if self.settings.discord_presence {
@@ -542,7 +542,6 @@ impl Player {
               paused,
               muted,
               volume_level,
-              &mut input,
             )
             .await;
           if self.settings.discord_presence {
@@ -564,7 +563,7 @@ impl Player {
         }
         last_time_update = current_time;
       }
-      thread::sleep(Duration::from_millis(500));
+      tokio::time::sleep(Duration::from_millis(500)).await;
     }
     if !input.is_closed() {
       input.send("stop".to_string()).unwrap()
@@ -616,6 +615,21 @@ async fn _websocket_send(
           format!("Failed to send message through websocket: {}", err).as_str(),
         )
       };
+    }
+  }
+}
+
+async fn websocket_keepalive(
+  socket: Option<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>,
+) {
+  if let Some(mut sock) = socket {
+    let mut interv = interval(Duration::from_secs(60));
+    loop {
+      let _instant = interv.tick().await;
+      if let Err(e) = sock.send(Message::Ping(Bytes::new())).await {
+        eprintln!("Failed to send ping: {}", e);
+        break;
+      }
     }
   }
 }

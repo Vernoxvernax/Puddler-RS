@@ -62,12 +62,6 @@ pub struct UserConfig {
   pub user_id: String,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct UserCredentials {
-  pub username: String,
-  pub password: String,
-}
-
 #[derive(Clone, Debug)]
 pub enum Objective {
   DeviceID,
