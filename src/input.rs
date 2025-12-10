@@ -200,83 +200,83 @@ fn series_select(text: Vec<String>, episodes: Vec<Episode>) -> (SeriesOptions, O
   let mut mode = SeriesOptions::Play;
   let mut index_selection: Vec<usize> = vec![];
   loop {
-    if poll(Duration::from_millis(100)).unwrap() {
-      if let Ok(Event::Key(KeyEvent {
+    if let Ok(boolean) = poll(Duration::from_millis(100))
+      && boolean
+      && let Ok(Event::Key(KeyEvent {
         code,
         modifiers,
         state: _,
         kind: KeyEventKind::Press,
       })) = read()
-      {
-        if let KeyCode::Char(ch) = code {
-          if ch.is_ascii_digit() {
-            input.push(ch);
-            update = true;
-          } else if ch == 'c' && modifiers == KeyModifiers::CONTROL {
-            execute!(stdout, LeaveAlternateScreen, EnableLineWrap, Show).unwrap();
-            disable_raw_mode().unwrap();
-            exit(1);
-          } else if ch == 't' {
-            if mode != SeriesOptions::Played {
-              options = format!(
-                "\nMode: [{}] (Press '{}' again toggle between Played and Un-Played)",
-                "Played".bold(),
-                ch.to_uppercase()
-              );
-              mode = SeriesOptions::Played;
-              update = true;
-            } else {
-              options = format!(
-                "\nMode: [{}] (Press '{}' again toggle between Played and Un-Played)",
-                "Un-Played".bold(),
-                ch.to_uppercase()
-              );
-              mode = SeriesOptions::UnPlayed;
-              update = true;
-            }
-          } else if ch == '-'
-            || ch == ',' && mode == SeriesOptions::Played
-            || mode == SeriesOptions::UnPlayed
-          {
-            input.push(ch);
-            update = true;
-          }
-        } else if KeyCode::Enter == code {
-          if input.is_empty() {
-            if index_selection.is_empty() {
-              for (index, episode) in episodes.iter().enumerate() {
-                if !episode.watched {
-                  input = index.to_string();
-                  break;
-                }
-              }
-            } else {
-              break;
-            }
-          }
-          break;
-        } else if KeyCode::Backspace == code {
-          if input.is_empty() {
-            mode = SeriesOptions::Play;
-            options = main_options.clone();
-          }
-          input.pop();
+    {
+      if let KeyCode::Char(ch) = code {
+        if ch.is_ascii_digit() {
+          input.push(ch);
           update = true;
-        } else if KeyCode::Up == code {
-          if skip_lines > 0 && text.len() > (terminal_height - 5) {
-            skip_lines -= 1;
+        } else if ch == 'c' && modifiers == KeyModifiers::CONTROL {
+          execute!(stdout, LeaveAlternateScreen, EnableLineWrap, Show).unwrap();
+          disable_raw_mode().unwrap();
+          exit(1);
+        } else if ch == 't' {
+          if mode != SeriesOptions::Played {
+            options = format!(
+              "\nMode: [{}] (Press '{}' again toggle between Played and Un-Played)",
+              "Played".bold(),
+              ch.to_uppercase()
+            );
+            mode = SeriesOptions::Played;
+            update = true;
+          } else {
+            options = format!(
+              "\nMode: [{}] (Press '{}' again toggle between Played and Un-Played)",
+              "Un-Played".bold(),
+              ch.to_uppercase()
+            );
+            mode = SeriesOptions::UnPlayed;
             update = true;
           }
-        } else if KeyCode::Down == code {
-          if text.len() > (terminal_height - 3) + skip_lines {
-            skip_lines += 1;
-            update = true;
-          }
-        } else if KeyCode::Left == code {
-          input.clear();
-          index_selection.clear();
-          break;
+        } else if ch == '-'
+          || ch == ',' && mode == SeriesOptions::Played
+          || mode == SeriesOptions::UnPlayed
+        {
+          input.push(ch);
+          update = true;
         }
+      } else if KeyCode::Enter == code {
+        if input.is_empty() {
+          if index_selection.is_empty() {
+            for (index, episode) in episodes.iter().enumerate() {
+              if !episode.watched {
+                input = index.to_string();
+                break;
+              }
+            }
+          } else {
+            break;
+          }
+        }
+        break;
+      } else if KeyCode::Backspace == code {
+        if input.is_empty() {
+          mode = SeriesOptions::Play;
+          options = main_options.clone();
+        }
+        input.pop();
+        update = true;
+      } else if KeyCode::Up == code {
+        if skip_lines > 0 && text.len() > (terminal_height - 5) {
+          skip_lines -= 1;
+          update = true;
+        }
+      } else if KeyCode::Down == code {
+        if text.len() > (terminal_height - 3) + skip_lines {
+          skip_lines += 1;
+          update = true;
+        }
+      } else if KeyCode::Left == code {
+        input.clear();
+        index_selection.clear();
+        break;
       }
     }
     if update {
@@ -382,7 +382,7 @@ pub fn interactive_menuoption(options: Vec<MenuOptions>) -> MenuOptions {
   }
 
   let selection = interactive_select(choices, 0);
-  return options.get(selection.0.0).unwrap().clone();
+  options.get(selection.0.0).unwrap().clone()
 }
 
 fn draw_options(
@@ -939,40 +939,40 @@ pub fn hidden_string_input(mask: Option<char>) -> String {
 
   let mut input = String::new();
   loop {
-    if poll(Duration::from_millis(500)).unwrap() {
-      if let Ok(Event::Key(KeyEvent {
+    if let Ok(boolean) = poll(Duration::from_millis(500))
+      && boolean
+      && let Ok(Event::Key(KeyEvent {
         code,
         modifiers,
         state: _,
         kind: KeyEventKind::Press,
       })) = read()
-      {
-        if modifiers == KeyModifiers::CONTROL && code == KeyCode::Char('c') {
-          write!(stdout, "^C").unwrap();
-          disable_raw_mode().unwrap();
-          execute!(stdout, RestorePosition, Clear(ClearType::FromCursorDown)).unwrap();
-          exit(1);
-        } else if code == KeyCode::Enter {
-          disable_raw_mode().unwrap();
-          execute!(stdout, RestorePosition, Clear(ClearType::FromCursorDown)).unwrap();
-          println!("---");
-          return input;
-        } else if code == KeyCode::Backspace {
-          if input.pop().is_some() {
-            execute!(std::io::stdout(), MoveLeft(1)).unwrap();
-            execute!(std::io::stdout(), Print(" "), MoveLeft(1)).unwrap();
-          }
-        } else {
-          if let KeyCode::Char(ch) = code {
-            if let Some(masking_char) = mask {
-              write!(stdout, "{}", masking_char).unwrap();
-            } else {
-              write!(stdout, "{}", ch).unwrap();
-            }
-            input.push(ch);
-          }
-          stdout.flush().expect("Failed to flush stdout");
+    {
+      if modifiers == KeyModifiers::CONTROL && code == KeyCode::Char('c') {
+        write!(stdout, "^C").unwrap();
+        disable_raw_mode().unwrap();
+        execute!(stdout, RestorePosition, Clear(ClearType::FromCursorDown)).unwrap();
+        exit(1);
+      } else if code == KeyCode::Enter {
+        disable_raw_mode().unwrap();
+        execute!(stdout, RestorePosition, Clear(ClearType::FromCursorDown)).unwrap();
+        println!("---");
+        return input;
+      } else if code == KeyCode::Backspace {
+        if input.pop().is_some() {
+          execute!(std::io::stdout(), MoveLeft(1)).unwrap();
+          execute!(std::io::stdout(), Print(" "), MoveLeft(1)).unwrap();
         }
+      } else {
+        if let KeyCode::Char(ch) = code {
+          if let Some(masking_char) = mask {
+            write!(stdout, "{}", masking_char).unwrap();
+          } else {
+            write!(stdout, "{}", ch).unwrap();
+          }
+          input.push(ch);
+        }
+        stdout.flush().expect("Failed to flush stdout");
       }
     }
   }

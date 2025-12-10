@@ -2,7 +2,7 @@
 use serde_derive::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
-  fmt::Debug,
+  fmt::{Debug, Display},
   fs::{self, remove_file},
   path::{Path, PathBuf},
   result::Result,
@@ -23,12 +23,12 @@ pub enum MediaCenterType {
   Plex,
 }
 
-impl ToString for MediaCenterType {
-  fn to_string(&self) -> String {
+impl Display for MediaCenterType {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
-      MediaCenterType::Jellyfin => String::from("Jellyfin"),
-      MediaCenterType::Emby => String::from("Emby"),
-      MediaCenterType::Plex => String::from("Plex"),
+      MediaCenterType::Jellyfin => write!(f, "Jellyfin"),
+      MediaCenterType::Emby => write!(f, "Emby"),
+      MediaCenterType::Plex => write!(f, "Plex"),
     }
   }
 }
@@ -103,7 +103,7 @@ impl Config {
     }
   }
 
-  pub fn new(&mut self) -> Result<Vec<Config>, MediaCenterConfigError> {
+  pub fn init(&mut self) -> Result<Vec<Config>, MediaCenterConfigError> {
     let mut files: Vec<Config> = vec![];
     let media_center_folder = get_mediacenter_folder();
     if fs::read_dir(media_center_folder.clone()).unwrap().count() == 0 {
@@ -314,8 +314,8 @@ impl Config {
 
   pub fn get_address(&mut self) -> Option<String> {
     let serde_address = self.config.specific_values.get("address");
-    if serde_address.is_some() {
-      let address = serde_address.unwrap().as_str().unwrap();
+    if let Some(addr_value) = serde_address {
+      let address = addr_value.as_str().unwrap();
       match self.config.media_center_type {
         MediaCenterType::Plex => Some(address.to_string()),
         MediaCenterType::Emby => Some(address.to_owned() + "emby/"),
@@ -348,8 +348,10 @@ impl Config {
   }
 
   pub fn get_active_user(&mut self) -> Option<UserConfig> {
-    if let Some(value) = self.config.specific_values.get("users") {
-      if let Ok(user) = serde_json::from_value::<UserConfig>(value[0].clone()) {
+    if let Some(value) = self.config.specific_values.get("users")
+      && let Ok(user) = serde_json::from_value::<UserConfig>(value[0].clone())
+    {
+      {
         return Some(user);
       }
     }

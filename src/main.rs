@@ -2,7 +2,10 @@
 use clap::{Arg, ArgAction, Command};
 use colored::Colorize;
 use puddler_settings::PuddlerSettings;
-use std::process::{ExitCode, exit};
+use std::{
+  fmt::Display,
+  process::{ExitCode, exit},
+};
 
 use crate::{
   input::{InteractiveOption, InteractiveOptionType, interactive_menuoption, interactive_select},
@@ -35,9 +38,9 @@ pub enum MenuOptions {
   Exit,
 }
 
-impl ToString for MenuOptions {
-  fn to_string(&self) -> String {
-    match self {
+impl Display for MenuOptions {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    let out = match self {
       MenuOptions::Default(message) => {
         if message.is_empty() {
           String::from("Stream from default Media-Center")
@@ -49,7 +52,9 @@ impl ToString for MenuOptions {
       MenuOptions::Setup => String::from("Add new Media-Center"),
       MenuOptions::Setting => String::from("Settings"),
       MenuOptions::Exit => String::from("Exit puddler"),
-    }
+    };
+
+    write!(f, "{}", out)
   }
 }
 
@@ -97,8 +102,7 @@ fn main() -> ExitCode {
     if let Ok(()) = handle.read() {
       options.append(&mut vec![MenuOptions::Default(format!(
         "{} - {}",
-        handle.config.server_name,
-        handle.config.media_center_type.to_string()
+        handle.config.server_name, handle.config.media_center_type
       ))]);
     }
   }
@@ -139,7 +143,7 @@ fn main() -> ExitCode {
         }
       },
       MenuOptions::Choose => {
-        if let Ok(configs) = handle.new() {
+        if let Ok(configs) = handle.init() {
           if configs.is_empty() {
             continue;
           }
@@ -148,8 +152,7 @@ fn main() -> ExitCode {
             configs_str.append(&mut vec![InteractiveOption {
               text: format!(
                 "{} - {}:Modify",
-                config.config.server_name,
-                config.config.media_center_type.to_string()
+                config.config.server_name, config.config.media_center_type
               ),
               option_type: InteractiveOptionType::MultiButton,
             }]);

@@ -18,7 +18,7 @@ use reqwest::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
-  fmt,
+  fmt::{self, Display},
   io::{Write, stdin, stdout},
   net::UdpSocket,
   process::exit,
@@ -175,6 +175,7 @@ enum PlayMethod {
   DirectPlay,
 }
 
+#[allow(clippy::enum_variant_names)]
 #[derive(Debug, Deserialize, Serialize, PartialEq, Clone)]
 enum RepeatMode {
   RepeatNone,
@@ -426,8 +427,8 @@ impl ToStringAdv for Item {
 }
 
 // Properly compiles titles, dates and other metadata into one string.
-impl ToString for Item {
-  fn to_string(&self) -> String {
+impl Display for Item {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     let time = if let (Some(start), Some(end)) = (self.PremiereDate.clone(), self.EndDate.clone()) {
       if start[0..4] == end[0..4] {
         format!("({})", &start[0..4])
@@ -456,7 +457,7 @@ impl ToString for Item {
       name = re.replace_all(&name, String::new()).to_string();
     }
 
-    match self.Type.as_str() {
+    let out = match self.Type.as_str() {
       "Movie" | "Series" => {
         format!("{} {}", name, time)
       },
@@ -487,7 +488,8 @@ impl ToString for Item {
         },
       },
       _ => format!("{} {} (unknown media type)", self.Name, time),
-    }
+    };
+    write!(f, "{}", out)
   }
 }
 
@@ -895,11 +897,7 @@ pub trait MediaCenter: Send {
             } else {
               print_message(
                 PrintMessageType::Error,
-                format!(
-                  "Failed to get updated information for {}.",
-                  item.to_string()
-                )
-                .as_str(),
+                format!("Failed to get updated information for {}.", item).as_str(),
               )
             }
             options.append(&mut vec![
@@ -994,7 +992,7 @@ pub trait MediaCenter: Send {
 
     // This is the only setting which isn't saved across the playlist. Don't really see the point in that tbh.
     if mediasource_list.len() > 1 {
-      print!("\n");
+      println!();
       let mut options: Vec<InteractiveOption> = vec![InteractiveOption {
         text: "Please select from the following files:".to_string(),
         option_type: InteractiveOptionType::Header,
@@ -1002,7 +1000,7 @@ pub trait MediaCenter: Send {
       for mediasource in mediasource_list.clone() {
         if let Some(path) = mediasource.Path {
           options.push(InteractiveOption {
-            text: path.split_terminator('/').last().unwrap().to_string(),
+            text: path.split_terminator('/').next_back().unwrap().to_string(),
             option_type: InteractiveOptionType::Button,
           });
         }
@@ -1028,21 +1026,13 @@ pub trait MediaCenter: Send {
           let mut audio_streams: Vec<MediaStream> = vec![];
           let mut subtitle_streams: Vec<MediaStream> = vec![];
           let audio_language = if let Some(pref) = user.Configuration.AudioLanguagePreference {
-            if let Ok(lang) = LanguageCode::from_str(&pref) {
-              Some(lang)
-            } else {
-              None
-            }
+            LanguageCode::from_str(&pref).ok()
           } else {
             None
           };
           let subtitle_language = if let Some(pref) = user.Configuration.SubtitleLanguagePreference
           {
-            if let Ok(lang) = LanguageCode::from_str(&pref) {
-              Some(lang)
-            } else {
-              None
-            }
+            LanguageCode::from_str(&pref).ok()
           } else {
             None
           };
@@ -1057,25 +1047,23 @@ pub trait MediaCenter: Send {
           }
           if audio_language.is_some() {
             for (index, stream) in audio_streams.iter().enumerate() {
-              if let Some(lang) = &stream.Language {
-                if let Ok(lang_code) = LanguageCode::from_str(lang) {
-                  if audio_language == Some(lang_code) {
-                    audio_track = Some(index as u32 + 1);
-                    break;
-                  }
-                }
+              if let Some(lang) = &stream.Language
+                && let Ok(lang_code) = LanguageCode::from_str(lang)
+                && audio_language == Some(lang_code)
+              {
+                audio_track = Some(index as u32 + 1);
+                break;
               }
             }
           }
           if subtitle_language.is_some() {
             for (index, stream) in subtitle_streams.iter().enumerate() {
-              if let Some(lang) = &stream.Language {
-                if let Ok(lang_code) = LanguageCode::from_str(lang) {
-                  if subtitle_language == Some(lang_code) {
-                    subtitle_track = Some(index as u32 + 1);
-                    break;
-                  }
-                }
+              if let Some(lang) = &stream.Language
+                && let Ok(lang_code) = LanguageCode::from_str(lang)
+                && subtitle_language == Some(lang_code)
+              {
+                subtitle_track = Some(index as u32 + 1);
+                break;
               }
             }
           }
@@ -1084,7 +1072,7 @@ pub trait MediaCenter: Send {
         Err(err) => {
           print_message(
             PrintMessageType::Error,
-            format!("Failed to get user prefences: {}", err.status()).as_str(),
+            format!("Failed to get user prefences: {}", err.0).as_str(),
           );
         },
       }
@@ -1403,11 +1391,7 @@ pub trait MediaCenter: Send {
         Err(err) => {
           print_message(
             PrintMessageType::Error,
-            format!(
-              "Failed to post playback information: {}",
-              err.text().unwrap()
-            )
-            .as_str(),
+            format!("Failed to post playback information: {}", err.1).as_str(),
           );
           Err(())
         },
@@ -1632,7 +1616,7 @@ pub trait MediaCenter: Send {
       Err(e) => {
         print_message(
           PrintMessageType::Error,
-          format!("Failed to get item at \"{}\"\n{}\n", url, e.text().unwrap()).as_str(),
+          format!("Failed to get item at \"{}\"\n{}\n", url, e.1).as_str(),
         );
       },
     }
@@ -1673,12 +1657,7 @@ pub trait MediaCenter: Send {
       Err(e) => {
         print_message(
           PrintMessageType::Error,
-          format!(
-            "Failed to get item list at \"{}\"\n{}\n",
-            url,
-            e.text().unwrap()
-          )
-          .as_str(),
+          format!("Failed to get item list at \"{}\"\n{}\n", url, e.1).as_str(),
         );
       },
     }
@@ -1792,17 +1771,15 @@ pub trait MediaCenter: Send {
     item_id: String,
     playbackpositionticks: u64,
     mut time_pos: f64,
-    audio_track: u32,
-    sub_track: u32,
-    paused: bool,
-    muted: bool,
+    tracks: (u32, u32),
+    paused_muted: (bool, bool),
     volume_level: u32,
   ) {
     let playback_info = self.get_playback_info();
     let session_id = self.get_session_id().expect("This shouldn't be None!");
-    let event_name: EventName = if paused {
+    let event_name: EventName = if paused_muted.0 {
       EventName::Pause
-    } else if muted {
+    } else if paused_muted.1 {
       EventName::VolumeChange
     } else {
       EventName::TimeUpdate
@@ -1821,10 +1798,10 @@ pub trait MediaCenter: Send {
       ItemId: item_id,
       SessionId: session_id,
       MediaSourceId: playback_info.MediaSources[0].Id.to_string(),
-      AudioStreamIndex: audio_track,
-      SubtitleStreamIndex: sub_track,
-      IsPaused: paused,
-      IsMuted: muted,
+      AudioStreamIndex: tracks.0,
+      SubtitleStreamIndex: tracks.1,
+      IsPaused: paused_muted.0,
+      IsMuted: paused_muted.1,
       PositionTicks: time_pos.round() as u64,
       VolumeLevel: volume_level,
       PlaySessionId: playback_info.PlaySessionId.to_string(),
@@ -1937,15 +1914,9 @@ pub trait MediaCenter: Send {
 
   fn create_user_credentials(&mut self) -> UserCredentials {
     let config = &self.get_config_handle().config;
-    print!(
-      "Please enter your {} username",
-      config.media_center_type.to_string()
-    );
+    print!("Please enter your {} username", config.media_center_type);
     let username = take_string_input(vec![]);
-    print!(
-      "Please enter your {} password: ",
-      config.media_center_type.to_string()
-    );
+    print!("Please enter your {} password: ", config.media_center_type);
     let password = hidden_string_input(Some('*'));
     println!();
     UserCredentials { username, password }
@@ -1971,11 +1942,11 @@ pub trait MediaCenter: Send {
                 MediaCenterValues::SessionID,
                 id.as_str().unwrap().to_string(),
               );
-              if let Some(support) = json_response[0].get("SupportedCommands") {
-                if !support.to_string().contains("PlayState") {
-                  // yea that should be sufficient
-                  self.report_session_capabilities().unwrap();
-                }
+              if let Some(support) = json_response[0].get("SupportedCommands")
+                && !support.to_string().contains("PlayState")
+              {
+                // yea that should be sufficient
+                self.report_session_capabilities().unwrap();
               }
               return;
             } else if self.report_session_capabilities().is_ok() {
@@ -1991,16 +1962,16 @@ pub trait MediaCenter: Send {
           },
           Err(e) => {
             println!("{}", "𐄂".red());
-            if e.status() == StatusCode::UNAUTHORIZED {
+            if e.0 == StatusCode::UNAUTHORIZED {
               print_message(
                 PrintMessageType::Error,
-                format!("{}: This session expired. Please login again.", e.status()).as_str(),
+                format!("{}: This session expired. Please login again.", e.0).as_str(),
               );
               self.get_config_handle().remove_user(user.access_token);
             } else {
               print_message(
                 PrintMessageType::Error,
-                format!("{}: {}", e.status(), e.text().unwrap()).as_str(),
+                format!("{}: {}", e.0, e.1).as_str(),
               );
             }
           },
@@ -2157,7 +2128,7 @@ pub trait MediaCenter: Send {
     }
   }
 
-  fn get(&mut self, url: String) -> Result<Response, Response> {
+  fn get(&mut self, url: String) -> Result<Response, (StatusCode, String)> {
     let url = format!("{}{}", self.get_address(), url);
     let headers = self.get_headers();
     let authorization_2 = if let Some(header) = headers.get(1) {
@@ -2189,7 +2160,7 @@ pub trait MediaCenter: Send {
 
     match response.status() {
       StatusCode::OK => Ok(response),
-      _ => Err(response),
+      _ => Err((response.status(), response.text().unwrap())),
     }
   }
 
@@ -2199,7 +2170,7 @@ pub trait MediaCenter: Send {
     let client = Client::new();
     let mut builder = client.delete(url).timeout(Duration::from_secs(15));
     if headers.len() == 1 {
-      let authorization_1 = headers.get(0).unwrap();
+      let authorization_1 = headers.first().unwrap();
       builder = builder.header(authorization_1.clone().0, authorization_1.clone().1);
     } else {
       let authorization_2 = headers.get(1).unwrap();
@@ -2232,7 +2203,7 @@ pub trait MediaCenter: Send {
     let client = Client::new();
     let mut builder = client.post(url).timeout(Duration::from_secs(15));
     if headers.len() == 1 {
-      let authorization_1 = headers.get(0).unwrap();
+      let authorization_1 = headers.first().unwrap();
       builder = builder.header(authorization_1.clone().0, authorization_1.clone().1);
     } else {
       let authorization_2 = headers.get(1).unwrap();
@@ -2265,7 +2236,7 @@ pub trait MediaCenter: Send {
     let client = reqwest::Client::new();
     let mut builder = client.post(url).timeout(Duration::from_secs(15));
     if headers.len() == 1 {
-      let authorization_1 = headers.get(0).unwrap();
+      let authorization_1 = headers.first().unwrap();
       builder = builder.header(authorization_1.clone().0, authorization_1.clone().1);
     } else {
       let authorization_2 = headers.get(1).unwrap();
@@ -2327,23 +2298,23 @@ pub fn broadcast_search(media_center_type: MediaCenterType) -> Option<UDPAnswer>
       println!();
       break;
     }
-    if poll(Duration::from_millis(100)).unwrap() {
-      if let Ok(Event::Key(KeyEvent {
+    if let Ok(boolean) = poll(Duration::from_millis(100))
+      && boolean
+      && let Ok(Event::Key(KeyEvent {
         code,
         modifiers,
         state: _,
         kind: _,
       })) = read()
-      {
-        if modifiers == KeyModifiers::CONTROL && code == KeyCode::Char('c') {
-          disable_raw_mode().unwrap();
-          println!("^C");
-          exit(1);
-        } else {
-          disable_raw_mode().unwrap();
-          println!();
-          break;
-        }
+    {
+      if modifiers == KeyModifiers::CONTROL && code == KeyCode::Char('c') {
+        disable_raw_mode().unwrap();
+        println!("^C");
+        exit(1);
+      } else {
+        disable_raw_mode().unwrap();
+        println!();
+        break;
       }
     }
   }

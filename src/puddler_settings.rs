@@ -4,6 +4,7 @@ use colored::Colorize;
 use config::{Config, File};
 use serde_derive::{Deserialize, Serialize};
 use std::{
+  fmt::Display,
   fs,
   io::prelude::*,
   path::{Path, PathBuf},
@@ -12,7 +13,7 @@ use std::{
 use crate::{
   APPNAME,
   error::PuddlerSettingsError,
-  input::{InteractiveOption, InteractiveOptionType, getch, interactive_select, take_string_input},
+  input::{InteractiveOption, InteractiveOptionType, interactive_select, take_string_input},
   media_config::get_mediacenter_folder,
   printing::{PrintMessageType, print_message},
 };
@@ -28,6 +29,7 @@ pub struct PuddlerSettings {
   pub mpv_debug_log: bool,
 }
 
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Clone)]
 enum PuddlerSettingType {
   DefaultMediaServer,
@@ -39,9 +41,9 @@ enum PuddlerSettingType {
   MPV_Debug,
 }
 
-impl ToString for PuddlerSettingType {
-  fn to_string(&self) -> String {
-    match self {
+impl Display for PuddlerSettingType {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    let out = match self {
       PuddlerSettingType::DefaultMediaServer => String::from("Default media server"),
       PuddlerSettingType::DiscordPresence => String::from("Discord Presence"),
       PuddlerSettingType::Fullscreen => String::from("Fullscreen"),
@@ -49,7 +51,8 @@ impl ToString for PuddlerSettingType {
       PuddlerSettingType::GLSL_Shaders => String::from("GLSL Shaders"),
       PuddlerSettingType::MPV_Config_Location => String::from("MPV Config Location"),
       PuddlerSettingType::MPV_Debug => String::from("MPV Debug Log"),
-    }
+    };
+    write!(f, "{}", out)
   }
 }
 
@@ -327,7 +330,7 @@ impl PuddlerSettings {
         let mut files: Vec<String> = vec![];
         for file in &path {
           if file.path().is_dir() {
-            let depth2: Vec<_> = fs::read_dir(&file.path())
+            let depth2: Vec<_> = fs::read_dir(file.path())
               .unwrap()
               .map(|r| r.unwrap())
               .collect();
@@ -373,63 +376,10 @@ impl PuddlerSettings {
         );
         temp.default_media_server = Some(files.get(num_selection).unwrap().to_string());
       },
-      PuddlerSettingType::DiscordPresence => {
-        print!("Do you want to activate Discord-Presence by default?\n (Y)es / (N)o");
-        let presence = getch("YyNn");
-        temp.discord_presence = match presence {
-          'Y' | 'y' => true,
-          _ => false,
-        };
-      },
-      PuddlerSettingType::Fullscreen => {
-        print!("Do you want mpv to start in fullscreen-mode?\n (Y)es / (N)o");
-        let fullscreen = getch("YyNn");
-        temp.fullscreen = match fullscreen {
-          'Y' | 'y' => true,
-          _ => false,
-        };
-      },
-      PuddlerSettingType::GPU => {
-        print!(
-          "Do you want to enable hardware decoding for MPV?\n(Using \"auto-safe\" api)\n (Y)es / (N)o"
-        );
-        let gpu = getch("YyNn");
-        temp.gpu = match gpu {
-          'Y' | 'y' => true,
-          _ => false,
-        };
-      },
-      PuddlerSettingType::GLSL_Shaders => {
-        println!(
-          "Do you want to configure any GLSL-Shaders for MPV?\n(Multiple paths can be added whilst confirming with ENTER; to finish, enter nothing)"
-        );
-        let mut glsl_shaders: Vec<String> = vec![];
-        loop {
-          let path = take_string_input(vec![]);
-          if path.trim().is_empty() {
-            break;
-          }
-          glsl_shaders.append(&mut vec![path]);
-        }
-        temp.glsl_shaders = glsl_shaders;
-      },
-      PuddlerSettingType::MPV_Config_Location => {
-        println!(
-          "Do you want to load an mpv-config?\n(Type the path to the config-directory. f.e. \"~/.config/mpv\"| <Empty input for no>)"
-        );
-        let path = take_string_input(vec![]);
-        if !path.trim().is_empty() {
-          temp.mpv_config_location = Some(path);
-        }
-      },
-      PuddlerSettingType::MPV_Debug => {
-        print!("Do you want MPV to debug-log to \"./mpv.log\"?\n (Y)es / (N)o");
-        let debug = getch("YyNn");
-        temp.mpv_debug_log = match debug {
-          'Y' | 'y' => true,
-          _ => false,
-        };
-      },
+      _ => print_message(
+        PrintMessageType::Error,
+        "Asking for this setting is not implemented here.",
+      ),
     }
     println!();
     temp

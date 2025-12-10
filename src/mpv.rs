@@ -195,7 +195,7 @@ impl Player {
     for (index, stream) in media_source.MediaStreams.iter().enumerate() {
       if stream.IsExternal && stream.SupportsExternalStream {
         let extension = if let Some(path) = &stream.Path {
-          path.split('.').last().unwrap().to_string()
+          path.split('.').next_back().unwrap().to_string()
         } else {
           stream.Codec.as_ref().unwrap().to_owned()
         };
@@ -308,16 +308,10 @@ impl Player {
 
     tokio::spawn(websocket_keepalive(websocket_sender));
 
-    let media_title = format!(
-      "{} | {}",
-      video.title[0],
-      config.media_center_type.to_string()
-    );
+    let media_title = format!("{} | {}", video.title[0], config.media_center_type);
     let mpv_title = format!(
       "{} - Streaming: {} ({})",
-      APPNAME,
-      video.title[0],
-      config.media_center_type.to_string()
+      APPNAME, video.title[0], config.media_center_type
     );
 
     let mut mpv = Mpv::new().expect("Failed to create mpv handle!");
@@ -396,26 +390,25 @@ impl Player {
     let mut muted: bool = false;
     let initial_preferences = (video.preferred_audio_track, video.preferred_subtitle_track);
     'main: loop {
-      if let Ok(msg) = output.try_recv() {
-        if let Ok(json_message) = serde_json::from_str::<WebSocketMessage>(&msg) {
-          if json_message.MessageType == "Playstate" {
-            match json_message.Data.get("Command").unwrap().as_str().unwrap() {
-              "PlayPause" => {
-                if paused {
-                  mpv.set_property("pause", false).unwrap();
-                  paused = false;
-                  old_pos -= 16.0;
-                } else {
-                  mpv.set_property("pause", true).unwrap();
-                  paused = true;
-                }
-              },
-              "Stop" => {
-                mpv.command("quit", &["0"]).unwrap();
-              },
-              _ => (),
+      if let Ok(msg) = output.try_recv()
+        && let Ok(json_message) = serde_json::from_str::<WebSocketMessage>(&msg)
+        && json_message.MessageType == "Playstate"
+      {
+        match json_message.Data.get("Command").unwrap().as_str().unwrap() {
+          "PlayPause" => {
+            if paused {
+              mpv.set_property("pause", false).unwrap();
+              paused = false;
+              old_pos -= 16.0;
+            } else {
+              mpv.set_property("pause", true).unwrap();
+              paused = true;
             }
-          }
+          },
+          "Stop" => {
+            mpv.command("quit", &["0"]).unwrap();
+          },
+          _ => (),
         }
       }
       while let Some(event_res) = mpv.wait_event(0.0) {
@@ -500,10 +493,8 @@ impl Player {
               video.clone().id,
               video.playback_position,
               current_time,
-              audio_track,
-              sub_track,
-              paused,
-              muted,
+              (audio_track, sub_track),
+              (paused, muted),
               volume_level,
             )
             .await;
@@ -537,10 +528,8 @@ impl Player {
               video.clone().id,
               video.playback_position,
               current_time,
-              audio_track,
-              sub_track,
-              paused,
-              muted,
+              (audio_track, sub_track),
+              (paused, muted),
               volume_level,
             )
             .await;

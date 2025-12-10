@@ -18,7 +18,7 @@ use reqwest::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
-  fmt,
+  fmt::{self, Display},
   io::{Write, stdin, stdout},
   process::exit,
   str::FromStr,
@@ -293,14 +293,14 @@ impl ToStringAdv for PlexItem {
 
   fn to_string_ext(&self) -> String {
     let full = self.to_string_full();
-    if let Some(offset) = self.viewOffset {
-      if let Some(duration) = self.duration {
-        return format!(
-          "{} {}%",
-          full,
-          ((offset as f64 / duration as f64) * 100.0).round()
-        );
-      }
+    if let Some(offset) = self.viewOffset
+      && let Some(duration) = self.duration
+    {
+      return format!(
+        "{} {}%",
+        full,
+        ((offset as f64 / duration as f64) * 100.0).round()
+      );
     }
     full
   }
@@ -309,24 +309,23 @@ impl ToStringAdv for PlexItem {
     let basic = self.to_string();
     let mut played_status = String::new();
     if &self.r#type == "season" || &self.r#type == "show" {
-      if let Some(leafCount) = self.leafCount {
-        if let Some(viewedLeafCount) = self.viewedLeafCount {
-          if leafCount <= viewedLeafCount {
-            played_status = format!(" - {}", "(Played)".green());
-          }
-        }
-      }
-    } else if let Some(viewCount) = self.viewCount {
-      if viewCount > 0 {
+      if let Some(leafCount) = self.leafCount
+        && let Some(viewedLeafCount) = self.viewedLeafCount
+        && leafCount <= viewedLeafCount
+      {
         played_status = format!(" - {}", "(Played)".green());
       }
+    } else if let Some(viewCount) = self.viewCount
+      && viewCount > 0
+    {
+      played_status = format!(" - {}", "(Played)".green());
     }
     format!("{}{}", basic, played_status)
   }
 }
 
-impl ToString for PlexItem {
-  fn to_string(&self) -> String {
+impl Display for PlexItem {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     let time = if let Some(production_year) = &self.year {
       format!("({})", production_year)
     } else if let Some(parentYear) = self.parentYear {
@@ -346,7 +345,7 @@ impl ToString for PlexItem {
       name = re.replace_all(&name, "").to_string();
     }
 
-    match self.r#type.as_str() {
+    let out = match self.r#type.as_str() {
       "movie" | "show" => {
         format!("{} {}", name, time)
       },
@@ -364,7 +363,8 @@ impl ToString for PlexItem {
         )
       },
       _ => format!("{} {} (unknown media type)", self.title, time),
-    }
+    };
+    write!(f, "{}", out)
   }
 }
 
@@ -557,7 +557,7 @@ impl MediaCenter for PlexServer {
     }
   }
 
-  fn get(&mut self, mut url: String) -> Result<Response, Response> {
+  fn get(&mut self, mut url: String) -> Result<Response, (StatusCode, String)> {
     let user = self.get_config_handle().get_active_user().unwrap();
     if !url.contains('?') {
       url.push('?')
@@ -588,7 +588,7 @@ impl MediaCenter for PlexServer {
 
     match response.status() {
       StatusCode::OK => Ok(response),
-      _ => Err(response),
+      _ => Err((response.status(), response.text().unwrap())),
     }
   }
 
@@ -597,14 +597,12 @@ impl MediaCenter for PlexServer {
     item_id: String,
     playbackpositionticks: u64,
     time_pos: f64,
-    _audio_track: u32,
-    _sub_track: u32,
-    paused: bool,
-    _muted: bool,
+    _tracks: (u32, u32),
+    paused_muted: (bool, bool),
     _volume_level: u32,
   ) {
     let playback_info = self.get_plex_playback_info();
-    let state: &str = if paused { "paused" } else { "playing" };
+    let state: &str = if paused_muted.0 { "paused" } else { "playing" };
 
     let actual_time_position = if self.config_handle.config.transcoding {
       (playbackpositionticks as f64 * 1000.0 + time_pos * 1000.0) as u64
@@ -758,7 +756,7 @@ impl MediaCenter for PlexServer {
     if let Err(err) = self.get(url) {
       print_message(
         PrintMessageType::Error,
-        format!("Failed to mark item as {}: {}", status_str, err.status()).as_str(),
+        format!("Failed to mark item as {}: {}", status_str, err.0).as_str(),
       );
     }
   }
@@ -925,11 +923,7 @@ impl PlexServer {
             } else {
               print_message(
                 PrintMessageType::Error,
-                format!(
-                  "Failed to get updated information for {}.",
-                  item.to_string()
-                )
-                .as_str(),
+                format!("Failed to get updated information for {}.", item).as_str(),
               )
             }
             options.append(&mut vec![
@@ -1017,9 +1011,9 @@ impl PlexServer {
       Err(err) => {
         print_message(
           PrintMessageType::Error,
-          format!("Failed to get user information: {}", err.status()).as_str(),
+          format!("Failed to get user information: {}", err.0).as_str(),
         );
-        Err(err.status())
+        Err(err.0)
       },
     }
   }
@@ -1061,7 +1055,7 @@ impl PlexServer {
           text: media_file.Part[0]
             .file
             .split_terminator('/')
-            .last()
+            .next_back()
             .unwrap()
             .to_string(),
           option_type: InteractiveOptionType::Button,
@@ -1088,18 +1082,9 @@ impl PlexServer {
         Ok(plex_user) => {
           let mut audio_streams: Vec<PlexStream> = vec![];
           let mut subtitle_streams: Vec<PlexStream> = vec![];
-          let audio_language =
-            if let Ok(lang) = LanguageCode::from_str(&plex_user.profile.defaultAudioLanguage) {
-              Some(lang)
-            } else {
-              None
-            };
+          let audio_language = LanguageCode::from_str(&plex_user.profile.defaultAudioLanguage).ok();
           let subtitle_language =
-            if let Ok(lang) = LanguageCode::from_str(&plex_user.profile.defaultSubtitleLanguage) {
-              Some(lang)
-            } else {
-              None
-            };
+            LanguageCode::from_str(&plex_user.profile.defaultSubtitleLanguage).ok();
           let mut audio_track = None;
           let mut subtitle_track = None;
           for stream in media_file_list[media_file_index].Part[0]
@@ -1115,25 +1100,23 @@ impl PlexServer {
           }
           if audio_language.is_some() {
             for (index, stream) in audio_streams.iter().enumerate() {
-              if let Some(lang) = &stream.languageCode {
-                if let Ok(lang_code) = LanguageCode::from_str(lang) {
-                  if audio_language == Some(lang_code) {
-                    audio_track = Some(index as u32 + 1);
-                    break;
-                  }
-                }
+              if let Some(lang) = &stream.languageCode
+                && let Ok(lang_code) = LanguageCode::from_str(lang)
+                && audio_language == Some(lang_code)
+              {
+                audio_track = Some(index as u32 + 1);
+                break;
               }
             }
           }
           if subtitle_language.is_some() {
             for (index, stream) in subtitle_streams.iter().enumerate() {
-              if let Some(lang) = &stream.languageCode {
-                if let Ok(lang_code) = LanguageCode::from_str(lang) {
-                  if subtitle_language == Some(lang_code) {
-                    subtitle_track = Some(index as u32 + 1);
-                    break;
-                  }
-                }
+              if let Some(lang) = &stream.languageCode
+                && let Ok(lang_code) = LanguageCode::from_str(lang)
+                && subtitle_language == Some(lang_code)
+              {
+                subtitle_track = Some(index as u32 + 1);
+                break;
               }
             }
           }
@@ -1346,7 +1329,7 @@ impl PlexServer {
       if let Err(err) = self.put(selected_tracks) {
         print_message(
           PrintMessageType::Error,
-          format!("Failed to set audio/subtitle tracks: {}", err.status()).as_str(),
+          format!("Failed to set audio/subtitle tracks: {}", err.0).as_str(),
         );
         return Err(());
       }
@@ -1409,18 +1392,14 @@ impl PlexServer {
     if let Err(err) = self.get(decision_url) {
       print_message(
         PrintMessageType::Error,
-        format!(
-          "Failed to post playback information: {}",
-          err.text().unwrap()
-        )
-        .as_str(),
+        format!("Failed to post playback information: {}", err.1).as_str(),
       );
       return Err(());
     }
     Ok(())
   }
 
-  fn put(&mut self, mut url: String) -> Result<Response, Response> {
+  fn put(&mut self, mut url: String) -> Result<Response, (StatusCode, String)> {
     let user = self.get_config_handle().get_active_user().unwrap();
     if !url.contains('?') {
       url.push('?')
@@ -1451,7 +1430,7 @@ impl PlexServer {
 
     match response.status() {
       StatusCode::OK => Ok(response),
-      _ => Err(response),
+      _ => Err((response.status(), response.text().unwrap())),
     }
   }
 
@@ -1624,12 +1603,7 @@ impl PlexServer {
       Err(e) => {
         print_message(
           PrintMessageType::Error,
-          format!(
-            "Failed to get item list at \"{}\"\n{}\n",
-            url,
-            e.text().unwrap()
-          )
-          .as_str(),
+          format!("Failed to get item list at \"{}\"\n{}\n", url, e.1).as_str(),
         );
       },
     }
@@ -1668,12 +1642,7 @@ impl PlexServer {
       Err(e) => {
         print_message(
           PrintMessageType::Error,
-          format!(
-            "Failed to get item list at \"{}\"\n{}\n",
-            url,
-            e.text().unwrap()
-          )
-          .as_str(),
+          format!("Failed to get item list at \"{}\"\n{}\n", url, e.1).as_str(),
         );
       },
     }
@@ -1690,7 +1659,7 @@ impl PlexServer {
     thread::spawn(move || {
       let mut pin: Option<PlexCreatePin> = None;
       loop {
-        let req: Result<Response, Response>;
+        let req: Result<Response, (StatusCode, String)>;
         if let Some(ref old_pin) = pin {
           let get_url = format!("pins/{}.json{}", old_pin.id, queries);
           req = plex_tv(RequestType::Get, None, device_id.clone(), get_url);
@@ -1816,7 +1785,7 @@ impl PlexServer {
       Err(err) => {
         print_message(
           PrintMessageType::Error,
-          format!("Failed to get server list of user: {}", err.status()).as_str(),
+          format!("Failed to get server list of user: {}", err.0).as_str(),
         );
         exit(1);
       },
@@ -1845,7 +1814,7 @@ impl PlexServer {
         println!("{}", "𐄂".red());
         print_message(
           PrintMessageType::Error,
-          format!("Failed to login: {}", err.status()).as_str(),
+          format!("Failed to login: {}", err.0).as_str(),
         );
         false
       },
@@ -1908,7 +1877,7 @@ fn plex_tv(
   user: Option<UserConfig>,
   device_id: String,
   url: String,
-) -> Result<Response, Response> {
+) -> Result<Response, (StatusCode, String)> {
   let mut modded_url = format!("https://plex.tv/{}", url);
   if modded_url.contains('?') {
     modded_url += "&";
@@ -1945,6 +1914,6 @@ fn plex_tv(
 
   match response.status() {
     StatusCode::OK | StatusCode::CREATED => Ok(response),
-    _ => Err(response),
+    _ => Err((response.status(), response.text().unwrap())),
   }
 }
