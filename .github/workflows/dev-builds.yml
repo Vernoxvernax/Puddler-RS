@@ -33,7 +33,7 @@ jobs:
 
     - name: Get libmpv for the windows build
       run: |
-        wget https://downloads.sourceforge.net/project/mpv-player-windows/libmpv/mpv-dev-x86_64-20250928-git-db2b436.7z -O mpv.7z
+        wget $(curl -s 'https://sourceforge.net/projects/mpv-player-windows/rss?path=/libmpv' | grep -oP '(?<=<link>).*?(?=</link>)' | sed -n '3p') -O mpv.7z
         7z e -y mpv.7z -o64
 
     - name: Build Linux and Windows bin
