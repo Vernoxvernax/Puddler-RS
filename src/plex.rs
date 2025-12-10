@@ -510,6 +510,9 @@ impl MediaCenter for PlexServer {
         },
         (selection, Some(mut search), InteractiveOptionType::TextInput(_)) => {
           current_selection = selection.0;
+          if search.is_empty() {
+            continue;
+          }
           search = search.trim().to_owned();
           if let Ok(items) = self.get_items(
             format!("hubs/search?query={}", urlencoding::encode(&search)),
