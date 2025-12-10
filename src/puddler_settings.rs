@@ -12,10 +12,9 @@ use std::{
 use crate::{
   APPNAME,
   error::PuddlerSettingsError,
-  input::{getch, take_string_input},
+  input::{InteractiveOption, InteractiveOptionType, getch, interactive_select, take_string_input},
   media_config::get_mediacenter_folder,
-  printing::PrintMessageType,
-  printing::print_message,
+  printing::{PrintMessageType, print_message},
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -51,20 +50,6 @@ impl ToString for PuddlerSettingType {
       PuddlerSettingType::MPV_Config_Location => String::from("MPV Config Location"),
       PuddlerSettingType::MPV_Debug => String::from("MPV Debug Log"),
     }
-  }
-}
-
-impl PuddlerSettingType {
-  fn all_types() -> Vec<PuddlerSettingType> {
-    vec![
-      PuddlerSettingType::DefaultMediaServer,
-      PuddlerSettingType::DiscordPresence,
-      PuddlerSettingType::Fullscreen,
-      PuddlerSettingType::GPU,
-      PuddlerSettingType::GLSL_Shaders,
-      PuddlerSettingType::MPV_Config_Location,
-      PuddlerSettingType::MPV_Debug,
-    ]
   }
 }
 
@@ -161,46 +146,129 @@ impl PuddlerSettings {
     }
   }
 
-  fn get_setting_value(&mut self, setting: PuddlerSettingType) -> String {
-    match setting {
-      PuddlerSettingType::DefaultMediaServer => format!("{:?}", self.default_media_server),
-      PuddlerSettingType::DiscordPresence => format!("{}", self.discord_presence),
-      PuddlerSettingType::Fullscreen => format!("{}", self.fullscreen),
-      PuddlerSettingType::GPU => format!("{}", self.gpu),
-      PuddlerSettingType::GLSL_Shaders => format!("{:?}", self.glsl_shaders),
-      PuddlerSettingType::MPV_Config_Location => format!("{:?}", self.mpv_config_location),
-      PuddlerSettingType::MPV_Debug => format!("{}", self.mpv_debug_log),
-    }
-  }
-
   pub fn change_menu(&mut self) {
+    let mut current_selection = 0;
     loop {
-      let mut allowed = String::new();
-      println!("Which settings do you want to change?");
-      for (index, setting_type) in PuddlerSettingType::all_types().iter().enumerate() {
-        println!(
-          "  [{}] {}: {}",
-          index,
-          setting_type.to_string(),
-          self.get_setting_value(setting_type.clone()).underline()
-        );
-        allowed.push_str(&index.to_string());
+      let default_media_server = if let Some(path) = &self.default_media_server {
+        path.to_string()
+      } else {
+        "None".to_string()
+      };
+      let discord_presence = if self.discord_presence {
+        format!("{}", "Enabled".green())
+      } else {
+        format!("{}", "Disabled".red())
+      };
+      let fullscreen = if self.fullscreen {
+        format!("{}", "Enabled".green())
+      } else {
+        format!("{}", "Disabled".red())
+      };
+      let hardware_acceleration = if self.gpu {
+        format!("{}", "Enabled".green())
+      } else {
+        format!("{}", "Disabled".red())
+      };
+      let mpv_debug_log = if self.mpv_debug_log {
+        format!("{}", "Enabled".green())
+      } else {
+        format!("{}", "Disabled".red())
+      };
+      let glsl_shaders = self.glsl_shaders.join(", ");
+      let mpv_config_location = if let Some(path) = &self.mpv_config_location {
+        path.to_string()
+      } else {
+        "None".to_string()
+      };
+      let settings = vec![
+        InteractiveOption {
+          text: String::from("General Settings:"),
+          option_type: InteractiveOptionType::Header,
+        },
+        InteractiveOption {
+          text: String::from("Default media server: ") + &default_media_server,
+          option_type: InteractiveOptionType::Button,
+        },
+        InteractiveOption {
+          text: String::from("Discord Presence:") + &discord_presence,
+          option_type: InteractiveOptionType::ListButtons,
+        },
+        InteractiveOption {
+          text: String::from("Fullscreen:") + &fullscreen,
+          option_type: InteractiveOptionType::ListButtons,
+        },
+        InteractiveOption {
+          text: String::from("Hardware Acceleration:") + &hardware_acceleration,
+          option_type: InteractiveOptionType::ListButtons,
+        },
+        InteractiveOption {
+          text: String::from("GLSL Shaders"),
+          option_type: InteractiveOptionType::TextInput(glsl_shaders),
+        },
+        InteractiveOption {
+          text: String::from("MPV Config Location"),
+          option_type: InteractiveOptionType::TextInput(mpv_config_location),
+        },
+        InteractiveOption {
+          text: String::from("MPV Debug Log:") + &mpv_debug_log,
+          option_type: InteractiveOptionType::ListButtons,
+        },
+        InteractiveOption {
+          text: String::from("Save"),
+          option_type: InteractiveOptionType::Button,
+        },
+        InteractiveOption {
+          text: String::from("Back"),
+          option_type: InteractiveOptionType::Special,
+        },
+      ];
+      match interactive_select(settings, current_selection) {
+        (_, _, InteractiveOptionType::Special) => break,
+        ((i1, _), Some(string), InteractiveOptionType::Button) if string == "Save" => {
+          self.write();
+          current_selection = i1;
+        },
+        ((i1, _), Some(text), InteractiveOptionType::TextInput(_)) => {
+          current_selection = i1;
+          match i1 {
+            4 => {
+              self.glsl_shaders.clear();
+              if !text.is_empty() && !text.starts_with("None") {
+                for part in text.split_terminator(",") {
+                  self.glsl_shaders.push(part.trim().to_string());
+                }
+              }
+            },
+            5 => {
+              if text.is_empty() || text.starts_with("None") {
+                self.mpv_config_location = None;
+              } else {
+                self.mpv_config_location = Some(text.trim().to_string());
+              }
+            },
+            _ => (),
+          }
+        },
+        ((i1, _), _, _) => {
+          current_selection = i1;
+          match i1 {
+            0 => {
+              self.change_setting(PuddlerSettingType::DefaultMediaServer);
+            },
+            1 => {
+              self.discord_presence = !self.discord_presence;
+            },
+            2 => {
+              self.fullscreen = !self.fullscreen;
+            },
+            3 => self.gpu = !self.gpu,
+            6 => {
+              self.mpv_debug_log = !self.mpv_debug_log;
+            },
+            _ => (),
+          }
+        },
       }
-      print!(" [S] Save and return to the menu.");
-      allowed.push_str("Ss");
-      let input = getch(&allowed);
-      println!();
-      if input == 's' {
-        self.write();
-        break;
-      }
-      let selection: usize = input.to_digit(10).unwrap() as usize;
-      self.change_setting(
-        PuddlerSettingType::all_types()
-          .get(selection)
-          .unwrap()
-          .clone(),
-      );
     }
   }
 

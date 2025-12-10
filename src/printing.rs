@@ -10,7 +10,7 @@ pub enum PrintMessageType {
   Success,
 }
 
-pub const INVALID_INPUT: &str = "Invalid input. Please try again.";
+pub const INVALID_INPUT: &str = "Invalid input! Please try again.";
 
 pub fn print_message(message_type: PrintMessageType, message: &str) {
   execute!(stdout(), SetAttribute(Attribute::Bold)).unwrap();

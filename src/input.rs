@@ -73,7 +73,7 @@ pub enum InteractiveOptionType {
   Button5s,
   MultiButton,
   ListButtons,
-  TextInput,
+  TextInput(String),
   Special,
 }
 
@@ -381,11 +381,11 @@ pub fn interactive_menuoption(options: Vec<MenuOptions>) -> MenuOptions {
     }]);
   }
 
-  let selection = interactive_select(choices);
+  let selection = interactive_select(choices, 0);
   return options.get(selection.0.0).unwrap().clone();
 }
 
-fn display_options(
+fn draw_options(
   options: &[InteractiveOption],
   selected_index: (usize, usize),
   inputs: Vec<String>,
@@ -413,7 +413,7 @@ fn display_options(
   disable_raw_mode().unwrap();
   for option in options[start..end].iter() {
     let mut output: String;
-    match option.option_type {
+    match &option.option_type {
       InteractiveOptionType::Header => {
         output = format!(" {}", option.text);
         if !stop {
@@ -428,7 +428,7 @@ fn display_options(
           output = format!("   [ {} ]", option.text);
         }
       },
-      InteractiveOptionType::TextInput => {
+      InteractiveOptionType::TextInput(_) => {
         let input = inputs.get(index).unwrap();
         let mut text = if !input.is_empty() {
           let prefix = if selected_index.1 != 0 {
@@ -505,7 +505,6 @@ fn display_options(
             }
             if selected_index.0 != index {
               output += " ";
-              break;
             }
           }
           if button_index == 0 {
@@ -542,6 +541,7 @@ fn display_options(
         }
       },
     }
+
     if index == options.len() - 1 {
       print!("{}", output);
     } else {
@@ -565,6 +565,7 @@ fn display_options(
 
 pub fn interactive_select(
   options: Vec<InteractiveOption>,
+  active_index: usize,
 ) -> ((usize, usize), Option<String>, InteractiveOptionType) {
   let terminal_height = terminal::size().unwrap().1 as usize - 3;
   enable_raw_mode().unwrap();
@@ -580,29 +581,38 @@ pub fn interactive_select(
   let first_line = (options.len() - 1) as u16;
 
   let mut selection = (0, 0);
-  loop {
-    match options[selection.0].option_type {
-      InteractiveOptionType::Header => {
-        selection.0 += 1;
+  let mut selectable_options = 0;
+  for (i, option) in options.iter().enumerate() {
+    match &option.option_type {
+      InteractiveOptionType::Header => continue,
+      option_type => {
+        selection.0 = i;
+        if active_index >= options.len() || active_index == selectable_options {
+          if *option_type == InteractiveOptionType::ListButtons {
+            selection.1 = 1;
+          }
+          break;
+        }
+        selectable_options += 1;
       },
-      InteractiveOptionType::ListButtons => {
-        selection.1 = 1;
-        break;
-      },
-      _ => break,
     }
   }
+
   let mut inputs: Vec<String> = vec![];
   for option in options.clone() {
     match option.option_type {
       InteractiveOptionType::Special => inputs.append(&mut vec![option.text]),
+      InteractiveOptionType::TextInput(text) => inputs.append(&mut vec![text]),
       _ => inputs.append(&mut vec![String::new()]),
     }
   }
+
+  execute!(stdout, DisableLineWrap).unwrap();
   if options.len() > terminal_height {
     execute!(stdout, EnterAlternateScreen, DisableLineWrap, Hide).unwrap();
   }
-  let mut corrected_selection = display_options(&options, selection, inputs.clone());
+  let mut corrected_selection = draw_options(&options, selection, inputs.clone());
+  execute!(stdout, EnableLineWrap).unwrap();
   let mut update = false;
   loop {
     if crossterm::event::poll(Duration::from_millis(250)).unwrap() {
@@ -633,7 +643,7 @@ pub fn interactive_select(
                   selection.1 = 1;
                   break;
                 },
-                InteractiveOptionType::TextInput | InteractiveOptionType::Button5s => {
+                InteractiveOptionType::TextInput(_) | InteractiveOptionType::Button5s => {
                   selection.1 = 0;
                   break;
                 },
@@ -656,7 +666,7 @@ pub fn interactive_select(
                   selection.1 = 1;
                   break;
                 },
-                InteractiveOptionType::TextInput | InteractiveOptionType::Button5s => {
+                InteractiveOptionType::TextInput(_) | InteractiveOptionType::Button5s => {
                   selection.1 = 0;
                   break;
                 },
@@ -677,7 +687,7 @@ pub fn interactive_select(
               } else {
                 selection.1 = options[selection.0].text.split_terminator(':').count() - 1;
               }
-            } else if options[selection.0].option_type == InteractiveOptionType::TextInput
+            } else if let InteractiveOptionType::TextInput(_) = options[selection.0].option_type
               && !inputs[selection.0].is_empty()
             {
               if selection.1 >= 1 {
@@ -688,7 +698,7 @@ pub fn interactive_select(
             }
           },
           KeyCode::Right => {
-            if options[selection.0].option_type == InteractiveOptionType::TextInput {
+            if let InteractiveOptionType::TextInput(_) = options[selection.0].option_type {
               if !inputs[selection.0].is_empty() {
                 if selection.1 < inputs[selection.0].chars().count() {
                   selection.1 += 1;
@@ -757,7 +767,9 @@ pub fn interactive_select(
       } else {
         execute!(stdout, MoveToColumn(0)).unwrap();
       }
-      corrected_selection = display_options(&options, selection, inputs.clone());
+      execute!(stdout, DisableLineWrap).unwrap();
+      corrected_selection = draw_options(&options, selection, inputs.clone());
+      execute!(stdout, EnableLineWrap).unwrap();
       update = false;
     }
   }
@@ -866,7 +878,7 @@ pub fn adv_getch(
           }
           writeln!(stdout).unwrap();
           execute!(stdout, MoveToNextLine(1)).unwrap();
-          writeln!(stdout, "{}", INVALID_INPUT).unwrap();
+          write!(stdout, "{}", INVALID_INPUT).unwrap();
           execute!(stdout, MoveToNextLine(1)).unwrap();
           if let Some(time) = timer {
             write!(stdout, "{} [{}]: ", message, time / 2).unwrap();

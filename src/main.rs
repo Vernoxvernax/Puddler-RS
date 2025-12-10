@@ -158,7 +158,7 @@ fn main() -> ExitCode {
             text: String::from("Back"),
             option_type: InteractiveOptionType::Special,
           }]);
-          match interactive_select(configs_str) {
+          match interactive_select(configs_str, 0) {
             ((i1, i2), _, InteractiveOptionType::MultiButton) => {
               handle = configs.get(i1).unwrap().clone();
               if i2 == 1 {
@@ -175,6 +175,10 @@ fn main() -> ExitCode {
             _ => (),
           }
         } else {
+          print_message(
+            PrintMessageType::Error,
+            "Failed to create config handle! Please create an issue on Github.",
+          );
           exit(1);
         }
       },

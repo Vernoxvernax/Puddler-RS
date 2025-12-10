@@ -39,7 +39,7 @@ use crate::{
   media_config::{Config, MediaCenterType, Objective, UserConfig},
   mpv::Player,
   plex::PlexServer,
-  printing::{PrintMessageType, print_message},
+  printing::{INVALID_INPUT, PrintMessageType, print_message},
   puddler_settings::PuddlerSettings,
 };
 
@@ -511,6 +511,7 @@ pub trait MediaCenter: Send {
   fn get_settings(&mut self) -> &mut PuddlerSettings;
 
   fn modify(&mut self) {
+    let mut current_selection = 0;
     loop {
       let handle = self.get_config_handle();
       let config = &mut handle.config;
@@ -566,9 +567,10 @@ pub trait MediaCenter: Send {
           option_type: InteractiveOptionType::Special,
         },
       ];
-      match interactive_select(settings) {
+      match interactive_select(settings, current_selection) {
         (_, _, InteractiveOptionType::Special) => break,
         ((i1, i2), _, InteractiveOptionType::ListButtons) => {
+          current_selection = i1;
           if i1 == 0 {
             handle.set_active_user(users[i2 - 1].clone().access_token);
           } else if i1 == 2 {
@@ -585,6 +587,7 @@ pub trait MediaCenter: Send {
           }
         },
         ((i1, _), _, InteractiveOptionType::Button) => {
+          current_selection = i1;
           if i1 == 1 {
             self.login();
           } else if i1 == 4 {
@@ -744,7 +747,7 @@ pub trait MediaCenter: Send {
       },
       InteractiveOption {
         text: String::from("Search"),
-        option_type: InteractiveOptionType::TextInput,
+        option_type: InteractiveOptionType::TextInput(String::new()),
       },
       InteractiveOption {
         text: format!("Return to {} Menu", APPNAME),
@@ -755,13 +758,17 @@ pub trait MediaCenter: Send {
     let menu = options.clone();
 
     let mut current_items = total.clone();
+
+    let mut current_selection = 0;
     loop {
-      match interactive_select(options.clone()) {
+      match interactive_select(options.clone(), current_selection) {
         (selection, _, InteractiveOptionType::Button) => {
+          current_selection = selection.0;
           self.process_item(current_items[selection.0].clone());
           continue;
         },
-        (_, Some(mut search), InteractiveOptionType::TextInput) => {
+        (selection, Some(mut search), InteractiveOptionType::TextInput(_)) => {
+          current_selection = selection.0;
           search = search.trim().to_owned();
           if let Ok(items) = self.get_items(
             format!(
@@ -935,7 +942,7 @@ pub trait MediaCenter: Send {
               option_type: InteractiveOptionType::Special,
             },
           ]);
-          match interactive_select(options) {
+          match interactive_select(options, 0) {
             ((_, _), Some(text), InteractiveOptionType::Button) => {
               if text.starts_with("Finish") {
                 transcoding_settings.as_mut().unwrap().0 = true;
@@ -1000,7 +1007,7 @@ pub trait MediaCenter: Send {
           });
         }
       }
-      let ((index, _), ..) = interactive_select(options);
+      let ((index, _), ..) = interactive_select(options, 0);
       mediasource_index = index;
       enable_raw_mode().unwrap();
       execute!(
@@ -1101,7 +1108,7 @@ pub trait MediaCenter: Send {
           )
         }
       } else {
-        time.to_string()
+        format!("00:{:0<2}", time)
       };
       if !previous_settings
         .clone()
@@ -1109,19 +1116,19 @@ pub trait MediaCenter: Send {
         .0
       {
         print!(
-          "\nDo you want to start at: {}?\n  (Y)es | (N)o",
+          "\nDo you want to start at time: {}?\n  (Y)es | (N)o",
           formated.cyan().bold()
         );
         match getch("YyNn") {
           'N' | 'n' => {
-            print!("Please enter a playback position in minutes: ");
+            print!("\nPlease enter a playback position in minutes: ");
             let mut input: String;
             loop {
               input = String::new();
               stdout.flush().expect("Failed to flush stdout");
               stdin().read_line(&mut input).unwrap();
               if input.trim().parse::<f64>().is_err() {
-                print!("\nInvalid input, please try again.\n: ");
+                print!("\n{}\n: ", INVALID_INPUT);
               } else if input.contains('.') {
                 if input
                   .split('.')
@@ -1131,7 +1138,7 @@ pub trait MediaCenter: Send {
                   .len()
                   > 8
                 {
-                  print!("\nInvalid input, please lower the amount of decimal places.\n: ");
+                  print!("\nInvalid input, maximum amount of decimal places: 8.\n: ");
                 } else {
                   break;
                 }
@@ -1140,10 +1147,7 @@ pub trait MediaCenter: Send {
               }
             }
             item.UserData.PlaybackPositionTicks =
-              (input.trim().parse::<f64>().unwrap() * 60.0 * 10000000.0)
-                .to_string()
-                .parse::<u64>()
-                .unwrap();
+              (input.trim().parse::<f64>().unwrap() * 60.0 * 10000000.0) as u64;
           },
           _ => (),
         }
@@ -1220,13 +1224,19 @@ pub trait MediaCenter: Send {
             text: "Please choose which audio track to use:".to_string(),
             option_type: InteractiveOptionType::Header,
           }];
-          for track in audio_tracks.clone() {
+          let mut current_selection = 0;
+          for (i, track) in audio_tracks.clone().iter().enumerate() {
+            if track.IsDefault && current_selection == 0 {
+              current_selection = i;
+            }
             options.push(InteractiveOption {
               text: track.to_string(),
               option_type: InteractiveOptionType::Button,
             });
           }
-          if let ((ind, _), _, InteractiveOptionType::Button) = interactive_select(options) {
+          if let ((ind, _), _, InteractiveOptionType::Button) =
+            interactive_select(options, current_selection)
+          {
             audio_track_index = audio_tracks[ind].Index;
           }
         }
@@ -1247,13 +1257,19 @@ pub trait MediaCenter: Send {
             text: "Please choose which subtitle track to use:".to_string(),
             option_type: InteractiveOptionType::Header,
           }];
-          for track in subtitle_tracks.clone() {
+          let mut current_selection = 0;
+          for (i, track) in subtitle_tracks.clone().iter().enumerate() {
+            if track.IsDefault && current_selection == 0 {
+              current_selection = i;
+            }
             options.push(InteractiveOption {
               text: track.to_string(),
               option_type: InteractiveOptionType::Button,
             });
           }
-          if let ((ind, _), _, InteractiveOptionType::Button) = interactive_select(options) {
+          if let ((ind, _), _, InteractiveOptionType::Button) =
+            interactive_select(options, current_selection)
+          {
             subtitle_track_index = subtitle_tracks[ind].Index;
           }
         }

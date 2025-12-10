@@ -36,7 +36,7 @@ use crate::{
   media_center::{IsNumeric, MediaCenter, MediaCenterValues, ToStringAdv},
   media_config::{Config, Objective, UserConfig},
   mpv::Player,
-  printing::{PrintMessageType, print_message},
+  printing::{INVALID_INPUT, PrintMessageType, print_message},
   puddler_settings::PuddlerSettings,
 };
 
@@ -488,7 +488,7 @@ impl MediaCenter for PlexServer {
       },
       InteractiveOption {
         text: String::from("Search"),
-        option_type: InteractiveOptionType::TextInput,
+        option_type: InteractiveOptionType::TextInput(String::new()),
       },
       InteractiveOption {
         text: format!("Return to {} Menu", APPNAME),
@@ -500,13 +500,16 @@ impl MediaCenter for PlexServer {
 
     let mut current_items = total.clone();
 
+    let mut current_selection = 0;
     loop {
-      match interactive_select(options.clone()) {
+      match interactive_select(options.clone(), current_selection) {
         (selection, _, InteractiveOptionType::Button) => {
+          current_selection = selection.0;
           self.process_item(current_items[selection.0].clone());
           continue;
         },
-        (_, Some(mut search), InteractiveOptionType::TextInput) => {
+        (selection, Some(mut search), InteractiveOptionType::TextInput(_)) => {
+          current_selection = selection.0;
           search = search.trim().to_owned();
           if let Ok(items) = self.get_items(
             format!("hubs/search?query={}", urlencoding::encode(&search)),
@@ -966,7 +969,7 @@ impl PlexServer {
               option_type: InteractiveOptionType::Special,
             },
           ]);
-          match interactive_select(options) {
+          match interactive_select(options, 0) {
             ((_, _), Some(text), InteractiveOptionType::Button) => {
               if text.starts_with("Finish") {
                 transcoding_settings.as_mut().unwrap().0 = true;
@@ -1061,7 +1064,7 @@ impl PlexServer {
           option_type: InteractiveOptionType::Button,
         });
       }
-      let ((index, _), ..) = interactive_select(options);
+      let ((index, _), ..) = interactive_select(options, 0);
       media_file_index = index;
       media_part_id = media_file_list[index].Part[0].id;
       enable_raw_mode().unwrap();
@@ -1161,7 +1164,7 @@ impl PlexServer {
           )
         }
       } else {
-        time.to_string()
+        format!("00:{:0<2}", time)
       };
       if !previous_settings
         .clone()
@@ -1169,19 +1172,19 @@ impl PlexServer {
         .0
       {
         print!(
-          "\nDo you want to start at: {}?\n  (Y)es | (N)o",
+          "\nDo you want to start at time: {}?\n  (Y)es | (N)o",
           formated.cyan().bold()
         );
         match getch("YyNn") {
           'N' | 'n' => {
-            print!("Please enter a playback position in minutes: ");
+            print!("\nPlease enter a playback position in minutes: ");
             let mut input: String;
             loop {
               input = String::new();
               stdout.flush().expect("Failed to flush stdout");
               stdin().read_line(&mut input).unwrap();
               if input.trim().parse::<f64>().is_err() {
-                print!("\nInvalid input, please try again.\n: ");
+                print!("\n{}\n: ", INVALID_INPUT);
               } else if input.contains('.') {
                 if input
                   .split('.')
@@ -1191,7 +1194,7 @@ impl PlexServer {
                   .len()
                   > 8
                 {
-                  print!("\nInvalid input, please lower the amount of decimal places.\n: ");
+                  print!("\nInvalid input, maximum amount of decimal places: 8.\n: ");
                 } else {
                   break;
                 }
@@ -1199,12 +1202,7 @@ impl PlexServer {
                 break;
               }
             }
-            item.viewOffset = Some(
-              (input.trim().parse::<f64>().unwrap() * 60.0 * 1000.0)
-                .to_string()
-                .parse::<u64>()
-                .unwrap(),
-            );
+            item.viewOffset = Some((input.trim().parse::<f64>().unwrap() * 60.0 * 1000.0) as u64);
           },
           _ => (),
         }
@@ -1277,13 +1275,19 @@ impl PlexServer {
             text: "Please choose which audio track to use:".to_string(),
             option_type: InteractiveOptionType::Header,
           }];
-          for track in audio_tracks.clone() {
+          let mut current_selection = 0;
+          for (i, track) in audio_tracks.clone().iter().enumerate() {
+            if track.default == Some(true) && current_selection == 0 {
+              current_selection = i;
+            }
             options.push(InteractiveOption {
               text: track.to_string(),
               option_type: InteractiveOptionType::Button,
             });
           }
-          if let ((ind, _), _, InteractiveOptionType::Button) = interactive_select(options) {
+          if let ((ind, _), _, InteractiveOptionType::Button) =
+            interactive_select(options, current_selection)
+          {
             audio_track_index = ind as u32;
           }
         }
@@ -1304,13 +1308,19 @@ impl PlexServer {
             text: "Please choose which subtitle track to use:".to_string(),
             option_type: InteractiveOptionType::Header,
           }];
-          for track in subtitle_tracks.clone() {
+          let mut current_selection = 0;
+          for (i, track) in subtitle_tracks.clone().iter().enumerate() {
+            if track.default == Some(true) && current_selection == 0 {
+              current_selection = i;
+            }
             options.push(InteractiveOption {
               text: track.to_string(),
               option_type: InteractiveOptionType::Button,
             });
           }
-          if let ((ind, _), _, InteractiveOptionType::Button) = interactive_select(options) {
+          if let ((ind, _), _, InteractiveOptionType::Button) =
+            interactive_select(options, current_selection)
+          {
             subtitle_track_index = ind as u32;
           }
         }
@@ -1770,16 +1780,16 @@ impl PlexServer {
           }
           options.push(InteractiveOption {
             text: r#"Enter "{NAME},{ADDRESS}""#.to_string(),
-            option_type: InteractiveOptionType::TextInput,
+            option_type: InteractiveOptionType::TextInput(String::from("127.0.0.1:8096")),
           });
           loop {
-            match interactive_select(options.clone()) {
+            match interactive_select(options.clone(), 0) {
               ((index, _), _, InteractiveOptionType::Button) => {
                 server_name = json[index].name.clone();
                 address = json[index].publicAddress.clone();
                 break;
               },
-              ((_, _), Some(input), InteractiveOptionType::TextInput) => {
+              ((_, _), Some(input), InteractiveOptionType::TextInput(_)) => {
                 let split = input.split_terminator(',').collect::<Vec<&str>>();
                 if split.len() != 2 {
                   continue;
