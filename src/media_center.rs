@@ -1577,10 +1577,6 @@ pub trait MediaCenter: Send {
               .append(&mut vec![episode]);
           }
         }
-
-        if series.seasons[season_index].episodes.is_empty() {
-          series.seasons.remove(season_index);
-        }
       } else {
         exit(1);
       };
