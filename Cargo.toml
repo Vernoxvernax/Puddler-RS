@@ -3,6 +3,12 @@ name = "puddler"
 version = "0.7.1"
 edition = "2024"
 
+[profile.release]
+codegen-units = 1
+strip = true
+panic = "abort"
+lto = true
+
 [dependencies]
 async-trait = "0.1.89"
 chrono = { version = "0.4.42", features = ["serde"] }
