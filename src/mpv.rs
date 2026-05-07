@@ -427,15 +427,17 @@ impl Player {
             }
             // let's hope loading external subs isn't async ...
             load_external_subtitles(self.video.clone().unwrap(), &mpv);
-            if let Some(audio_track_) = initial_preferences.0 {
-              mpv
-                .set_property("aid", audio_track_ as i64)
-                .expect("Failed to set preferred audio track.");
-            }
-            if let Some(subtitle_track_) = initial_preferences.1 {
-              mpv
-                .set_property("sid", subtitle_track_ as i64)
-                .expect("Failed to set preferred subtitle track.");
+            if !config.transcoding {
+              if let Some(audio_track_) = initial_preferences.0 {
+                mpv
+                  .set_property("aid", audio_track_ as i64)
+                  .expect("Failed to set preferred audio track.");
+              }
+              if let Some(subtitle_track_) = initial_preferences.1 {
+                mpv
+                  .set_property("sid", subtitle_track_ as i64)
+                  .expect("Failed to set preferred subtitle track.");
+              }
             }
           },
           Event::Shutdown | Event::EndFile(_) => {

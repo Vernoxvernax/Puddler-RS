@@ -1204,10 +1204,10 @@ impl PlexServer {
       .unwrap();
       disable_raw_mode().unwrap();
 
-      if let Some((_, _, _, speed)) = previous_settings {
+      if let Some((repeat, _, _, speed)) = previous_settings && !*repeat {
         mbps = (*speed.clone()).to_string();
       } else {
-        print!("\nPlease enter your connection speed in mbps: ");
+        print!("\nPlease enter your available bandwidth in Mbps: ");
         loop {
           stdout.flush().expect("Failed to flush stdout");
           stdin().read_line(&mut mbps).unwrap();
@@ -1243,11 +1243,11 @@ impl PlexServer {
           }
         }
       } else {
-        panic!("Did item doesn't have any streams?? That's weird.");
+        panic!("Does the item not have any streams?? That's weird.");
       }
       if audio_tracks.len() > 1 {
         let mut skip = false;
-        if let Some((_, Some(selection), _, _)) = previous_settings {
+        if let Some((repeat, Some(selection), _, _)) = previous_settings && !*repeat {
           for track in audio_tracks.clone() {
             if track.index == Some(*selection) {
               skip = true;
@@ -1280,7 +1280,7 @@ impl PlexServer {
       }
       if subtitle_tracks.len() > 1 {
         let mut skip = false;
-        if let Some((_, _, Some(selection), _)) = previous_settings {
+        if let Some((repeat, _, Some(selection), _)) = previous_settings && !*repeat {
           for track in subtitle_tracks.clone() {
             if track.index == Some(*selection) {
               skip = true;

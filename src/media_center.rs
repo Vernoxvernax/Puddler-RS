@@ -43,6 +43,14 @@ use crate::{
   puddler_settings::PuddlerSettings,
 };
 
+pub struct PuddlerTranscodingSettings {
+  _video_bitrate: u64,
+  video_width: u32,
+  video_height: u32,
+  audio_codec: String,
+  audio_bitrate: u64,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct UDPAnswer {
   pub Address: String,
@@ -108,6 +116,9 @@ pub struct MediaStream {
   pub IsExternal: bool,
   pub SupportsExternalStream: bool,
   pub Path: Option<String>,
+  pub Profile: Option<String>,
+  pub BitRate: Option<u64>,
+  pub Channels: Option<u8>
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq, Clone)]
@@ -275,8 +286,17 @@ struct DeviceProfile {
   SupportedMediaTypes: String,
   MaxStreamingBitrate: u64,
   MaxStaticMusicBitrate: u64,
+  MusicStreamingTranscodingBitrate: u64,
   TranscodingProfiles: Vec<TranscodingProfile>,
   SubtitleProfiles: Vec<SubtitleProfile>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct ProfileCondition {
+  Condition: String,
+  Property: String,
+  Value: String,
+  IsRequired: bool
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -284,8 +304,11 @@ struct TranscodingProfile {
   Container: String,
   Type: String,
   VideoCodec: String,
+  AudioCodec: String,
   TranscodeSeekInfo: String,
   Context: String,
+  Conditions: Vec<ProfileCondition>,
+  EnableAudioVbrEncoding: bool
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -1146,10 +1169,10 @@ pub trait MediaCenter: Send {
       disable_raw_mode().unwrap();
 
       let mut mbps: String = String::new();
-      if let Some((_, _, _, speed)) = previous_settings {
+      if let Some((repeat, _, _, speed)) = previous_settings && !*repeat {
         mbps = (*speed.clone()).to_string();
       } else {
-        print!("\nPlease enter your connection speed in mbps: ");
+        print!("\nPlease enter your available bandwidth in Mbps: ");
         loop {
           stdout.flush().expect("Failed to flush stdout");
           stdin().read_line(&mut mbps).unwrap();
@@ -1198,13 +1221,10 @@ pub trait MediaCenter: Send {
       }
       if audio_tracks.len() > 1 {
         let mut skip = false;
-        if let Some((_, Some(selection), _, _)) = previous_settings {
-          for track in audio_tracks.clone() {
-            if track.Index == *selection {
-              skip = true;
-              audio_track_index = *selection;
-              break;
-            }
+        if let Some((repeat, Some(selection), _, _)) = previous_settings && !*repeat {
+          if *selection <= audio_tracks.len() as u32 {
+            skip = true;
+            audio_track_index = *selection;
           }
         }
         if !skip {
@@ -1225,19 +1245,16 @@ pub trait MediaCenter: Send {
           if let ((ind, _), _, InteractiveOptionType::Button) =
             interactive_select(options, current_selection)
           {
-            audio_track_index = audio_tracks[ind].Index;
+            audio_track_index = ind as u32;
           }
         }
       }
       if subtitle_tracks.len() > 1 {
         let mut skip = false;
-        if let Some((_, _, Some(selection), _)) = previous_settings {
-          for track in subtitle_tracks.clone() {
-            if track.Index == *selection {
-              skip = true;
-              subtitle_track_index = *selection;
-              break;
-            }
+        if let Some((repeat, _, Some(selection), _)) = previous_settings && !*repeat {
+          if *selection <= subtitle_tracks.len() as u32 {
+            skip = true;
+            subtitle_track_index = *selection;
           }
         }
         if !skip {
@@ -1258,10 +1275,13 @@ pub trait MediaCenter: Send {
           if let ((ind, _), _, InteractiveOptionType::Button) =
             interactive_select(options, current_selection)
           {
-            subtitle_track_index = subtitle_tracks[ind].Index;
+            subtitle_track_index = ind as u32;
           }
         }
       }
+
+      let max_bitrate = mbps.trim().parse::<u64>().unwrap() * 1000000;
+      let trans_settings = self.resolve_transcoding_settings(max_bitrate, &audio_tracks[audio_track_index as usize]);
 
       *previous_settings = Some((
         false,
@@ -1269,6 +1289,18 @@ pub trait MediaCenter: Send {
         Some(subtitle_track_index),
         mbps.clone(),
       ));
+
+      let audio_index_aligned = if audio_tracks.len() as u32 >= audio_track_index {
+        audio_tracks[audio_track_index as usize].Index as u32
+      } else {
+        0
+      };
+
+      let subtitle_index_aligned = if subtitle_tracks.len() as u32 >= audio_track_index {
+        subtitle_tracks[subtitle_track_index as usize].Index as u32
+      } else {
+        0
+      };
 
       enable_raw_mode().unwrap();
       execute!(
@@ -1281,16 +1313,35 @@ pub trait MediaCenter: Send {
       .unwrap();
       disable_raw_mode().unwrap();
 
-      let bitrate = mbps.trim().parse::<u64>().unwrap() * 1000000;
+      let resolution_conditions: Vec<ProfileCondition> = vec![
+        ProfileCondition {
+          Condition: "LessThanEqual".to_string(),
+          Property: "Width".to_string(),
+          Value: trans_settings.video_width.to_string(),
+          IsRequired: true
+        },
+        ProfileCondition {
+          Condition: "LessThanEqual".to_string(),
+          Property: "Height".to_string(),
+          Value: trans_settings.video_height.to_string(),
+          IsRequired: true
+        },
+        ProfileCondition {
+          Condition: "Equals".to_string(),
+          Property: "AudioBitrate".to_string(),
+          Value: trans_settings.audio_bitrate.to_string(),
+          IsRequired: true
+        },
+      ];
 
       let session_capabilities: SessionCapabilities = SessionCapabilities {
         UserId: user_id.clone(),
         StartTimeTicks: item.UserData.PlaybackPositionTicks,
         MediaSourceId: mediasource_list[mediasource_index].Id.clone(),
-        AudioStreamIndex: audio_track_index,
-        SubtitleStreamIndex: subtitle_track_index,
-        MaxStaticBitrate: bitrate,
-        MaxStreamingBitrate: bitrate,
+        AudioStreamIndex: audio_index_aligned,
+        SubtitleStreamIndex: subtitle_index_aligned,
+        MaxStaticBitrate: max_bitrate,
+        MaxStreamingBitrate: max_bitrate,
         EnableDirectPlay: true,
         EnableDirectStream: true,
         EnableTranscoding: true,
@@ -1299,30 +1350,40 @@ pub trait MediaCenter: Send {
         DeviceProfile: DeviceProfile {
           Name: APPNAME.to_string(),
           Id: handle.get_device_id().clone(),
+          MaxStreamingBitrate: max_bitrate,
           MaxStaticMusicBitrate: 999999999,
-          MaxStreamingBitrate: bitrate,
+          MusicStreamingTranscodingBitrate: trans_settings.audio_bitrate,
           SupportedMediaTypes: "Video".to_string(),
           TranscodingProfiles: [
             TranscodingProfile {
               Type: "Video".to_string(),
               Container: "mkv".to_string(),
               VideoCodec: "hevc".to_string(),
+              AudioCodec: trans_settings.audio_codec.clone(),
               TranscodeSeekInfo: "Auto".to_string(),
               Context: "Streaming".to_string(),
+              Conditions: resolution_conditions.clone(),
+              EnableAudioVbrEncoding: true,
             },
             TranscodingProfile {
               Type: "Video".to_string(),
               Container: "mkv".to_string(),
               VideoCodec: "avc".to_string(),
+              AudioCodec: trans_settings.audio_codec.clone(),
               TranscodeSeekInfo: "Auto".to_string(),
               Context: "Streaming".to_string(),
+              Conditions: resolution_conditions.clone(),
+              EnableAudioVbrEncoding: true,
             },
             TranscodingProfile {
               Type: "Video".to_string(),
               Container: "mkv".to_string(),
               VideoCodec: "av1".to_string(),
+              AudioCodec: trans_settings.audio_codec,
               TranscodeSeekInfo: "Auto".to_string(),
               Context: "Streaming".to_string(),
+              Conditions: resolution_conditions,
+              EnableAudioVbrEncoding: true
             },
           ]
           .to_vec(),
@@ -2260,6 +2321,55 @@ pub trait MediaCenter: Send {
   }
 
   fn insert_value(&mut self, value_type: MediaCenterValues, value: String);
+
+  fn resolve_transcoding_settings(&self, max_bitrate: u64, audio_track: &MediaStream) -> PuddlerTranscodingSettings {
+    let audio_codec = if let Some(codec) = &audio_track.Codec {
+      match codec.as_str() {
+        "aac" | "mp3" | "ac3" | "eac3" | "opus" | "vorbis" => "copy".to_string(),
+        "dts" => {
+          match audio_track.Profile.as_deref() {
+            Some("DTS-HD MA") | Some("DTS:X") => "opus".to_string(),
+            _ => "copy".to_string(),
+          }
+        }
+        _ => "opus".to_string()
+      }
+    } else {
+      "opus".to_string()
+    };
+
+    let audio_bitrate;
+    if audio_codec == String::from("copy") {
+      if let Some(bitrate) = audio_track.BitRate {
+        audio_bitrate = bitrate;
+      } else {
+        audio_bitrate = 128000;
+      }
+    } else {
+      audio_bitrate = match audio_track.Channels {
+        Some(2) => 128000,
+        Some(6) => 320000,
+        Some(8) => 450000,
+        _ => 128000
+      }
+    }
+
+    let video_bitrate = max_bitrate - audio_bitrate;
+    let (video_width, video_height) = match video_bitrate {
+      r if r >= 15_000_000 => (3840, 2160),
+      r if r >= 3_000_000 => (1920, 1080),
+      r if r >= 1_500_000 => (1280, 720),
+      _ => (854, 480)
+    };
+
+    PuddlerTranscodingSettings {
+      _video_bitrate: video_bitrate,
+      video_width,
+      video_height,
+      audio_codec,
+      audio_bitrate
+    }
+  }
 }
 
 pub fn broadcast_search(media_center_type: MediaCenterType) -> Option<UDPAnswer> {
