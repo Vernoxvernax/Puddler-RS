@@ -1,6 +1,6 @@
 use crate::{
   APPNAME, VERSION,
-  media_center::{MediaCenter, MediaCenterValues, PlaybackInfo},
+  media_center::{MediaCenter, MediaCenterValues, MediaSourceInfo, PlaybackInfo},
   media_config::Config,
   mpv::Player,
   puddler_settings::PuddlerSettings,
@@ -32,6 +32,10 @@ impl MediaCenter for EmbyServer {
       settings,
       playback_info: None,
     }
+  }
+
+  fn mediasource_id(&self, item: &MediaSourceInfo) -> String {
+    item.ItemId.clone().unwrap()
   }
 
   fn get_settings(&mut self) -> &mut PuddlerSettings {

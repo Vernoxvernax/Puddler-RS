@@ -187,7 +187,13 @@ impl Player {
     } else {
       format!(
         "{}Videos/{}/stream?Container=mkv&Static=true&api_key={}",
-        server_address, media_source.Id, auth_token
+        server_address,
+        self
+          .media_center
+          .as_ref()
+          .unwrap()
+          .mediasource_id(media_source),
+        auth_token
       )
     };
 
@@ -415,7 +421,10 @@ impl Player {
         let event = if let Ok(event) = event_res {
           event
         } else {
-          eprintln!("No idea why this would happen. Please create an issue. :)");
+          eprintln!(
+            "No idea why this would happen. Please create an issue. :)\nI tried playing this file: {}",
+            video.stream_url
+          );
           break 'main;
         };
         match event {

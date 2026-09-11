@@ -94,6 +94,7 @@ pub struct Item {
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct MediaSourceInfo {
   pub Id: String,
+  pub ItemId: Option<String>,
   pub Path: Option<String>,
   pub SupportsTranscoding: bool,
   pub MediaStreams: Vec<MediaStream>,
@@ -534,6 +535,7 @@ pub trait MediaCenter: Send {
   fn get_config_handle(&mut self) -> &mut Config;
   fn get_headers(&mut self) -> Vec<(String, String)>;
   fn get_settings(&mut self) -> &mut PuddlerSettings;
+  fn mediasource_id(&self, item: &MediaSourceInfo) -> String;
 
   fn modify(&mut self) {
     let mut current_selection = 0;
@@ -1206,7 +1208,7 @@ pub trait MediaCenter: Send {
           PrintMessageType::Error,
           format!(
             "MediaSource \"{}\" does not support transcoding. Trying next ...",
-            media_source.Id
+            self.mediasource_id(media_source)
           )
           .as_str(),
         );
@@ -1342,7 +1344,7 @@ pub trait MediaCenter: Send {
       let session_capabilities: SessionCapabilities = SessionCapabilities {
         UserId: user_id.clone(),
         StartTimeTicks: item.UserData.PlaybackPositionTicks,
-        MediaSourceId: mediasource_list[mediasource_index].Id.clone(),
+        MediaSourceId: self.mediasource_id(&mediasource_list[mediasource_index]),
         AudioStreamIndex: audio_index_aligned,
         SubtitleStreamIndex: subtitle_index_aligned,
         MaxStaticBitrate: max_bitrate,
@@ -1769,7 +1771,7 @@ pub trait MediaCenter: Send {
         ItemId: item_id,
         PlaySessionId: playback_info.PlaySessionId.to_string(),
         SessionId: session_id,
-        MediaSourceId: playback_info.MediaSources[0].Id.to_string(),
+        MediaSourceId: self.mediasource_id(&playback_info.MediaSources[0]),
         PositionTicks: time_position.to_string(),
         Failed: false,
       };
@@ -1801,7 +1803,7 @@ pub trait MediaCenter: Send {
         ItemId: item_id,
         PlaySessionId: playback_info.PlaySessionId.to_string(),
         SessionId: session_id,
-        MediaSourceId: playback_info.MediaSources[0].Id.to_string(),
+        MediaSourceId: self.mediasource_id(&playback_info.MediaSources[0]),
         PositionTicks: (playbackpositionticks as f64).to_string(),
         Failed: false,
       };
@@ -1859,7 +1861,7 @@ pub trait MediaCenter: Send {
       CanSeek: true,
       ItemId: item_id,
       SessionId: session_id,
-      MediaSourceId: playback_info.MediaSources[0].Id.to_string(),
+      MediaSourceId: self.mediasource_id(&playback_info.MediaSources[0]),
       AudioStreamIndex: tracks.0,
       SubtitleStreamIndex: tracks.1,
       IsPaused: paused_muted.0,
@@ -1929,7 +1931,7 @@ pub trait MediaCenter: Send {
       CanSeek: true,
       ItemId: item_id,
       SessionId: session_id.to_string(),
-      MediaSourceId: playback_info.MediaSources[0].Id.to_string(),
+      MediaSourceId: self.mediasource_id(&playback_info.MediaSources[0]),
       AudioStreamIndex: audio_index,
       SubtitleStreamIndex: subtitle_index,
       IsPaused: false,

@@ -33,7 +33,7 @@ use crate::{
     InteractiveOption, InteractiveOptionType, SeriesOptions, getch, interactive_select,
     plex_series_select, take_string_input,
   },
-  media_center::{IsNumeric, MediaCenter, MediaCenterValues, ToStringAdv},
+  media_center::{IsNumeric, MediaCenter, MediaCenterValues, MediaSourceInfo, ToStringAdv},
   media_config::{Config, Objective, UserConfig},
   mpv::Player,
   printing::{INVALID_INPUT, PrintMessageType, print_message},
@@ -386,6 +386,10 @@ impl MediaCenter for PlexServer {
       settings,
       playback_info: None,
     }
+  }
+
+  fn mediasource_id(&self, _item: &MediaSourceInfo) -> String {
+    panic!("This should not be used for Plex!!");
   }
 
   fn get_settings(&mut self) -> &mut PuddlerSettings {
