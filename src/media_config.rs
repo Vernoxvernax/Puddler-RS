@@ -187,11 +187,10 @@ impl Config {
         }
       },
       Objective::User => {
-        let user = serde_json::from_str::<UserConfig>(&value).unwrap();
         let user_index = temp
           .users
           .iter()
-          .position(|u| u.access_token == user.access_token)
+          .position(|u| u.access_token == value)
           .unwrap();
         temp.users.remove(user_index);
       },
