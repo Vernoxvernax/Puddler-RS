@@ -170,10 +170,8 @@ fn main() -> ExitCode {
                 continue;
               }
             },
-            (_, Some(option), InteractiveOptionType::Special) => {
-              if option == *"Back" {
-                continue;
-              }
+            (_, Some(option), InteractiveOptionType::Special) if option == *"Back" => {
+              continue;
             },
             _ => (),
           }

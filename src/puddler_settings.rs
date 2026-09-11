@@ -60,7 +60,7 @@ pub fn get_config_path() -> PathBuf {
   let config_path = dirs::config_dir().unwrap();
   let mut config_file_path = format!(
     "{}/{}/{}.toml",
-    &config_path.display().to_string(),
+    config_path.display(),
     APPNAME.to_lowercase(),
     APPNAME
   );
@@ -321,7 +321,7 @@ impl PuddlerSettings {
       PuddlerSettingType::DefaultMediaServer => {
         println!(
           "Searching in \"{}\" for configuration files ...",
-          &media_center_path.to_str().unwrap()
+          media_center_path.to_str().unwrap()
         );
         let path: Vec<_> = fs::read_dir(media_center_path)
           .unwrap()

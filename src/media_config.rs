@@ -77,7 +77,7 @@ pub fn get_mediacenter_folder() -> PathBuf {
   let config_path = dirs::config_dir().unwrap();
   let mut media_center_path = format!(
     "{}/{}/media-center",
-    &config_path.display().to_string(),
+    config_path.display(),
     APPNAME.to_lowercase()
   );
   if cfg!(windows) {
@@ -420,7 +420,7 @@ impl Config {
           let config_path = dirs::config_dir().unwrap();
           self.path = format!(
             "{}/{}/media-center/{}.json",
-            &config_path.display().to_string(),
+            config_path.display(),
             APPNAME.to_lowercase(),
             self.config.server_name
           );
@@ -462,7 +462,7 @@ impl Config {
       let config_path = dirs::config_dir().unwrap();
       let config_file_path = format!(
         "{}/{}/media-center/{}.json",
-        &config_path.display().to_string(),
+        config_path.display(),
         APPNAME.to_lowercase(),
         self.config.server_name
       );

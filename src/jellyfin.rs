@@ -22,7 +22,7 @@ impl MediaCenter for JellyfinServer {
       headers: vec![(
         String::from("Authorization"),
         format!(
-          "Emby UserId=\"\", Client=Emby Theater, Device={}, DeviceId={}, Version={}, Token=\"\"",
+          "MediaBrowser Client=Emby Theater, Device={}, DeviceId={}, Version={}, Token=\"\"",
           APPNAME,
           config.get_device_id(),
           VERSION

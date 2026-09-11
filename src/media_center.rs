@@ -118,7 +118,7 @@ pub struct MediaStream {
   pub Path: Option<String>,
   pub Profile: Option<String>,
   pub BitRate: Option<u64>,
-  pub Channels: Option<u8>
+  pub Channels: Option<u8>,
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq, Clone)]
@@ -296,7 +296,7 @@ struct ProfileCondition {
   Condition: String,
   Property: String,
   Value: String,
-  IsRequired: bool
+  IsRequired: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -308,7 +308,7 @@ struct TranscodingProfile {
   TranscodeSeekInfo: String,
   Context: String,
   Conditions: Vec<ProfileCondition>,
-  EnableAudioVbrEncoding: bool
+  EnableAudioVbrEncoding: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -1169,7 +1169,9 @@ pub trait MediaCenter: Send {
       disable_raw_mode().unwrap();
 
       let mut mbps: String = String::new();
-      if let Some((repeat, _, _, speed)) = previous_settings && !*repeat {
+      if let Some((repeat, _, _, speed)) = previous_settings
+        && !*repeat
+      {
         mbps = (*speed.clone()).to_string();
       } else {
         print!("\nPlease enter your available bandwidth in Mbps: ");
@@ -1221,11 +1223,12 @@ pub trait MediaCenter: Send {
       }
       if audio_tracks.len() > 1 {
         let mut skip = false;
-        if let Some((repeat, Some(selection), _, _)) = previous_settings && !*repeat {
-          if *selection <= audio_tracks.len() as u32 {
-            skip = true;
-            audio_track_index = *selection;
-          }
+        if let Some((repeat, Some(selection), _, _)) = previous_settings
+          && !*repeat
+          && *selection <= audio_tracks.len() as u32
+        {
+          skip = true;
+          audio_track_index = *selection;
         }
         if !skip {
           let mut options: Vec<InteractiveOption> = vec![InteractiveOption {
@@ -1251,11 +1254,12 @@ pub trait MediaCenter: Send {
       }
       if subtitle_tracks.len() > 1 {
         let mut skip = false;
-        if let Some((repeat, _, Some(selection), _)) = previous_settings && !*repeat {
-          if *selection <= subtitle_tracks.len() as u32 {
-            skip = true;
-            subtitle_track_index = *selection;
-          }
+        if let Some((repeat, _, Some(selection), _)) = previous_settings
+          && !*repeat
+          && *selection <= subtitle_tracks.len() as u32
+        {
+          skip = true;
+          subtitle_track_index = *selection;
         }
         if !skip {
           let mut options: Vec<InteractiveOption> = vec![InteractiveOption {
@@ -1281,7 +1285,8 @@ pub trait MediaCenter: Send {
       }
 
       let max_bitrate = mbps.trim().parse::<u64>().unwrap() * 1000000;
-      let trans_settings = self.resolve_transcoding_settings(max_bitrate, &audio_tracks[audio_track_index as usize]);
+      let trans_settings =
+        self.resolve_transcoding_settings(max_bitrate, &audio_tracks[audio_track_index as usize]);
 
       *previous_settings = Some((
         false,
@@ -1291,13 +1296,13 @@ pub trait MediaCenter: Send {
       ));
 
       let audio_index_aligned = if audio_tracks.len() as u32 >= audio_track_index {
-        audio_tracks[audio_track_index as usize].Index as u32
+        audio_tracks[audio_track_index as usize].Index
       } else {
         0
       };
 
       let subtitle_index_aligned = if subtitle_tracks.len() as u32 >= audio_track_index {
-        subtitle_tracks[subtitle_track_index as usize].Index as u32
+        subtitle_tracks[subtitle_track_index as usize].Index
       } else {
         0
       };
@@ -1318,19 +1323,19 @@ pub trait MediaCenter: Send {
           Condition: "LessThanEqual".to_string(),
           Property: "Width".to_string(),
           Value: trans_settings.video_width.to_string(),
-          IsRequired: true
+          IsRequired: true,
         },
         ProfileCondition {
           Condition: "LessThanEqual".to_string(),
           Property: "Height".to_string(),
           Value: trans_settings.video_height.to_string(),
-          IsRequired: true
+          IsRequired: true,
         },
         ProfileCondition {
           Condition: "Equals".to_string(),
           Property: "AudioBitrate".to_string(),
           Value: trans_settings.audio_bitrate.to_string(),
-          IsRequired: true
+          IsRequired: true,
         },
       ];
 
@@ -1383,7 +1388,7 @@ pub trait MediaCenter: Send {
               TranscodeSeekInfo: "Auto".to_string(),
               Context: "Streaming".to_string(),
               Conditions: resolution_conditions,
-              EnableAudioVbrEncoding: true
+              EnableAudioVbrEncoding: true,
             },
           ]
           .to_vec(),
@@ -2041,36 +2046,45 @@ pub trait MediaCenter: Send {
 
   fn write_headers(&mut self) {
     let handle = self.get_config_handle();
-    let config = &mut handle.config;
-    match config.media_center_type {
-      MediaCenterType::Plex => panic!("not sure if this is even needed"),
-      _ => {
-        if let Some(user) = handle.get_active_user() {
-          let authorization_header: (String, String) = (
-            String::from("Authorization"),
-            format!(
-              "Emby UserId={}, Client=Emby Theater, Device={}, DeviceId={}, Version={}, Token={}",
-              user.user_id,
-              APPNAME,
-              handle.get_device_id(),
-              VERSION,
-              user.access_token
-            ),
-          );
-          self.insert_value(
-            MediaCenterValues::Header,
-            serde_json::to_string(&authorization_header).unwrap(),
-          );
-          let request_header: (String, String) =
-            (format!("{}/{}", APPNAME, VERSION), user.access_token);
-          self.insert_value(
-            MediaCenterValues::Header,
-            serde_json::to_string(&request_header).unwrap(),
-          );
-        } else {
-          panic!("Trying to generate a new header without any user existent?!");
-        }
-      },
+    if let Some(user) = handle.get_active_user() {
+      let config = &mut handle.config;
+      let authorization_header: (String, String) = match config.media_center_type {
+        MediaCenterType::Plex => panic!("not sure if this is even needed"),
+        MediaCenterType::Emby => (
+          String::from("Authorization"),
+          format!(
+            "Emby UserId={}, Client=Emby Theater, Device={}, DeviceId={}, Version={}, Token={}",
+            user.user_id,
+            APPNAME,
+            handle.get_device_id(),
+            VERSION,
+            user.access_token
+          ),
+        ),
+        MediaCenterType::Jellyfin => (
+          String::from("Authorization"),
+          format!(
+            "MediaBrowser Client=Emby Theater, Device={}, DeviceId={}, Version={}, Token={}",
+            APPNAME,
+            handle.get_device_id(),
+            VERSION,
+            user.access_token
+          ),
+        ),
+      };
+
+      self.insert_value(
+        MediaCenterValues::Header,
+        serde_json::to_string(&authorization_header).unwrap(),
+      );
+      let request_header: (String, String) =
+        (format!("{}/{}", APPNAME, VERSION), user.access_token);
+      self.insert_value(
+        MediaCenterValues::Header,
+        serde_json::to_string(&request_header).unwrap(),
+      );
+    } else {
+      panic!("Trying to generate a new header without any user existent?!");
     }
   }
 
@@ -2322,24 +2336,26 @@ pub trait MediaCenter: Send {
 
   fn insert_value(&mut self, value_type: MediaCenterValues, value: String);
 
-  fn resolve_transcoding_settings(&self, max_bitrate: u64, audio_track: &MediaStream) -> PuddlerTranscodingSettings {
+  fn resolve_transcoding_settings(
+    &self,
+    max_bitrate: u64,
+    audio_track: &MediaStream,
+  ) -> PuddlerTranscodingSettings {
     let audio_codec = if let Some(codec) = &audio_track.Codec {
       match codec.as_str() {
         "aac" | "mp3" | "ac3" | "eac3" | "opus" | "vorbis" => "copy".to_string(),
-        "dts" => {
-          match audio_track.Profile.as_deref() {
-            Some("DTS-HD MA") | Some("DTS:X") => "opus".to_string(),
-            _ => "copy".to_string(),
-          }
-        }
-        _ => "opus".to_string()
+        "dts" => match audio_track.Profile.as_deref() {
+          Some("DTS-HD MA") | Some("DTS:X") => "opus".to_string(),
+          _ => "copy".to_string(),
+        },
+        _ => "opus".to_string(),
       }
     } else {
       "opus".to_string()
     };
 
     let audio_bitrate;
-    if audio_codec == String::from("copy") {
+    if audio_codec == "copy" {
       if let Some(bitrate) = audio_track.BitRate {
         audio_bitrate = bitrate;
       } else {
@@ -2350,7 +2366,7 @@ pub trait MediaCenter: Send {
         Some(2) => 128000,
         Some(6) => 320000,
         Some(8) => 450000,
-        _ => 128000
+        _ => 128000,
       }
     }
 
@@ -2359,7 +2375,7 @@ pub trait MediaCenter: Send {
       r if r >= 15_000_000 => (3840, 2160),
       r if r >= 3_000_000 => (1920, 1080),
       r if r >= 1_500_000 => (1280, 720),
-      _ => (854, 480)
+      _ => (854, 480),
     };
 
     PuddlerTranscodingSettings {
@@ -2367,7 +2383,7 @@ pub trait MediaCenter: Send {
       video_width,
       video_height,
       audio_codec,
-      audio_bitrate
+      audio_bitrate,
     }
   }
 }

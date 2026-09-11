@@ -1204,7 +1204,9 @@ impl PlexServer {
       .unwrap();
       disable_raw_mode().unwrap();
 
-      if let Some((repeat, _, _, speed)) = previous_settings && !*repeat {
+      if let Some((repeat, _, _, speed)) = previous_settings
+        && !*repeat
+      {
         mbps = (*speed.clone()).to_string();
       } else {
         print!("\nPlease enter your available bandwidth in Mbps: ");
@@ -1247,7 +1249,9 @@ impl PlexServer {
       }
       if audio_tracks.len() > 1 {
         let mut skip = false;
-        if let Some((repeat, Some(selection), _, _)) = previous_settings && !*repeat {
+        if let Some((repeat, Some(selection), _, _)) = previous_settings
+          && !*repeat
+        {
           for track in audio_tracks.clone() {
             if track.index == Some(*selection) {
               skip = true;
@@ -1280,7 +1284,9 @@ impl PlexServer {
       }
       if subtitle_tracks.len() > 1 {
         let mut skip = false;
-        if let Some((repeat, _, Some(selection), _)) = previous_settings && !*repeat {
+        if let Some((repeat, _, Some(selection), _)) = previous_settings
+          && !*repeat
+        {
           for track in subtitle_tracks.clone() {
             if track.index == Some(*selection) {
               skip = true;
@@ -1839,7 +1845,7 @@ impl PlexServer {
             let config_path = dirs::config_dir().unwrap();
             let config_file_path = format!(
               "{}/{}/media-center/{}.json",
-              &config_path.display().to_string(),
+              config_path.display(),
               APPNAME.to_lowercase(),
               file_name
             );
