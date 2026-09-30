@@ -433,7 +433,7 @@ impl ToStringAdv for Item {
 
   fn to_string_ext(&self) -> String {
     let full = self.to_string_full();
-    if let Some(percentage) = self.UserData.PlayedPercentage {
+    if let Some(percentage) = self.UserData.PlayedPercentage && percentage != 0.0 {
       format!("{} {}%", full, percentage.round())
     } else {
       full
