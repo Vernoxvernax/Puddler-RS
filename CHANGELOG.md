@@ -1,3 +1,18 @@
+## **0.7.2**
+* feat: puddler settings now uses the more interactive menu
+* fix (plex): dont allow empty search
+* chore: update dependencies
+* ci: try getting the most up to date mpv source for the windows cross build
+* build: binary size optimizations
+* fix: allow series objects with empty seasons
+* fix(jellyfin): improve transcoding profiles
+  * if the selected audio track is lossless, transcode it to opus based on channel amount; limit video width and height with respect to the available bitrate; some other small logic improvements
+* fix(jellyfin): fix authorization api change
+* fix: overwriting user because of expired sessions works again
+* fix(emby): emby api diverges from jellyfin and uses other parameter for mediasource ids
+* fix(ci): use correct libmpv architecture artifacts
+* fix(jellyfin): only show played percentage if its > 0
+
 ## **0.7.1**
 * [#16]: increase timeout of all network requests to 15 seconds and don't just unwrap
 * [#17]:
