@@ -637,7 +637,7 @@ impl MediaCenter for PlexServer {
     if let Err(err) = self.async_get(url).await {
       print_message(
         PrintMessageType::Error,
-        format!("Failed to report PlaySession: {}", err.status()).as_str(),
+        format!("Failed to report PlaySession: {}", err).as_str(),
       );
     }
   }
@@ -730,11 +730,7 @@ impl MediaCenter for PlexServer {
         Err(err) => {
           print_message(
             PrintMessageType::Error,
-            format!(
-              "Failed to log playback progress to your server: {}",
-              err.status()
-            )
-            .as_str(),
+            format!("Failed to log playback progress to your server: {}", err).as_str(),
           );
         },
       }
@@ -780,7 +776,7 @@ impl PlexServer {
   }
 
   // Just like `async_post`. reqwest::blocking::client isn't allowed in an asynchronous context -_-
-  async fn async_get(&mut self, mut url: String) -> Result<reqwest::Response, reqwest::Response> {
+  async fn async_get(&mut self, mut url: String) -> Result<reqwest::Response, reqwest::StatusCode> {
     let user = self.get_config_handle().get_active_user().unwrap();
     if !url.contains('?') {
       url.push('?')
@@ -812,7 +808,7 @@ impl PlexServer {
 
     match response.status() {
       StatusCode::OK => Ok(response),
-      _ => Err(response),
+      e => Err(e),
     }
   }
 
@@ -827,7 +823,7 @@ impl PlexServer {
     if let Err(err) = self.async_get(url).await {
       print_message(
         PrintMessageType::Error,
-        format!("Failed to mark item as {}: {}", status_str, err.status()).as_str(),
+        format!("Failed to mark item as {}: {}", status_str, err).as_str(),
       );
     }
   }
